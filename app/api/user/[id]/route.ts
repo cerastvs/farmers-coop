@@ -1,6 +1,6 @@
 import prisma from "@/lib/client";
 import { NextResponse } from "next/server";
-import Dashboard from "@/app/dashboard/page";
+
 export async function GET(
   req: Request,
   { params }: { params: Promise<Record<string, string>> },
@@ -11,5 +11,5 @@ export async function GET(
     where: { id },
   });
 
-  return NextResponse.json({ user }, { status: 200 });
+  return NextResponse.json(user, { status: 200 });
 }

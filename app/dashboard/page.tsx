@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { User } from "../generated/prisma/client";
+
 import { useUser } from "../hooks/useUser";
 
 export default function Dashboard() {

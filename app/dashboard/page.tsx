@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { User } from "../generated/prisma/client";
+import { useUser } from "../hooks/useUser";
 
 export default function Dashboard() {
   //temporary muna
   const id = "1";
-  const [user, setUser] = useState<User | null>(null);
+  const { user, setUser } = useUser();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

@@ -6,9 +6,9 @@ import { useUser } from "../hooks/useUser";
 
 export default function Dashboard() {
   //temporary muna
-  const id = "1";
+  const [id, setId] = useState<string>("1");
   const { user, setUser } = useUser();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     fetch(`/api/user/${id}`)
@@ -17,7 +17,7 @@ export default function Dashboard() {
         setUser(data);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [id]);
 
   if (loading) return <p>Loading...</p>;
   if (!user) return <p>No user found.</p>;

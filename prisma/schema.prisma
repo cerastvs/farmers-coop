@@ -17,6 +17,8 @@ model User {
   name      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  username String
+  password String
 
   posts     Post[]
   loans     Loan[]

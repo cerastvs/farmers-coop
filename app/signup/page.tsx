@@ -38,13 +38,22 @@ export default function SignUp() {
     const res = await fetch("api/user", {
       method: "POST",
       headers: {
-        "Content-Type": "apllication/json",
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         username: data.username,
         password: data.password,
       }),
     });
+    const responseData = await res.json();
+
+    if (!res.ok) {
+      setErrors((prev) => ({
+        ...prev,
+        username: responseData.error,
+      }));
+      return;
+    }
   };
 
   return (

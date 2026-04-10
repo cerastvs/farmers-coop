@@ -1,14 +1,15 @@
 import "server-only";
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
-import { Session } from "inspector/promises";
+
+import { Role } from "@/app/generated/prisma/enums";
 
 const secretKey = process.env.SESSION_SECRET;
 const encodedKey = new TextEncoder().encode(secretKey);
 
-export async function createSession(userId: string) {
+export async function createSession(userId: string, userRole: Role) {
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  const session = await encrypt({ userId, expiresAt });
+  const session = await encrypt({ userId, expiresAt, userRole });
 
   (await cookies()).set("session", session, {
     httpOnly: true,
@@ -31,17 +32,18 @@ export async function getSession() {
       typeof data === "object" &&
       data !== null &&
       "userId" in data &&
-      "expiresAt" in data
+      "expiresAt" in data &&
+      "userRole" in data
     ) {
-      const userId = (data as { userId: string; expiresAt: string | Date })
-        .userId;
-      const expiresAt = new Date(
-        (data as { userId: string; expiresAt: string | Date }).expiresAt,
-      );
+      const { userId, userRole, expiresAt } = data as {
+        userId: string;
+        userRole: Role;
+        expiresAt: string | Date;
+      };
 
       if (expiresAt < new Date()) return null;
 
-      return { userId };
+      return { userId, userRole };
     }
 
     return null;
@@ -51,14 +53,15 @@ export async function getSession() {
   }
 }
 
-type SessionData = {
-  userId: string;
-  expiresAt: string;
-};
-
 type SessionPayload = {
   userId: string;
   expiresAt: Date;
+  userRole: Role;
+};
+type SessionData = {
+  userId: string;
+  userRole: Role;
+  expiresAt: string;
 };
 
 export async function encrypt(payload: SessionPayload) {
@@ -69,13 +72,20 @@ export async function encrypt(payload: SessionPayload) {
     .sign(encodedKey);
 }
 
-export async function decrypt(session: string | undefined = "") {
+export async function decrypt(
+  session: string | undefined = "",
+): Promise<SessionData | null> {
   try {
     const { payload } = await jwtVerify(session, encodedKey, {
       algorithms: ["HS256"],
     });
-    return payload;
+
+    return payload as SessionData;
   } catch (error) {
-    console.log("Failed to verify session");
+    return null;
   }
 }
+
+// export async function deleteSession() {
+//   (await cookies()).delete("session");
+// }

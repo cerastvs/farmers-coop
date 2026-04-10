@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { useUser } from "../hooks/useUser";
+import { logout } from "../login/actions";
 
 export default function Dashboard() {
   const { user, setUser } = useUser();
@@ -20,8 +21,10 @@ export default function Dashboard() {
   if (loading) return <p>Loading...</p>;
   if (!user) return <p>No user found.</p>;
   return (
-    <div>
-      <h1>Welcome, {user.name}!</h1>
-    </div>
+    <>
+      <div>
+        <h1>Welcome, {user.name}!</h1>
+      </div>
+    </>
   );
 }

@@ -6,14 +6,6 @@ import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-type FormState = {
-  errors?: {
-    username?: string[];
-    password?: string[];
-    general?: string[];
-  };
-};
-
 const LoginSchema = z.object({
   username: z
     .string()
@@ -51,7 +43,7 @@ export async function login(prevState: any, formData: FormData) {
     return { errors: { password: ["Invalid password"] } };
   }
 
-  await createSession(user.id);
+  await createSession(user.id, user.role);
 
   redirect("/dashboard");
 }

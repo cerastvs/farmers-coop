@@ -86,6 +86,6 @@ export async function decrypt(
   }
 }
 
-// export async function deleteSession() {
-//   (await cookies()).delete("session");
-// }
+export async function deleteSession() {
+  (await cookies()).delete("session");
+}

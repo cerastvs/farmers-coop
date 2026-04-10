@@ -25,6 +25,9 @@ export default function Dashboard() {
       <div>
         <h1>Welcome, {user.name}!</h1>
       </div>
+      <form action={logout}>
+        <button type="submit">logout</button>
+      </form>
     </>
   );
 }

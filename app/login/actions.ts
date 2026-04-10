@@ -1,7 +1,7 @@
 "use server";
 
 import prisma from "@/lib/client";
-import { createSession } from "@/lib/session";
+import { createSession, deleteSession } from "@/lib/session";
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -48,4 +48,7 @@ export async function login(prevState: any, formData: FormData) {
   redirect("/dashboard");
 }
 
-export async function logout() {}
+export async function logout() {
+  await deleteSession();
+  redirect("/login");
+}

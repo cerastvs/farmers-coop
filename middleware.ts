@@ -21,6 +21,14 @@ export async function middleware(req: NextRequest) {
   const publicRoutes = ["/login", "/signup"];
   const isPublicRoute = publicRoutes.some((r) => pathname.startsWith(r));
 
+  const publicPages = ["/home"];
+  const isPublicPage = publicPages.some(
+    (p) => pathname === p || pathname.startsWith(p),
+  );
+
+  if (isPublicPage) {
+    return NextResponse.next();
+  }
   const loginUrl = new URL("/login", req.url);
   const dashboardUrl = new URL("/dashboard", req.url);
 

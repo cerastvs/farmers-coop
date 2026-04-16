@@ -7,7 +7,7 @@ datasource db {
   provider = "postgresql"
 }
 
-enum Role{
+enum Role {
   APPLICANT
   MEMBER
   TREASURER
@@ -15,16 +15,68 @@ enum Role{
   SECRETARY
 }
 
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PaymentType {
+  APPLICATION_FEE
+  LOAN_PAYMENT
+  EQUIPMENT_PURCHASE
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum MachineStatus {
+  QUEUED
+  APPROVED
+  IN_USE
+  RETURNED
+  OVERDUE
+  REJECTED
+}
+
+enum SupplyTransactionType {
+  PURCHASE
+  LOAN
+}
+
+enum TransactionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum LoanStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  ACTIVE
+  PAID
+}
+
 model User {
-  id        String   @id @default(uuid())
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  password  String
-  username  String   @unique
-  role Role @default(APPLICANT)
-  loans     Loan[]
-  posts     Post[]
+  id                 String              @id @default(uuid())
+  name               String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  password           String
+  username           String              @unique
+  role               Role                @default(APPLICANT)
+  loans              Loan[]
+  posts              Post[]
+  applications       Application[]
+  payments           Payment[]
+  machineRequests    MachineRequest[]
+  supplyTransactions SupplyTransaction[]
+  availability       Availability[]
 }
 
 model Post {
@@ -37,24 +89,151 @@ model Post {
 }
 
 model Loan {
-  id        String   @id @default(uuid())
+  id        String        @id @default(uuid())
   userId    String
-  amount    Decimal  @db.Decimal(10, 2)
-  createdAt DateTime @default(now())
+  amount    Decimal       @db.Decimal(10, 2)
+  createdAt DateTime      @default(now())
   due       DateTime
-  user      User     @relation(fields: [userId], references: [id])
+  user      User          @relation(fields: [userId], references: [id])
+  payments  LoanPayment[]
 }
 
 model Supply {
-  id          String   @id @default(uuid())
-  productName String
-  price       Decimal  @db.Decimal(10, 2)
-  quantity    Int
-  createdAt   DateTime @default(now())
+  id           String              @id @default(uuid())
+  productName  String
+  price        Decimal             @db.Decimal(10, 2)
+  quantity     Int
+  createdAt    DateTime            @default(now())
+  transactions SupplyTransaction[]
 }
 
 model Log {
   id        String   @id @default(uuid())
   info      String
+  createdAt DateTime @default(now())
+}
+
+model Application {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  fullName String
+  age      Int
+  gender   String
+  address  String
+  contact  String
+
+  farmSize     Float
+  cropType     String
+  yearsFarming Int
+
+  validIdUrl     String
+  proofOfFarmUrl String
+
+  status     ApplicationStatus @default(PENDING)
+  createdAt  DateTime          @default(now())
+  reviewedBy String?
+}
+
+model Payment {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  type   PaymentType
+  amount Decimal     @db.Decimal(10, 2)
+
+  receiptUrl String
+  status     PaymentStatus @default(PENDING)
+
+  createdAt  DateTime @default(now())
+  verifiedBy String?
+}
+
+model Machine {
+  id          String           @id @default(uuid())
+  name        String
+  description String?
+  quantity    Int
+  createdAt   DateTime         @default(now())
+  requests    MachineRequest[]
+}
+
+model MachineRequest {
+  id        String @id @default(uuid())
+  userId    String
+  machineId String
+
+  user    User    @relation(fields: [userId], references: [id])
+  machine Machine @relation(fields: [machineId], references: [id])
+
+  status MachineStatus @default(QUEUED)
+
+  requestDate DateTime  @default(now())
+  startDate   DateTime?
+  endDate     DateTime?
+  returnedAt  DateTime?
+}
+
+model SupplyTransaction {
+  id       String @id @default(uuid())
+  userId   String
+  supplyId String
+
+  user   User   @relation(fields: [userId], references: [id])
+  supply Supply @relation(fields: [supplyId], references: [id])
+
+  quantity   Int
+  totalPrice Decimal @db.Decimal(10, 2)
+
+  type   SupplyTransactionType
+  status TransactionStatus     @default(PENDING)
+
+  createdAt DateTime @default(now())
+}
+
+model LoanPayment {
+  id     String  @id @default(uuid())
+  loanId String
+  amount Decimal @db.Decimal(10, 2)
+
+  loan Loan @relation(fields: [loanId], references: [id])
+
+  paidAt DateTime @default(now())
+}
+
+model LoanStatusHistory {
+  id        String     @id @default(uuid())
+  loanId    String
+  status    LoanStatus
+  changedAt DateTime   @default(now())
+}
+
+model Availability {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  date     DateTime
+  location String
+  notes    String?
+
+  createdAt DateTime @default(now())
+}
+
+model Report {
+  id          String   @id @default(uuid())
+  title       String
+  generatedBy String
+  createdAt   DateTime @default(now())
+}
+
+model AuditTrail {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
   createdAt DateTime @default(now())
 }

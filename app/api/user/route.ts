@@ -6,6 +6,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const username = body.username;
+
     const password = await bcrypt.hash(body.password, 10);
 
     if (!username || !password) {

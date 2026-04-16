@@ -21,7 +21,7 @@ export default function Home() {
 
       <section className="relative h-[80vh] flex items-center">
         <Image
-          src="/farm.jpg"
+          src="/farm.webp"
           alt="Farm"
           fill
           className="object-cover"

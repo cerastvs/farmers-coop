@@ -57,67 +57,72 @@ export default function SignUp() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-md">
-        <h1 className="text-2xl font-bold text-center mb-6">
-          Create an account
-        </h1>
+    <div className="min-h-screen flex items-center justify-center bg-green-50 px-4">
+      <div className="w-full max-w-md bg-white/80 backdrop-blur-md p-6 sm:p-8 rounded-2xl shadow-xl">
+        <div className="text-center mb-6">
+          <h1 className="text-2xl font-bold text-green-700">🌱 FarmCoop</h1>
+          <p className="text-gray-500 text-sm mt-1">Create your account</p>
+        </div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label>Username</label>
             <input
               name="username"
-              className={`w-full px-4 py-2 border rounded-lg ${
-                errors.username ? "border-red-500" : ""
-              }`}
+              placeholder="Username"
+              className={`w-full px-4 py-3 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-600 ${errors.username ? "ring-2 ring-red-500" : ""
+                }`}
             />
             {errors.username && (
-              <p className="text-red-500 text-sm">{errors.username}</p>
+              <p className="text-red-500 text-sm mt-1">{errors.username}</p>
             )}
           </div>
 
           <div>
-            <label>Password</label>
             <input
               name="password"
               type="password"
-              className={`w-full px-4 py-2 border rounded-lg ${
-                errors.password ? "border-red-500" : ""
-              }`}
+              placeholder="Password"
+              className={`w-full px-4 py-3 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-600 ${errors.password ? "ring-2 ring-red-500" : ""
+                }`}
             />
             {errors.password && (
-              <p className="text-red-500 text-sm">{errors.password}</p>
+              <p className="text-red-500 text-sm mt-1">{errors.password}</p>
             )}
           </div>
+
           <div>
-            <label>Confirm Password</label>
             <input
               name="confirmPassword"
               type="password"
-              className={`w-full px-4 py-2 border rounded-lg ${
-                errors.confirmPassword ? "border-red-500" : ""
-              }`}
+              placeholder="Confirm Password"
+              className={`w-full px-4 py-3 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-600 ${errors.confirmPassword ? "ring-2 ring-red-500" : ""
+                }`}
             />
             {errors.confirmPassword && (
-              <p className="text-red-500 text-sm">{errors.confirmPassword}</p>
+              <p className="text-red-500 text-sm mt-1">{errors.confirmPassword}</p>
             )}
           </div>
 
           <button
             type="submit"
-            className="w-full bg-black text-white py-2 rounded-lg hover:bg-gray-800 transition"
+            className="w-full bg-green-700 text-white py-3 rounded-xl hover:bg-green-800 transition font-medium"
           >
-            Sign up
+            Sign Up
           </button>
         </form>
 
-        <p className="text-sm text-center mt-4">
+        <p className="text-sm text-center mt-6 text-gray-600">
           Already have an account?{" "}
-          <Link href="/login" className="text-black font-medium underline">
+          <Link href="/login" className="text-green-600 font-medium">
             Log in
           </Link>
         </p>
+
+        <div className="text-center mt-4">
+          <Link href="/" className="text-gray-400 text-sm hover:underline">
+            ← Back to home
+          </Link>
+        </div>
       </div>
     </div>
   );

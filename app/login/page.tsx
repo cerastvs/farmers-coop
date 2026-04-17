@@ -7,46 +7,60 @@ import { useFormStatus } from "react-dom";
 
 export default function Login() {
   const [state, loginAction] = useActionState(login, undefined);
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-md">
-        <h1 className="text-2xl font-bold text-center mb-6">Welcome back</h1>
 
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-green-50 px-4">
+      <div className="w-full max-w-md bg-white/80 backdrop-blur-md p-6 sm:p-8 rounded-2xl shadow-xl">
+        <div className="text-center mb-6">
+          <h1 className="text-2xl font-bold text-green-700">🌱 FarmCoop</h1>
+          <p className="text-gray-500 text-sm mt-1">Sign in to your account</p>
+        </div>
         <form className="space-y-4" action={loginAction}>
           <div>
             {state?.errors?.username?.[0] && (
               <p className="text-red-500 text-sm">{state.errors.username[0]}</p>
             )}
-            <label className="block text-sm font-medium mb-1">username</label>
             <input
               name="username"
               type="text"
-              placeholder="you@example.com"
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+              placeholder="Email address"
+              className="w-full px-4 py-3 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-600"
             />
           </div>
 
           <div>
-            {state?.errors?.username?.[0] && (
-              <p className="text-red-500 text-sm">{state.errors.username[0]}</p>
+            {state?.errors?.password?.[0] && (
+              <p className="text-red-500 text-sm">{state.errors.password[0]}</p>
             )}
-            <label className="block text-sm font-medium mb-1">Password</label>
             <input
               name="password"
               type="password"
-              placeholder="••••••••"
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+              placeholder="Password"
+              className="w-full px-4 py-3 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-600"
             />
           </div>
+
+          <div className="flex items-center justify-between text-sm">
+            <Link href="#" className="text-green-600 hover:underline">
+              Forgot password?
+            </Link>
+          </div>
+
           <SubmitButton />
         </form>
 
-        <p className="text-sm text-center mt-4">
+        <p className="text-sm text-center mt-6 text-gray-600">
           Don’t have an account?{" "}
-          <Link href="/signup" className="text-black font-medium underline">
+          <Link href="/signup" className="text-green-600 font-medium">
             Sign up
           </Link>
         </p>
+
+        <div className="text-center mt-4">
+          <Link href="/" className="text-gray-400 text-sm hover:underline">
+            ← Back to home
+          </Link>
+        </div>
       </div>
     </div>
   );
@@ -58,9 +72,10 @@ function SubmitButton() {
   return (
     <button
       type="submit"
-      className="w-full bg-black text-white py-2 rounded-lg hover:bg-gray-800 transition"
+      disabled={pending}
+      className="w-full bg-green-700 text-white py-3 rounded-xl hover:bg-green-800 transition font-medium"
     >
-      Log in
+      {pending ? "Signing in..." : "Sign In"}
     </button>
   );
 }

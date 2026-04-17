@@ -21,6 +21,14 @@ export async function middleware(req: NextRequest) {
   const isPublicPage = publicPages.some(
     (p) => pathname === p || pathname.startsWith(p),
   );
+
+  if (
+    pathname.startsWith("/api") ||
+    pathname.includes(".") // Skips public files with extensions
+  ) {
+    return NextResponse.next();
+  }
+
   if (isPublicPage) {
     return NextResponse.next();
   }

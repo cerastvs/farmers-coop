@@ -17,18 +17,17 @@ export async function middleware(req: NextRequest) {
   const session = cookie ? await decrypt(cookie) : null;
   const publicRoutes = ["/login", "/signup"];
   const isPublicRoute = publicRoutes.some((r) => pathname.startsWith(r));
-  const publicPages = ["/home", "/registration"];
+  const publicPages = ["/home"];
   const isPublicPage = publicPages.some(
     (p) => pathname === p || pathname.startsWith(p),
   );
 
-  if (
-    pathname.startsWith("/api") ||
-    pathname.includes(".") // Skips public files with extensions
-  ) {
+  if (pathname.startsWith("/api") || pathname.includes(".")) {
     return NextResponse.next();
   }
-
+  if (session?.userRole === "APPLICANT" && pathname !== "/registration") {
+    return NextResponse.redirect(new URL("/registration", req.url));
+  }
   if (isPublicPage) {
     return NextResponse.next();
   }

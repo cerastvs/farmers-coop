@@ -63,7 +63,7 @@ export default function SignUp() {
 
       <div className="w-full max-w-md bg-white/70 backdrop-blur-xl p-8 sm:p-10 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-white/20 relative z-10 transition-all duration-300 font-sans">
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-2xl mb-4 shadow-inner">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4">
             <span className="text-3xl">🌱</span>
           </div>
           <h1 className="text-3xl font-extrabold text-green-900 tracking-tight">
@@ -155,13 +155,6 @@ export default function SignUp() {
               Log in here
             </Link>
           </p>
-
-          <Link
-            href="/"
-            className="text-xs font-semibold text-gray-400 hover:text-green-600 uppercase tracking-widest transition-colors inline-block"
-          >
-            ← Return to home
-          </Link>
         </div>
       </div>
     </div>

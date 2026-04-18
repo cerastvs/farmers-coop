@@ -89,3 +89,16 @@ export async function decrypt(
 export async function deleteSession() {
   (await cookies()).delete("session");
 }
+
+export async function getUserId() {
+  const cookie = (await cookies()).get("session")?.value;
+  const session = cookie ? await decrypt(cookie) : null;
+
+  if (!session?.userId) {
+    return "error";
+  }
+
+  const userId = session.userId;
+
+  return userId;
+}

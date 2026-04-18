@@ -1,25 +1,75 @@
+"use client";
+
 import Link from "next/link";
 import { logout } from "../login/actions";
+import { useState } from "react";
+import { getUserId } from "@/lib/session";
+import { Application } from "../generated/prisma/client";
 
 export default function Registration() {
+  const [loading, setLoading] = useState(false);
+  const [application, setApplicaton] = useState<Application | null>(null);
+  async function handleSubmit(e: any) {
+    e.preventDefault();
+    setLoading(true);
+
+    const formData = new FormData(e.target);
+
+    try {
+      const res = await fetch("/api/registration", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error);
+        return;
+      }
+
+      alert("Application submitted!");
+      e.target.reset();
+    } catch (err) {
+      alert("Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  }
+  // i'll fix this later, takbo lang ;)))
+
+  // fetch(`/api/registation?id=${getUserId()}`)
+  //   .then((res) => res.json())
+  //   .then((data) => {
+  //     setApplicaton(data);
+  //     console.log(data);
+  //   });
+
   return (
     <div className="min-h-screen bg-[#cfe1ce] font-sans flex flex-col items-center py-6 sm:py-12">
       <div className="w-full max-w-lg bg-white rounded-[2.5rem] shadow-xl overflow-hidden flex flex-col min-h-screen sm:min-h-0">
-
-        {/* Header with Back Button */}
         <div className="p-6 flex items-center">
           <Link href="/" className="text-gray-900">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-6 w-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
             </svg>
           </Link>
         </div>
 
-        {/* Summary Card */}
         <div className="px-6 mb-6">
           <div className="bg-[#51a808] text-white p-5 rounded-xl flex justify-between items-center shadow-md">
             <span className="font-semibold text-lg">Application Status</span>
-            <span className="font-bold text-xl uppercase tracking-tighter">Farmer ID</span>
           </div>
         </div>
 
@@ -28,12 +78,14 @@ export default function Registration() {
           action="/submit-application"
           method="POST"
           encType="multipart/form-data"
+          onSubmit={handleSubmit}
         >
           <input type="hidden" name="userId" value="" />
 
-          {/* Section: Personal Information */}
           <div className="mb-8">
-            <h2 className="text-lg font-bold text-gray-800 mb-4 opacity-70">Personal Information</h2>
+            <h2 className="text-lg font-bold text-gray-800 mb-4 opacity-70">
+              Personal Information
+            </h2>
             <div className="space-y-3">
               <input
                 type="text"
@@ -77,9 +129,10 @@ export default function Registration() {
             </div>
           </div>
 
-          {/* Section: Farming Details */}
           <div className="mb-8">
-            <h2 className="text-lg font-bold text-gray-800 mb-4 opacity-70">Farming Details</h2>
+            <h2 className="text-lg font-bold text-gray-800 mb-4 opacity-70">
+              Farming Details
+            </h2>
             <div className="space-y-3">
               <input
                 type="number"
@@ -106,12 +159,15 @@ export default function Registration() {
             </div>
           </div>
 
-          {/* Section: Requirements */}
           <div className="mb-10">
-            <h2 className="text-lg font-bold text-gray-800 mb-4 opacity-70">Requirements</h2>
+            <h2 className="text-lg font-bold text-gray-800 mb-4 opacity-70">
+              Requirements
+            </h2>
             <div className="space-y-4">
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-semibold text-gray-500 uppercase px-1">Valid Identification</label>
+                <label className="text-xs font-semibold text-gray-500 uppercase px-1">
+                  Valid Identification
+                </label>
                 <input
                   type="file"
                   name="validId"
@@ -121,7 +177,9 @@ export default function Registration() {
                 />
               </div>
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-semibold text-gray-500 uppercase px-1">Proof of Farming</label>
+                <label className="text-xs font-semibold text-gray-500 uppercase px-1">
+                  Proof of Farming
+                </label>
                 <input
                   type="file"
                   name="proofOfFarm"
@@ -141,7 +199,13 @@ export default function Registration() {
               Submit Application
             </button>
             <p className="text-center text-xs text-gray-400 mt-4 px-2">
-              Have any questions? Reach directly to our <Link href="#" className="text-black font-semibold hover:underline">Customer Support</Link>
+              Have any questions? Reach directly to our{" "}
+              <Link
+                href="#"
+                className="text-black font-semibold hover:underline"
+              >
+                Customer Support
+              </Link>
             </p>
           </div>
         </form>

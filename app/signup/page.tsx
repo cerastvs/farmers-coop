@@ -57,70 +57,110 @@ export default function SignUp() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-green-50 px-4">
-      <div className="w-full max-w-md bg-white/80 backdrop-blur-md p-6 sm:p-8 rounded-2xl shadow-xl">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-green-700">🌱 FarmCoop</h1>
-          <p className="text-gray-500 text-sm mt-1">Create your account</p>
+    <div className="min-h-screen flex items-center justify-center bg-[#f0f9f4] relative overflow-hidden px-4">
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-green-200/50 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-200/50 rounded-full blur-[120px] pointer-events-none" />
+
+      <div className="w-full max-w-md bg-white/70 backdrop-blur-xl p-8 sm:p-10 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-white/20 relative z-10 transition-all duration-300 font-sans">
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-2xl mb-4 shadow-inner">
+            <span className="text-3xl">🌱</span>
+          </div>
+          <h1 className="text-3xl font-extrabold text-green-900 tracking-tight">
+            FarmCoop
+          </h1>
+          <p className="text-green-700/60 font-medium mt-2">
+            Join our growing community
+          </p>
         </div>
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div>
+        <form className="space-y-5" onSubmit={handleSubmit}>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-green-800/70 ml-1 uppercase tracking-wider">
+              Username
+            </label>
             <input
               name="username"
-              placeholder="Username"
-              className={`w-full px-4 py-3 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-600 ${errors.username ? "ring-2 ring-red-500" : ""
-                }`}
+              placeholder="e.g. janesmith"
+              className={`w-full px-5 py-3.5 bg-white/50 border border-green-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-green-500/10 focus:border-green-500 transition-all placeholder:text-gray-400 ${
+                errors.username
+                  ? "border-red-300 bg-red-50/50 ring-4 ring-red-500/10"
+                  : ""
+              }`}
             />
             {errors.username && (
-              <p className="text-red-500 text-sm mt-1">{errors.username}</p>
+              <p className="text-red-500 text-xs font-medium mt-1 ml-1">
+                {errors.username}
+              </p>
             )}
           </div>
 
-          <div>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-green-800/70 ml-1 uppercase tracking-wider">
+              Password
+            </label>
             <input
               name="password"
               type="password"
-              placeholder="Password"
-              className={`w-full px-4 py-3 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-600 ${errors.password ? "ring-2 ring-red-500" : ""
-                }`}
+              placeholder="••••••••"
+              className={`w-full px-5 py-3.5 bg-white/50 border border-green-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-green-500/10 focus:border-green-500 transition-all placeholder:text-gray-400 ${
+                errors.password
+                  ? "border-red-300 bg-red-50/50 ring-4 ring-red-500/10"
+                  : ""
+              }`}
             />
             {errors.password && (
-              <p className="text-red-500 text-sm mt-1">{errors.password}</p>
+              <p className="text-red-500 text-xs font-medium mt-1 ml-1">
+                {errors.password}
+              </p>
             )}
           </div>
 
-          <div>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-green-800/70 ml-1 uppercase tracking-wider">
+              Confirm Password
+            </label>
             <input
               name="confirmPassword"
               type="password"
-              placeholder="Confirm Password"
-              className={`w-full px-4 py-3 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-600 ${errors.confirmPassword ? "ring-2 ring-red-500" : ""
-                }`}
+              placeholder="••••••••"
+              className={`w-full px-5 py-3.5 bg-white/50 border border-green-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-green-500/10 focus:border-green-500 transition-all placeholder:text-gray-400 ${
+                errors.confirmPassword
+                  ? "border-red-300 bg-red-50/50 ring-4 ring-red-500/10"
+                  : ""
+              }`}
             />
             {errors.confirmPassword && (
-              <p className="text-red-500 text-sm mt-1">{errors.confirmPassword}</p>
+              <p className="text-red-500 text-xs font-medium mt-1 ml-1">
+                {errors.confirmPassword}
+              </p>
             )}
           </div>
 
           <button
             type="submit"
-            className="w-full bg-green-700 text-white py-3 rounded-xl hover:bg-green-800 transition font-medium"
+            className="w-full bg-green-600 text-white py-4 rounded-2xl hover:bg-green-700 active:scale-[0.98] transition-all font-bold shadow-lg shadow-green-200 mt-2"
           >
-            Sign Up
+            Create Account
           </button>
         </form>
 
-        <p className="text-sm text-center mt-6 text-gray-600">
-          Already have an account?{" "}
-          <Link href="/login" className="text-green-600 font-medium">
-            Log in
-          </Link>
-        </p>
+        <div className="mt-8 pt-6 border-t border-green-100/50 flex flex-col gap-4 text-center">
+          <p className="text-sm text-gray-500">
+            Already have an account?{" "}
+            <Link
+              href="/login"
+              className="text-green-600 font-bold hover:text-green-700 transition-colors"
+            >
+              Log in here
+            </Link>
+          </p>
 
-        <div className="text-center mt-4">
-          <Link href="/" className="text-gray-400 text-sm hover:underline">
-            ← Back to home
+          <Link
+            href="/"
+            className="text-xs font-semibold text-gray-400 hover:text-green-600 uppercase tracking-widest transition-colors inline-block"
+          >
+            ← Return to home
           </Link>
         </div>
       </div>

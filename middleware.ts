@@ -17,7 +17,7 @@ export async function middleware(req: NextRequest) {
   const session = cookie ? await decrypt(cookie) : null;
   const publicRoutes = ["/login", "/signup"];
   const isPublicRoute = publicRoutes.some((r) => pathname.startsWith(r));
-  const publicPages = ["/home"];
+  const publicPages = ["/home", "/registration"];
   const isPublicPage = publicPages.some(
     (p) => pathname === p || pathname.startsWith(p),
   );

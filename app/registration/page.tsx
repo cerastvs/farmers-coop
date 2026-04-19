@@ -2,48 +2,34 @@
 
 import Link from "next/link";
 import { logout } from "../login/actions";
-import { useState } from "react";
-import { getUserId } from "@/lib/session";
+import { useEffect, useState } from "react";
 import { Application } from "../generated/prisma/client";
+import { handleSubmit } from "./actions";
 
 export default function Registration() {
   const [loading, setLoading] = useState(false);
   const [application, setApplicaton] = useState<Application | null>(null);
-  async function handleSubmit(e: any) {
-    e.preventDefault();
-    setLoading(true);
-
-    const formData = new FormData(e.target);
-
-    try {
-      const res = await fetch("/api/registration", {
-        method: "POST",
-        body: formData,
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  useEffect(() => {
+    fetch("/api/registration")
+      .then(async (res) => {
+        if (!res.ok) {
+          const text = await res.text();
+          console.error("API error:", text);
+          return null;
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (data) {
+          setApplicaton(data);
+          console.log(data);
+        }
+      })
+      .catch((err) => {
+        console.error("Fetch failed:", err);
       });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        alert(data.error);
-        return;
-      }
-
-      alert("Application submitted!");
-      e.target.reset();
-    } catch (err) {
-      alert("Something went wrong");
-    } finally {
-      setLoading(false);
-    }
-  }
-  // i'll fix this later, takbo lang ;)))
-
-  // fetch(`/api/registation?id=${getUserId()}`)
-  //   .then((res) => res.json())
-  //   .then((data) => {
-  //     setApplicaton(data);
-  //     console.log(data);
-  //   });
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#cfe1ce] font-sans flex flex-col items-center py-6 sm:py-12">
@@ -78,7 +64,7 @@ export default function Registration() {
           action="/submit-application"
           method="POST"
           encType="multipart/form-data"
-          onSubmit={handleSubmit}
+          onSubmit={(e) => handleSubmit(e, setLoading, setErrors)}
         >
           <input type="hidden" name="userId" value="" />
 
@@ -86,40 +72,62 @@ export default function Registration() {
             <h2 className="text-lg font-bold text-gray-800 mb-4 opacity-70">
               Personal Information
             </h2>
-            <div className="space-y-3">
-              <input
-                type="text"
-                name="fullName"
-                required
-                placeholder="Your Name *"
-                className="w-full border border-gray-200 rounded-lg px-4 py-3 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-green-500 text-gray-700"
-              />
-              <input
-                type="text"
-                name="contact"
-                required
-                placeholder="Your Phone Number *"
-                className="w-full border border-gray-200 rounded-lg px-4 py-3 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-green-500 text-gray-700"
-              />
-              <input
-                type="text"
-                name="address"
-                required
-                placeholder="Current Address *"
-                className="w-full border border-gray-200 rounded-lg px-4 py-3 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-green-500 text-gray-700"
-              />
-              <div className="grid grid-cols-2 gap-3">
+
+            {errors.fullName && (
+              <p className="text-red-500 text-sm mb-1">{errors.fullName}</p>
+            )}
+            <input
+              type="text"
+              name="fullName"
+              placeholder="Your Name *"
+              className={`w-full border rounded-lg px-4 py-3 ${errors.fullName ? "border-red-500" : "border-gray-200"
+                }`}
+            />
+
+            {errors.contact && (
+              <p className="text-red-500 text-sm mb-1">{errors.contact}</p>
+            )}
+            <input
+              type="text"
+              name="contact"
+              placeholder="Your Phone Number *"
+              className={`w-full border rounded-lg px-4 py-3 ${errors.contact ? "border-red-500" : "border-gray-200"
+                }`}
+            />
+
+            {errors.address && (
+              <p className="text-red-500 text-sm mb-1">{errors.address}</p>
+            )}
+            <input
+              type="text"
+              name="address"
+              placeholder="Current Address *"
+              className={`w-full border rounded-lg px-4 py-3 ${errors.address ? "border-red-500" : "border-gray-200"
+                }`}
+            />
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                {errors.age && (
+                  <p className="text-red-500 text-sm mb-1">{errors.age}</p>
+                )}
                 <input
                   type="number"
                   name="age"
-                  required
                   placeholder="Age *"
-                  className="border border-gray-200 rounded-lg px-4 py-3 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-green-500 text-gray-700"
+                  className={`w-full border rounded-lg px-4 py-3 ${errors.age ? "border-red-500" : "border-gray-200"
+                    }`}
                 />
+              </div>
+
+              <div>
+                {errors.gender && (
+                  <p className="text-red-500 text-sm mb-1">{errors.gender}</p>
+                )}
                 <select
                   name="gender"
-                  required
-                  className="border border-gray-200 rounded-lg px-4 py-3 bg-white text-gray-400 focus:outline-none focus:ring-1 focus:ring-green-500"
+                  className={`w-full border rounded-lg px-4 py-3 bg-white ${errors.gender ? "border-red-500" : "border-gray-200"
+                    }`}
                 >
                   <option value="">Gender *</option>
                   <option value="Male">Male</option>
@@ -134,28 +142,43 @@ export default function Registration() {
               Farming Details
             </h2>
             <div className="space-y-3">
-              <input
-                type="number"
-                step="0.01"
-                name="farmSize"
-                required
-                placeholder="Farm Size (in hectares) *"
-                className="w-full border border-gray-200 rounded-lg px-4 py-3 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-green-500 text-gray-700"
-              />
-              <input
-                type="text"
-                name="cropType"
-                required
-                placeholder="Principal Crop Types *"
-                className="w-full border border-gray-200 rounded-lg px-4 py-3 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-green-500 text-gray-700"
-              />
-              <input
-                type="number"
-                name="yearsFarming"
-                required
-                placeholder="Years of Farming *"
-                className="w-full border border-gray-200 rounded-lg px-4 py-3 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-green-500 text-gray-700"
-              />
+              <div>
+                {errors.farmSize && (
+                  <p className="text-red-500 text-sm mb-1">{errors.farmSize}</p>
+                )}
+                <input
+                  type="number"
+                  step="0.01"
+                  name="farmSize"
+                  placeholder="Farm Size (in hectares) *"
+                  className={`w-full border rounded-lg px-4 py-3 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-green-500 text-gray-700 ${errors.farmSize ? "border-red-500" : "border-gray-200"
+                    }`}
+                />
+              </div>
+              <div>
+                {errors.cropType && (
+                  <p className="text-red-500 text-sm mb-1">{errors.cropType}</p>
+                )}
+                <input
+                  type="text"
+                  name="cropType"
+                  placeholder="Principal Crop Types *"
+                  className={`w-full border rounded-lg px-4 py-3 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-green-500 text-gray-700 ${errors.cropType ? "border-red-500" : "border-gray-200"
+                    }`}
+                />
+              </div>
+              <div>
+                {errors.yearsFarming && (
+                  <p className="text-red-500 text-sm mb-1">{errors.yearsFarming}</p>
+                )}
+                <input
+                  type="number"
+                  name="yearsFarming"
+                  placeholder="Years of Farming *"
+                  className={`w-full border rounded-lg px-4 py-3 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-green-500 text-gray-700 ${errors.yearsFarming ? "border-red-500" : "border-gray-200"
+                    }`}
+                />
+              </div>
             </div>
           </div>
 
@@ -168,24 +191,30 @@ export default function Registration() {
                 <label className="text-xs font-semibold text-gray-500 uppercase px-1">
                   Valid Identification
                 </label>
+                {errors.validId && (
+                  <p className="text-red-500 text-sm">{errors.validId}</p>
+                )}
                 <input
                   type="file"
                   name="validId"
                   accept="image/*"
-                  required
-                  className="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 cursor-pointer"
+                  className={`text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 cursor-pointer ${errors.validId ? "outline outline-red-400 rounded" : ""
+                    }`}
                 />
               </div>
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-semibold text-gray-500 uppercase px-1">
                   Proof of Farming
                 </label>
+                {errors.proofOfFarm && (
+                  <p className="text-red-500 text-sm">{errors.proofOfFarm}</p>
+                )}
                 <input
                   type="file"
                   name="proofOfFarm"
                   accept="image/*"
-                  required
-                  className="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 cursor-pointer"
+                  className={`text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 cursor-pointer ${errors.proofOfFarm ? "outline outline-red-400 rounded" : ""
+                    }`}
                 />
               </div>
             </div>

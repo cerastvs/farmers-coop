@@ -63,3 +63,16 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Something went wrong" }, { status: 500 });
   }
 }
+
+export async function GET() {
+  const user = await getUserId();
+  const application = await prisma.application.findFirst({
+    where: { userId: user },
+  });
+
+  if (!application) {
+    return Response.json(null, { status: 404 });
+  }
+
+  return Response.json(application);
+}

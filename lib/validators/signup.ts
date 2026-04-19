@@ -30,11 +30,3 @@ export const RegistrationSchema = z
     message: "Passwords do not match",
     path: ["confirmPassword"],
   });
-
-type Registration = z.infer<typeof RegistrationSchema>;
-
-const data: Registration = {
-  username: "yurika",
-  password: "21aa_Ass",
-  confirmPassword: "21aa_Ass",
-};

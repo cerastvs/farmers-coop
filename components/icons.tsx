@@ -227,19 +227,38 @@ export function IconBell(props: React.SVGProps<SVGSVGElement>) {
 }
 
 export function IconLeaf(props: React.SVGProps<SVGSVGElement>) {
-    return (
-        <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="w-5 h-5"
-            {...props}
-        >
-            <path d="M17 8C8 10 5.9 16.17 3.82 19.82A1 1 0 0 0 5 21C6 20.49 9 19 12 19c4 0 9-2 9-8.99 0 0-1.01 1-4 1" />
-            <path d="M8 16c0-4 4-8 9-8" />
-        </svg>
-    );
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="w-5 h-5"
+      {...props}
+    >
+      <path d="M17 8C8 10 5.9 16.17 3.82 19.82A1 1 0 0 0 5 21C6 20.49 9 19 12 19c4 0 9-2 9-8.99 0 0-1.01 1-4 1" />
+      <path d="M8 16c0-4 4-8 9-8" />
+    </svg>
+  );
+}
+
+export function IconInfoCircle(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="w-5 h-5"
+      {...props}
+    >
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="16" x2="12" y2="12" />
+      <line x1="12" y1="8" x2="12.01" y2="8" />
+    </svg>
+  );
 }

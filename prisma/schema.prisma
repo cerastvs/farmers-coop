@@ -144,7 +144,7 @@ model Payment {
   type   PaymentType
   amount Decimal     @db.Decimal(10, 2)
 
-  receiptUrl String
+  receiptUrl String?
   status     PaymentStatus @default(PENDING)
 
   createdAt  DateTime @default(now())

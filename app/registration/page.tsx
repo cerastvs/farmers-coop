@@ -34,9 +34,8 @@ export default function Registration() {
   useEffect(() => {
     fetch("/api/registration")
       .then(async (res) => {
-        if (!res.ok) {
-          const text = await res.text();
-          console.error("API error:", text);
+        if (res.status === 401) {
+          console.error("Not logged in");
           return null;
         }
         return res.json();
@@ -50,23 +49,12 @@ export default function Registration() {
         console.error("Fetch failed:", err);
       });
   }, []);
-
   if (!mounted) return null;
 
   return (
     <div className="min-h-screen bg-[#cfe1ce] font-sans flex flex-col items-center py-6 sm:py-12">
       <div className="w-full max-w-lg bg-white rounded-[2.5rem] shadow-xl overflow-hidden flex flex-col min-h-screen sm:min-h-0">
-        <div className="p-6 flex items-center">
-          <Link href="/" className="text-gray-900">
-            ←
-          </Link>
-        </div>
-
-        <div className="px-6 mb-6">
-          <div className="bg-[#51a808] text-white p-5 rounded-xl shadow-md">
-            <span className="font-semibold text-lg">Application Status</span>
-          </div>
-        </div>
+        <div className="p-6"></div>
 
         <form
           className="flex-1 flex flex-col px-6 pb-8"
@@ -188,13 +176,63 @@ export default function Registration() {
               Requirements
             </h2>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
               <FormField error={errors.validId}>
-                <input type="file" name="validId" accept="image/*" />
+                <label className="text-xs font-semibold text-gray-500 uppercase px-1">
+                  Valid Identification
+                </label>
+
+                <div
+                  className={`flex items-center justify-between border rounded-lg px-4 py-3 ${
+                    errors.validId ? "border-red-500" : "border-gray-200"
+                  }`}
+                >
+                  <input
+                    type="file"
+                    name="validId"
+                    accept="image/*"
+                    className="hidden"
+                    id="validId"
+                  />
+
+                  <label
+                    htmlFor="validId"
+                    className="cursor-pointer text-sm text-gray-600"
+                  >
+                    Choose file
+                  </label>
+
+                  <span className="text-xs text-gray-400">Image only</span>
+                </div>
               </FormField>
 
               <FormField error={errors.proofOfFarm}>
-                <input type="file" name="proofOfFarm" accept="image/*" />
+                <label className="text-xs font-semibold text-gray-500 uppercase px-1">
+                  Proof of Farming
+                </label>
+
+                <div
+                  className={`flex items-center justify-between border rounded-lg px-4 py-3 ${
+                    errors.proofOfFarm ? "border-red-500" : "border-gray-200"
+                  }`}
+                >
+                  <input
+                    type="file"
+                    name="proofOfFarm"
+                    accept="image/*"
+                    className="hidden"
+                    id="proofOfFarm"
+                  />
+
+                  <label
+                    htmlFor="proofOfFarm"
+                    className="cursor-pointer text-sm text-gray-600"
+                  >
+                    Choose file
+                  </label>
+
+                  <span className="text-xs text-gray-400">Image only</span>
+                </div>
               </FormField>
             </div>
           </div>
@@ -209,7 +247,6 @@ export default function Registration() {
           </div>
         </form>
 
-        {/* logout */}
         <div className="p-4 border-t text-center">
           <form action={logout}>
             <button type="submit" className="text-sm text-gray-400">

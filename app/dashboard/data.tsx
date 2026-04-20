@@ -49,7 +49,7 @@ export const quickActions = [
     icon: <IconApplyLoan />,
     iconBg: "bg-green-100",
     iconColor: "text-green-700",
-    href: "#",
+    href: "/dashboard/applyLoan",
   },
   {
     label: "Rent Machine",

@@ -91,6 +91,8 @@ model Post {
 model Loan {
   id        String        @id @default(uuid())
   userId    String
+  name      String        @default("Cash Loan") // Loan type / label (e.g. Cash Loan, Emergency Loan)
+  status    LoanStatus    @default(PENDING)
   amount    Decimal       @db.Decimal(10, 2)
   createdAt DateTime      @default(now())
   due       DateTime
@@ -194,12 +196,12 @@ model SupplyTransaction {
 }
 
 model LoanPayment {
-  id     String  @id @default(uuid())
-  loanId String
-  amount Decimal @db.Decimal(10, 2)
+  id        String  @id @default(uuid())
+  loanId    String
+  amount    Decimal @db.Decimal(10, 2)
+  receiptNo String? // Auto-generated receipt number, e.g. RCP-2026-0001
 
-  loan Loan @relation(fields: [loanId], references: [id])
-
+  loan   Loan     @relation(fields: [loanId], references: [id])
   paidAt DateTime @default(now())
 }
 

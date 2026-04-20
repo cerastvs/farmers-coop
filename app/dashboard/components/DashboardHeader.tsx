@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { logout } from "../../login/actions";
-import { IconMenu, IconLeaf } from "../../../components/icons";
+import { IconMenu, IconLeaf } from "@/components/icons";
 
 export function DashboardHeader() {
   const [menuOpen, setMenuOpen] = useState(false);

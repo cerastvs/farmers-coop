@@ -8,7 +8,7 @@ import {
   IconRentMachine,
   IconBuySupplies,
   IconViewLoans,
-} from "../../components/icons";
+} from "@/components/icons";
 
 export const summaryCards = [
   {
@@ -70,7 +70,7 @@ export const quickActions = [
     icon: <IconViewLoans />,
     iconBg: "bg-purple-100",
     iconColor: "text-purple-700",
-    href: "#",
+    href: "/dashboard/viewloan",
   },
 ];
 

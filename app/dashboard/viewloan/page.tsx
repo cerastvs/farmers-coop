@@ -12,6 +12,7 @@ interface LoanData {
   name: string;
   status: "PENDING" | "APPROVED" | "REJECTED" | "ACTIVE" | "PAID";
   amount: number;
+  remainingBalance: number;
   due: string;
 }
 
@@ -81,6 +82,7 @@ export default function ViewLoanPage() {
                 loan={{
                   ...loan,
                   amount: `₱${loan.amount.toLocaleString()}`,
+                  remainingBalance: `₱${loan.remainingBalance.toLocaleString()}`,
                   due: new Date(loan.due).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
                 }} 
               />

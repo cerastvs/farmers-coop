@@ -12,18 +12,19 @@ export async function GET() {
   const userId = session.userId;
 
   try {
-    // 1. Get all user loans
     const loans = await prisma.loan.findMany({
       where: {
         userId,
       },
+      include: {
+        payments: true,
+      },
       orderBy: {
-        createdAt: 'desc',
+        createdAt: "desc",
       },
     });
 
-    // 2. Get all loan payments for this user
-    const payments = await prisma.loanPayment.findMany({
+    const allPayments = await prisma.loanPayment.findMany({
       where: {
         loan: {
           userId,
@@ -37,27 +38,39 @@ export async function GET() {
         },
       },
       orderBy: {
-        paidAt: 'desc',
+        paidAt: "desc",
       },
     });
 
     return NextResponse.json({
-      loans: loans.map(l => ({
-        id: l.id,
-        name: l.name,
-        status: l.status,
-        amount: Number(l.amount),
-        due: l.due,
-      })),
-      paymentHistory: payments.map(p => ({
+      loans: loans.map((l) => {
+        const paidAmount = l.payments.reduce(
+          (sum, p) => sum + Number(p.amount),
+          0,
+        );
+        const remainingBalance = Number(l.amount) - paidAmount;
+
+        return {
+          id: l.id,
+          name: l.name,
+          status: l.status,
+          amount: Number(l.amount),
+          remainingBalance: remainingBalance > 0 ? remainingBalance : 0,
+          due: l.due,
+        };
+      }),
+      paymentHistory: allPayments.map((p) => ({
         receiptNo: p.receiptNo,
         paidAt: p.paidAt,
         amount: Number(p.amount),
-        loanName: p.loan.name, // Extra info for the table if needed
+        loanName: p.loan.name,
       })),
     });
   } catch (error) {
     console.error("Fetch loans error:", error);
-    return NextResponse.json({ error: "Failed to fetch loans" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch loans" },
+      { status: 500 },
+    );
   }
 }

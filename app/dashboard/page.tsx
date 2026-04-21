@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { DashboardHeader } from "./components/DashboardHeader";
 import { SummaryCard } from "./components/SummaryCard";
 import { QuickActionButton } from "./components/QuickActionButton";
@@ -63,6 +63,7 @@ export default function Dashboard() {
     }
 
     fetchData();
+    console.log(user);
   }, [user, setUser]);
 
   if (loading) {

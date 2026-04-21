@@ -4,8 +4,8 @@ import { routeAccess } from "./rbac";
 export function canAccess(path: string, role?: Role) {
   if (!role) return false;
 
-  const match = Object.keys(routeAccess).find((route) =>
-    path.startsWith(route),
+  const match = Object.keys(routeAccess).find(
+    (route) => path === route || path.startsWith(route + "/"),
   );
 
   if (!match) return true;

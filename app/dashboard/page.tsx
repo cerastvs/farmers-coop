@@ -42,12 +42,10 @@ export default function Dashboard() {
   useEffect(() => {
     async function fetchData() {
       try {
-        if (!user) {
-          const userRes = await fetch("/api/me");
-          if (userRes.ok) {
-            const userData = await userRes.json();
-            setUser(userData);
-          }
+        const userRes = await fetch("/api/me");
+        if (userRes.ok) {
+          const userData = await userRes.json();
+          setUser(userData);
         }
 
         const statsRes = await fetch("/api/dashboard/stats");
@@ -63,8 +61,7 @@ export default function Dashboard() {
     }
 
     fetchData();
-    console.log(user);
-  }, [user, setUser]);
+  }, [setUser]);
 
   if (loading) {
     return (

@@ -46,12 +46,15 @@ export default function Dashboard() {
         if (userRes.ok) {
           const userData = await userRes.json();
           setUser(userData);
-        }
 
-        const statsRes = await fetch("/api/dashboard/stats");
-        if (statsRes.ok) {
-          const statsData = await statsRes.json();
-          setStats(statsData);
+          // Only fetch stats if not a pending applicant
+          if (!(userData.role === "APPLICANT" && userData.hasApplied)) {
+            const statsRes = await fetch("/api/dashboard/stats");
+            if (statsRes.ok) {
+              const statsData = await statsRes.json();
+              setStats(statsData);
+            }
+          }
         }
       } catch (error) {
         console.error("Failed to fetch dashboard data:", error);
@@ -111,6 +114,41 @@ export default function Dashboard() {
       largeValue: true,
     },
   ];
+
+  const isApplicant = user?.role === "APPLICANT";
+  const hasApplied = user?.hasApplied;
+
+  if (isApplicant && hasApplied) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        <DashboardHeader />
+        <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-12">
+          <div className="bg-white rounded-[2.5rem] shadow-xl p-10 text-center border border-green-50">
+            <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <IconCalendar className="text-yellow-600 w-10 h-10" />
+            </div>
+            <h1 className="text-3xl font-black text-[#2d6a2d] mb-4">
+              Application Pending
+            </h1>
+            <p className="text-gray-600 text-lg mb-8 max-w-md mx-auto">
+              Your membership application is currently being reviewed by the cooperative board.
+              We will notify you once your account has been approved.
+            </p>
+            <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
+              <p className="text-sm text-gray-500 font-medium uppercase tracking-wider mb-2">
+                What can you do?
+              </p>
+              <p className="text-gray-700">
+                You can update your application details at any time by clicking 
+                <span className="font-bold text-[#51a808]"> "Edit Profile" </span> 
+                in the menu above.
+              </p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">

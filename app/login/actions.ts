@@ -43,7 +43,11 @@ export async function login(prevState: any, formData: FormData) {
     return { errors: { password: ["Invalid password"] } };
   }
 
-  await createSession(user.id, user.role);
+  const application = await prisma.application.findFirst({
+    where: { userId: user.id },
+  });
+
+  await createSession(user.id, user.role, !!application);
 
   redirect("/dashboard");
 }

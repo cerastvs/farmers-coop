@@ -25,8 +25,12 @@ export async function middleware(req: NextRequest) {
   if (pathname.startsWith("/api") || pathname.includes(".")) {
     return NextResponse.next();
   }
-  if (session?.userRole === "APPLICANT" && pathname !== "/registration") {
-    return NextResponse.redirect(new URL("/registration", req.url));
+  if (session?.userRole === "APPLICANT") {
+    if (!session.hasApplied && pathname !== "/registration") {
+      return NextResponse.redirect(new URL("/registration", req.url));
+    }
+    if (session.hasApplied && pathname === "/registration") {
+    }
   }
   if (isPublicPage) {
     return NextResponse.next();

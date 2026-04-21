@@ -1,4 +1,5 @@
 import { ApplicationSchema } from "@/lib/validators/registration";
+import { refreshSession } from "./server-actions";
 
 export async function handleSubmit(
   e: any,
@@ -12,8 +13,6 @@ export async function handleSubmit(
   const formData = new FormData(e.target);
   const formValues = Object.fromEntries(formData.entries());
 
-  // For updates, we might want to make images optional if already present.
-  // But let's stick to the schema first and see if it fails.
   const result = ApplicationSchema.safeParse(formValues);
   if (!result.success) {
     const fieldErrors: Record<string, string> = {};
@@ -23,8 +22,6 @@ export async function handleSubmit(
       fieldErrors[field] = err.message;
     });
 
-    // If it's an update, some fields like validId and proofOfFarm might be optional if already present.
-    // Let's check if the errors are just about these fields and if it's an update.
     if (isUpdate) {
       if (fieldErrors.validId && (formData.get("validId") as File).size === 0) {
         delete fieldErrors.validId;
@@ -56,6 +53,8 @@ export async function handleSubmit(
       alert(data.error);
       return;
     }
+
+    await refreshSession();
 
     alert(isUpdate ? "Profile updated!" : "Application submitted!");
     if (!isUpdate) e.target.reset();

@@ -1,7 +1,14 @@
 "use client";
 
 import { createContext, useContext, useState, ReactNode } from "react";
-import { User } from "../generated/prisma/client";
+
+interface User {
+  id: string;
+  name: string | null;
+  username: string;
+  role: string;
+  hasApplied?: boolean;
+}
 
 interface UserContextType {
   user: User | null;

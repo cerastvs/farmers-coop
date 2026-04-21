@@ -51,14 +51,41 @@ export default function Registration() {
   }, []);
   if (!mounted) return null;
 
+  const isUpdate = !!application;
+
   return (
     <div className="min-h-screen bg-[#cfe1ce] font-sans flex flex-col items-center py-6 sm:py-12">
       <div className="w-full max-w-lg bg-white rounded-[2.5rem] shadow-xl overflow-hidden flex flex-col min-h-screen sm:min-h-0">
-        <div className="p-6"></div>
+        <div className="p-6 flex justify-between items-center">
+          <Link
+            href="/dashboard"
+            className="text-[#51a808] font-bold flex items-center gap-1"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+            Back
+          </Link>
+          <h1 className="text-xl font-black text-[#2d6a2d]">
+            {isUpdate ? "Edit Profile" : "Application"}
+          </h1>
+          <div className="w-10"></div>
+        </div>
 
         <form
+          key={application?.id || "new"}
           className="flex-1 flex flex-col px-6 pb-8"
-          onSubmit={(e) => handleSubmit(e, setLoading, setErrors)}
+          onSubmit={(e) => handleSubmit(e, setLoading, setErrors, isUpdate)}
         >
           <input type="hidden" name="userId" value="" />
 
@@ -73,6 +100,7 @@ export default function Registration() {
                   type="text"
                   name="fullName"
                   placeholder="Your Name *"
+                  defaultValue={application?.fullName || ""}
                   className={`w-full border rounded-lg px-4 py-3 ${
                     errors.fullName ? "border-red-500" : "border-gray-200"
                   }`}
@@ -84,6 +112,7 @@ export default function Registration() {
                   type="text"
                   name="contact"
                   placeholder="Your Phone Number *"
+                  defaultValue={application?.contact || ""}
                   className={`w-full border rounded-lg px-4 py-3 ${
                     errors.contact ? "border-red-500" : "border-gray-200"
                   }`}
@@ -95,6 +124,7 @@ export default function Registration() {
                   type="text"
                   name="address"
                   placeholder="Current Address *"
+                  defaultValue={application?.address || ""}
                   className={`w-full border rounded-lg px-4 py-3 ${
                     errors.address ? "border-red-500" : "border-gray-200"
                   }`}
@@ -107,6 +137,7 @@ export default function Registration() {
                     type="number"
                     name="age"
                     placeholder="Age *"
+                    defaultValue={application?.age || ""}
                     className={`w-full border rounded-lg px-4 py-3 ${
                       errors.age ? "border-red-500" : "border-gray-200"
                     }`}
@@ -116,6 +147,7 @@ export default function Registration() {
                 <FormField error={errors.gender}>
                   <select
                     name="gender"
+                    defaultValue={application?.gender || ""}
                     className={`w-full border rounded-lg px-4 py-3 bg-white ${
                       errors.gender ? "border-red-500" : "border-gray-200"
                     }`}
@@ -141,6 +173,7 @@ export default function Registration() {
                   step="0.01"
                   name="farmSize"
                   placeholder="Farm Size (in hectares) *"
+                  defaultValue={application?.farmSize || ""}
                   className={`w-full border rounded-lg px-4 py-3 ${
                     errors.farmSize ? "border-red-500" : "border-gray-200"
                   }`}
@@ -152,6 +185,7 @@ export default function Registration() {
                   type="text"
                   name="cropType"
                   placeholder="Principal Crop Types *"
+                  defaultValue={application?.cropType || ""}
                   className={`w-full border rounded-lg px-4 py-3 ${
                     errors.cropType ? "border-red-500" : "border-gray-200"
                   }`}
@@ -163,6 +197,7 @@ export default function Registration() {
                   type="number"
                   name="yearsFarming"
                   placeholder="Years of Farming *"
+                  defaultValue={application?.yearsFarming || ""}
                   className={`w-full border rounded-lg px-4 py-3 ${
                     errors.yearsFarming ? "border-red-500" : "border-gray-200"
                   }`}
@@ -179,7 +214,7 @@ export default function Registration() {
             <div className="space-y-5">
               <FormField error={errors.validId}>
                 <label className="text-xs font-semibold text-gray-500 uppercase px-1">
-                  Valid Identification
+                  Valid Identification {isUpdate && "(Leave blank to keep current)"}
                 </label>
 
                 <div
@@ -199,16 +234,21 @@ export default function Registration() {
                     htmlFor="validId"
                     className="cursor-pointer text-sm text-gray-600"
                   >
-                    Choose file
+                    {isUpdate ? "Change file" : "Choose file"}
                   </label>
 
                   <span className="text-xs text-gray-400">Image only</span>
                 </div>
+                {application?.validIdUrl && (
+                  <p className="text-[10px] text-gray-400 mt-1 truncate">
+                    Current: {application.validIdUrl}
+                  </p>
+                )}
               </FormField>
 
               <FormField error={errors.proofOfFarm}>
                 <label className="text-xs font-semibold text-gray-500 uppercase px-1">
-                  Proof of Farming
+                  Proof of Farming {isUpdate && "(Leave blank to keep current)"}
                 </label>
 
                 <div
@@ -228,11 +268,16 @@ export default function Registration() {
                     htmlFor="proofOfFarm"
                     className="cursor-pointer text-sm text-gray-600"
                   >
-                    Choose file
+                    {isUpdate ? "Change file" : "Choose file"}
                   </label>
 
                   <span className="text-xs text-gray-400">Image only</span>
                 </div>
+                {application?.proofOfFarmUrl && (
+                  <p className="text-[10px] text-gray-400 mt-1 truncate">
+                    Current: {application.proofOfFarmUrl}
+                  </p>
+                )}
               </FormField>
             </div>
           </div>
@@ -240,9 +285,14 @@ export default function Registration() {
           <div className="mt-auto">
             <button
               type="submit"
-              className="w-full bg-[#51a808] text-white py-4 rounded-xl font-bold text-lg shadow-md"
+              disabled={loading}
+              className="w-full bg-[#51a808] text-white py-4 rounded-xl font-bold text-lg shadow-md disabled:opacity-50"
             >
-              Submit Application
+              {loading
+                ? "Processing..."
+                : isUpdate
+                ? "Update Profile"
+                : "Submit Application"}
             </button>
           </div>
         </form>

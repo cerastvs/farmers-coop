@@ -41,25 +41,96 @@ export async function POST(req: NextRequest) {
     const validIdImgUrl = await uploadImage(validId);
 
     const userId = await getUserId();
-    await prisma.application.create({
-      data: {
-        userId: userId,
-        fullName: fullname,
-        contact,
-        address,
-        age,
-        gender,
-        farmSize,
-        cropType,
-        yearsFarming,
-        proofOfFarmUrl: farmImgUrl!,
-        validIdUrl: validIdImgUrl!,
-      },
-    });
+    await prisma.$transaction([
+      prisma.application.create({
+        data: {
+          userId: userId,
+          fullName: fullname,
+          contact,
+          address,
+          age,
+          gender,
+          farmSize,
+          cropType,
+          yearsFarming,
+          proofOfFarmUrl: farmImgUrl!,
+          validIdUrl: validIdImgUrl!,
+        },
+      }),
+      prisma.user.update({
+        where: { id: userId },
+        data: { name: fullname },
+      }),
+    ]);
 
     return Response.json({ success: true });
   } catch (error) {
     console.error(error);
+    return Response.json({ error: "Something went wrong" }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const formData = await req.formData();
+    const userId = await getUserId();
+
+    const existingApplication = await prisma.application.findFirst({
+      where: { userId },
+    });
+
+    if (!existingApplication) {
+      return Response.json({ error: "Application not found" }, { status: 404 });
+    }
+
+    const fullname = formData.get("fullName") as string;
+    const contact = formData.get("contact") as string;
+    const address = formData.get("address") as string;
+    const age = Number(formData.get("age"));
+    const gender = formData.get("gender") as string;
+    const farmSize = Number(formData.get("farmSize"));
+    const cropType = formData.get("cropType") as string;
+    const yearsFarming = Number(formData.get("yearsFarming"));
+
+    const proofOfFarm = formData.get("proofOfFarm") as File;
+    const validId = formData.get("validId") as File;
+
+    let farmImgUrl = existingApplication.proofOfFarmUrl;
+    let validIdImgUrl = existingApplication.validIdUrl;
+
+    if (proofOfFarm && proofOfFarm.size > 0) {
+      farmImgUrl = await uploadImage(proofOfFarm);
+    }
+
+    if (validId && validId.size > 0) {
+      validIdImgUrl = await uploadImage(validId);
+    }
+
+    await prisma.$transaction([
+      prisma.application.update({
+        where: { id: existingApplication.id },
+        data: {
+          fullName: fullname,
+          contact,
+          address,
+          age,
+          gender,
+          farmSize,
+          cropType,
+          yearsFarming,
+          proofOfFarmUrl: farmImgUrl,
+          validIdUrl: validIdImgUrl,
+        },
+      }),
+      prisma.user.update({
+        where: { id: userId },
+        data: { name: fullname },
+      }),
+    ]);
+
+    return Response.json({ success: true });
+  } catch (error) {
+    console.error("PATCH error:", error);
     return Response.json({ error: "Something went wrong" }, { status: 500 });
   }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { logout } from "../../login/actions";
 import { IconMenu, IconLeaf } from "@/components/icons";
 
@@ -25,10 +26,17 @@ export function DashboardHeader() {
 
       {menuOpen && (
         <div className="absolute right-4 top-14 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 w-48 z-50">
+          <a
+            href="/registration"
+            onClick={() => setMenuOpen(false)}
+            className="w-full text-left block px-4 py-3 text-sm text-gray-700 font-medium hover:bg-gray-50 transition-colors cursor-pointer"
+          >
+            Edit Profile
+          </a>
           <form action={logout}>
             <button
               type="submit"
-              className="w-full text-left px-4 py-3 text-sm text-red-600 font-medium hover:bg-red-50 transition-colors"
+              className="w-full text-left px-4 py-3 text-sm text-red-600 font-medium hover:bg-red-50 transition-colors border-t border-gray-100 cursor-pointer"
             >
               Logout
             </button>

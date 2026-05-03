@@ -17,7 +17,26 @@ const LoginSchema = z.object({
     .string()
     .min(6, "Password must be at least 6 characters")
     .max(100, "Password is too long"),
+
+  captchaToken: z.string().min(1, "Please complete the reCAPTCHA"),
 });
+
+async function verifyCaptcha(token: string) {
+  const secretKey = process.env.RECAPTCHA_SECRET_KEY;
+  if (!secretKey) {
+    console.error("RECAPTCHA_SECRET_KEY is not set");
+    return false;
+  }
+
+  const response = await fetch(
+    `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${token}`,
+    { method: "POST" },
+  );
+
+  const data = await response.json();
+  return data.success;
+}
+
 export async function login(prevState: any, formData: FormData) {
   const result = LoginSchema.safeParse(Object.fromEntries(formData));
 
@@ -27,7 +46,14 @@ export async function login(prevState: any, formData: FormData) {
     };
   }
 
-  const { username, password } = result.data;
+  const { username, password, captchaToken } = result.data;
+
+  const isCaptchaValid = await verifyCaptcha(captchaToken);
+  if (!isCaptchaValid) {
+    return {
+      errors: { captcha: ["reCAPTCHA verification failed. Please try again."] },
+    };
+  }
 
   const user = await prisma.user.findUnique({
     where: { username },

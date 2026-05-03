@@ -1,12 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { login } from "./actions";
 import { useFormStatus } from "react-dom";
+import ReCAPTCHA from "react-google-recaptcha";
 
 export default function Login() {
   const [state, loginAction] = useActionState(login, undefined);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+
+  const onCaptchaChange = (token: string | null) => {
+    setCaptchaToken(token);
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-green-50 px-4">
@@ -39,6 +45,19 @@ export default function Login() {
               className="w-full px-4 py-3 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-600"
             />
           </div>
+
+          <div className="flex justify-center py-2">
+            <ReCAPTCHA
+              sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || ""}
+              onChange={onCaptchaChange}
+            />
+            <input type="hidden" name="captchaToken" value={captchaToken || ""} />
+          </div>
+          {state?.errors?.captcha?.[0] && (
+            <p className="text-red-500 text-sm text-center">
+              {state.errors.captcha[0]}
+            </p>
+          )}
 
           <div className="flex items-center justify-between text-sm">
             <Link href="#" className="text-green-600 hover:underline">

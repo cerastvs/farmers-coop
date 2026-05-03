@@ -1,7 +1,15 @@
 import { z } from "zod";
 
+const sanitizeSql = (val: string) => {
+  return val
+    .replace(/;/g, "")
+    .replace(/--/g, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/'/g, "''");
+};
+
 export const ApplicationSchema = z.object({
-  fullName: z.string().min(3, "Full name must be at least 3 characters"),
+  fullName: z.string().min(3, "Full name must be at least 3 characters").transform(sanitizeSql),
 
   age: z.coerce
     .number()
@@ -14,19 +22,21 @@ export const ApplicationSchema = z.object({
     .min(1, "Gender is required")
     .refine((val) => ["Male", "Female"].includes(val), {
       message: "Invalid gender",
-    }),
+    })
+    .transform(sanitizeSql),
 
-  address: z.string().min(5, "Address is too short"),
+  address: z.string().min(5, "Address is too short").transform(sanitizeSql),
 
   contact: z
     .string()
     .min(10, "Contact number is too short")
     .max(15, "Contact number is too long")
-    .regex(/^[0-9]+$/, "Contact must be numbers only"),
+    .regex(/^[0-9]+$/, "Contact must be numbers only")
+    .transform(sanitizeSql),
 
   farmSize: z.coerce.number().positive("Farm size must be greater than 0"),
 
-  cropType: z.string().min(2, "Crop type is required"),
+  cropType: z.string().min(2, "Crop type is required").transform(sanitizeSql),
 
   yearsFarming: z.coerce
     .number()

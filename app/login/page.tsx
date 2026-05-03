@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useState, useEffect } from "react";
 import { ActionState, login } from "./actions";
 import { useFormStatus } from "react-dom";
 import ReCAPTCHA from "react-google-recaptcha";
@@ -12,6 +12,14 @@ export default function Login() {
     undefined,
   );
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [envKey, setEnvKey] = useState<string>("");
+  const [isMounted, setIsMounted] = useState<boolean>(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    setEnvKey(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "");
+    console.log("Client-side Site Key:", process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY);
+  }, []);
 
   const onCaptchaChange = (token: string | null) => {
     setCaptchaToken(token);
@@ -49,11 +57,13 @@ export default function Login() {
             />
           </div>
 
-          <div className="flex justify-center py-2">
-            <ReCAPTCHA
-              sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || ""}
-              onChange={onCaptchaChange}
-            />
+          <div className="flex justify-center py-2" style={{ minHeight: '78px' }}>
+            {isMounted && (
+              <ReCAPTCHA
+                sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || ""}
+                onChange={onCaptchaChange}
+              />
+            )}
             <input type="hidden" name="captchaToken" value={captchaToken || ""} />
           </div>
           {state?.errors?.captchaToken?.[0] && (

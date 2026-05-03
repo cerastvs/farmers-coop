@@ -6,12 +6,21 @@ import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+const sanitizeSql = (val: string) => {
+  return val
+    .replace(/;/g, "")
+    .replace(/--/g, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/'/g, "''");
+};
+
 const LoginSchema = z.object({
   username: z
     .string()
     .min(3, "Username must be at least 3 characters")
     .max(50, "Username is too long")
-    .trim(),
+    .trim()
+    .transform(sanitizeSql),
 
   password: z
     .string()
@@ -39,13 +48,13 @@ async function verifyCaptcha(token: string) {
 
 export type ActionState =
   | {
-      errors?: {
-        username?: string[];
-        password?: string[];
-        captchaToken?: string[];
-      };
-      message?: string;
-    }
+    errors?: {
+      username?: string[];
+      password?: string[];
+      captchaToken?: string[];
+    };
+    message?: string;
+  }
   | undefined;
 
 export async function login(prevState: ActionState, formData: FormData) {

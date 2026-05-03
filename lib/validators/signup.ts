@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+const sanitizeSql = (val: string) => {
+  return val
+    .replace(/;/g, "")
+    .replace(/--/g, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/'/g, "''");
+};
+
 export const RegistrationSchema = z
   .object({
     username: z
@@ -10,7 +18,8 @@ export const RegistrationSchema = z
       .regex(
         /^[a-zA-Z0-9_]+$/,
         "Username can only contain letters, numbers, and underscores",
-      ),
+      )
+      .transform(sanitizeSql),
 
     password: z
       .string()

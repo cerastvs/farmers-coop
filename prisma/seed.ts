@@ -10,7 +10,7 @@ import {
   SupplyTransactionType,
   TransactionStatus,
   ApplicationStatus,
-} from "../app/generated/prisma/enums";
+} from "../app/generated/prisma";
 import bcrypt from "bcryptjs";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });

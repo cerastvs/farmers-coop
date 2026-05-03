@@ -2,7 +2,7 @@
 
 import prisma from "@/lib/client";
 import { createSession, getUserId } from "@/lib/session";
-import { Role } from "@/app/generated/prisma/enums";
+import { Role } from "@/app/generated/prisma";
 
 export async function refreshSession() {
   const userId = await getUserId();

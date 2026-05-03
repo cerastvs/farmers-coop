@@ -1,4 +1,4 @@
-import { Role } from "@/app/generated/prisma/enums";
+import { Role } from "@/app/generated/prisma";
 import { routeAccess } from "./rbac";
 
 export function canAccess(path: string, role?: Role) {

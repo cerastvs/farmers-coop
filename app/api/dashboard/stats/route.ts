@@ -6,7 +6,7 @@ import {
   MachineStatus,
   PaymentStatus,
   TransactionStatus,
-} from "@/app/generated/prisma/enums";
+} from "@/app/generated/prisma";
 
 export async function GET() {
   const session = await getSession();

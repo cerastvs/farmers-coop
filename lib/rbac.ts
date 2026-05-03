@@ -1,4 +1,4 @@
-import { Role } from "@/app/generated/prisma/enums";
+import { Role } from "@/app/generated/prisma";
 
 export const routeAccess: Record<string, Role[]> = {
   "/dashboard/secretary": [Role.SECRETARY],

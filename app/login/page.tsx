@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import { useActionState, useState } from "react";
-import { login } from "./actions";
+import { ActionState, login } from "./actions";
 import { useFormStatus } from "react-dom";
 import ReCAPTCHA from "react-google-recaptcha";
 
 export default function Login() {
-  const [state, loginAction] = useActionState(login, undefined);
+  const [state, loginAction] = useActionState<ActionState, FormData>(
+    login,
+    undefined,
+  );
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
   const onCaptchaChange = (token: string | null) => {
@@ -53,9 +56,9 @@ export default function Login() {
             />
             <input type="hidden" name="captchaToken" value={captchaToken || ""} />
           </div>
-          {state?.errors?.captcha?.[0] && (
+          {state?.errors?.captchaToken?.[0] && (
             <p className="text-red-500 text-sm text-center">
-              {state.errors.captcha[0]}
+              {state.errors.captchaToken[0]}
             </p>
           )}
 

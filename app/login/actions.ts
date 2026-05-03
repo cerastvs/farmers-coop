@@ -37,7 +37,18 @@ async function verifyCaptcha(token: string) {
   return data.success;
 }
 
-export async function login(prevState: any, formData: FormData) {
+export type ActionState =
+  | {
+      errors?: {
+        username?: string[];
+        password?: string[];
+        captchaToken?: string[];
+      };
+      message?: string;
+    }
+  | undefined;
+
+export async function login(prevState: ActionState, formData: FormData) {
   const result = LoginSchema.safeParse(Object.fromEntries(formData));
 
   if (!result.success) {
@@ -51,7 +62,9 @@ export async function login(prevState: any, formData: FormData) {
   const isCaptchaValid = await verifyCaptcha(captchaToken);
   if (!isCaptchaValid) {
     return {
-      errors: { captcha: ["reCAPTCHA verification failed. Please try again."] },
+      errors: {
+        captchaToken: ["reCAPTCHA verification failed. Please try again."],
+      },
     };
   }
 

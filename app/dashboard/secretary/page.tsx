@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, Users, DollarSign, AlertCircle, Clock, X } from "lucide-react";
+import { FileText, Users, DollarSign, AlertCircle, Clock, X, LucideIcon } from "lucide-react";
 import { DashboardHeader } from "../components/DashboardHeader";
 
-const StatCard = ({ title, value, trend, icon: Icon }: any) => (
+const StatCard = ({ title, value, trend, icon: Icon }: { title: string, value: string, trend: string, icon: LucideIcon }) => (
   <div className="bg-white rounded-2xl shadow p-5 flex items-center justify-between">
     <div>
       <p className="text-gray-500 text-sm">{title}</p>
@@ -17,14 +17,14 @@ const StatCard = ({ title, value, trend, icon: Icon }: any) => (
   </div>
 );
 
-const ActionButton = ({ icon: Icon, label }: any) => (
+const ActionButton = ({ icon: Icon, label }: { icon: LucideIcon, label: string }) => (
   <button className="w-full border-2 border-green-600 text-green-700 rounded-xl p-3 flex items-center justify-center gap-2 hover:bg-green-50 transition">
     <Icon size={18} />
     {label}
   </button>
 );
 
-const TaskItem = ({ title, status, due, onClick, isClickable }: any) => (
+const TaskItem = ({ title, status, due, onClick, isClickable }: { title: string, status: string, due: string, onClick?: () => void, isClickable?: boolean }) => (
   <div 
     onClick={onClick}
     className={`bg-gray-50 rounded-xl p-4 flex items-start gap-3 transition ${isClickable ? "cursor-pointer hover:bg-gray-100 border border-transparent hover:border-green-200" : ""}`}
@@ -82,26 +82,72 @@ export default function SecretaryDashboard() {
   const [stats, setStats] = useState<SecretaryStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
+  const [processing, setProcessing] = useState(false);
+
+  const fetchStats = async () => {
+    try {
+      const res = await fetch("/api/secretary/stats");
+      if (res.ok) {
+        const data = await res.json();
+        setStats(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch secretary stats:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function fetchStats() {
-      try {
-        const res = await fetch("/api/secretary/stats");
-        if (res.ok) {
-          const data = await res.json();
-          setStats(data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch secretary stats:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
     fetchStats();
   }, []);
 
   const closeApplicationModal = () => setSelectedApplication(null);
+
+  const handleApprove = async () => {
+    if (!selectedApplication) return;
+    setProcessing(true);
+    try {
+      const res = await fetch(`/api/secretary/applications/${selectedApplication.id}/approve`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        closeApplicationModal();
+        fetchStats();
+      } else {
+        const error = await res.json();
+        alert(error.error || "Failed to approve application");
+      }
+    } catch (error) {
+      console.error("Approve error:", error);
+      alert("Something went wrong");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!selectedApplication) return;
+    if (!confirm("Are you sure you want to reject this application?")) return;
+    setProcessing(true);
+    try {
+      const res = await fetch(`/api/secretary/applications/${selectedApplication.id}/reject`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        closeApplicationModal();
+        fetchStats();
+      } else {
+        const error = await res.json();
+        alert(error.error || "Failed to reject application");
+      }
+    } catch (error) {
+      console.error("Reject error:", error);
+      alert("Something went wrong");
+    } finally {
+      setProcessing(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -310,11 +356,19 @@ export default function SecretaryDashboard() {
             </div>
 
             <div className="p-6 border-t border-gray-100 bg-gray-50 flex gap-3">
-              <button className="flex-1 py-4 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold transition-all transform active:scale-[0.98] shadow-lg shadow-green-200">
-                Approve Member
+              <button 
+                onClick={handleApprove}
+                disabled={processing}
+                className="flex-1 py-4 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold transition-all transform active:scale-[0.98] shadow-lg shadow-green-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {processing ? "Processing..." : "Approve Member"}
               </button>
-              <button className="flex-1 py-4 bg-white border-2 border-red-100 text-red-600 hover:bg-red-50 rounded-2xl font-bold transition-all">
-                Reject Application
+              <button 
+                onClick={handleReject}
+                disabled={processing}
+                className="flex-1 py-4 bg-white border-2 border-red-100 text-red-600 hover:bg-red-50 rounded-2xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {processing ? "Processing..." : "Reject Application"}
               </button>
             </div>
           </div>

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { logout } from "../../login/actions";
 import { IconMenu, IconLeaf } from "@/components/icons";
 
@@ -9,15 +8,15 @@ export function DashboardHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <header className="bg-[#2d6a2d] text-white sticky top-0 z-30 shadow-md">
-      <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <IconLeaf />
-          <span className="font-bold text-base tracking-wide">FarmCoop</span>
+    <header className="sticky top-0 z-30 border-b border-white/10 bg-[#174b36] text-white shadow-lg shadow-[#173a2b]/10">
+      <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
+        <div className="flex items-center gap-2.5">
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#d6ed9f] text-[#174b36]"><IconLeaf className="h-4 w-4" /></span>
+          <span className="font-extrabold tracking-tight">FarmCoop</span>
         </div>
         <button
           onClick={() => setMenuOpen(!menuOpen)}
-          className="p-1 rounded-lg hover:bg-white/20 transition-colors"
+          className="rounded-lg p-2 transition-colors hover:bg-white/15"
           aria-label="Menu"
         >
           <IconMenu />
@@ -25,18 +24,18 @@ export function DashboardHeader() {
       </div>
 
       {menuOpen && (
-        <div className="absolute right-4 top-14 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 w-48 z-50">
+        <div className="absolute right-4 top-[4.25rem] z-50 w-52 rounded-2xl border border-[#dfe7dc] bg-white py-2 shadow-2xl shadow-[#173a2b]/15">
           <a
             href="/registration"
             onClick={() => setMenuOpen(false)}
-            className="w-full text-left block px-4 py-3 text-sm text-gray-700 font-medium hover:bg-gray-50 transition-colors cursor-pointer"
+            className="block w-full px-4 py-3 text-left text-sm font-semibold text-[#315646] transition-colors hover:bg-[#f0f7eb]"
           >
             Edit Profile
           </a>
           <form action={logout}>
             <button
               type="submit"
-              className="w-full text-left px-4 py-3 text-sm text-red-600 font-medium hover:bg-red-50 transition-colors border-t border-gray-100 cursor-pointer"
+              className="w-full border-t border-[#edf0eb] px-4 py-3 text-left text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
             >
               Logout
             </button>

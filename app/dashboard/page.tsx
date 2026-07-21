@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { DashboardHeader } from "./components/DashboardHeader";
 import { SummaryCard } from "./components/SummaryCard";
 import { QuickActionButton } from "./components/QuickActionButton";
@@ -68,8 +68,8 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+      <div className="min-h-screen bg-[#f7f7f2] flex flex-col items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#39733e]"></div>
       </div>
     );
   }
@@ -120,10 +120,10 @@ export default function Dashboard() {
 
   if (isApplicant && hasApplied) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="min-h-screen bg-[#f7f7f2] flex flex-col">
         <DashboardHeader />
         <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-12">
-          <div className="bg-white rounded-[2.5rem] shadow-xl p-10 text-center border border-green-50">
+          <div className="rounded-[2.5rem] border border-[#dce8d2] bg-white p-10 text-center shadow-xl shadow-[#173a2b]/[.06]">
             <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
               <IconCalendar className="text-yellow-600 w-10 h-10" />
             </div>
@@ -140,7 +140,7 @@ export default function Dashboard() {
               </p>
               <p className="text-gray-700">
                 You can update your application details at any time by clicking 
-                <span className="font-bold text-[#51a808]"> "Edit Profile" </span> 
+                <span className="font-bold text-[#51a808]"> &quot;Edit Profile&quot; </span>
                 in the menu above.
               </p>
             </div>
@@ -151,15 +151,16 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-[#f7f7f2] flex flex-col">
       <DashboardHeader />
 
-      <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6 space-y-6">
+      <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-8 space-y-7">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <p className="text-xs font-bold uppercase tracking-[.14em] text-[#4f7e38]">Member portal</p>
+          <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-[#173a2b]">
             Welcome back, {user?.name?.split(" ")[0] || "Farmer"}!
           </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <p className="mt-1 text-sm text-[#718176]">
             Here&apos;s an overview of your cooperative account
           </p>
         </div>
@@ -171,7 +172,7 @@ export default function Dashboard() {
         </div>
 
         <section>
-          <h2 className="text-base font-bold text-gray-800 mb-3">
+          <h2 className="mb-3 text-base font-extrabold text-[#173a2b]">
             Quick Actions
           </h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -182,7 +183,7 @@ export default function Dashboard() {
         </section>
 
         <section>
-          <h2 className="text-base font-bold text-gray-800 mb-3">
+          <h2 className="mb-3 text-base font-extrabold text-[#173a2b]">
             Active Loans
           </h2>
           <div className="space-y-3">
@@ -200,7 +201,7 @@ export default function Dashboard() {
                 />
               ))
             ) : (
-              <div className="bg-white p-4 rounded-xl border border-gray-100 text-center text-gray-500 italic">
+              <div className="rounded-2xl border border-dashed border-[#ccd9c8] bg-white p-5 text-center text-sm text-[#718176]">
                 No active loans
               </div>
             )}

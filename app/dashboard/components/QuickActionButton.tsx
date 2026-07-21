@@ -18,10 +18,10 @@ export function QuickActionButton({
   return (
     <a
       href={href}
-      className="flex flex-col items-center justify-center gap-2 bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-md transition-all active:scale-95"
+      className="group flex flex-col items-center justify-center gap-2 rounded-2xl border border-[#e2e7dc] bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#bdd9a7] hover:shadow-md active:scale-95"
     >
       <div className={`${iconBg} ${iconColor} p-3 rounded-xl`}>{icon}</div>
-      <span className="text-xs font-semibold text-gray-700 text-center leading-tight">
+      <span className="text-center text-xs font-bold leading-tight text-[#315646]">
         {label}
       </span>
     </a>

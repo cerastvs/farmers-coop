@@ -18,16 +18,16 @@ export function SummaryCard({
   largeValue,
 }: SummaryCardProps) {
   return (
-    <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center justify-between border border-gray-100">
+    <div className="flex items-center justify-between rounded-2xl border border-[#e2e7dc] bg-white p-5 shadow-sm shadow-[#173a2b]/[.03] transition hover:-translate-y-0.5 hover:shadow-md">
       <div>
-        <p className="text-xs text-gray-500 font-medium mb-1">{label}</p>
+        <p className="mb-1 text-xs font-bold uppercase tracking-wide text-[#718176]">{label}</p>
         <p
-          className={`font-bold text-gray-900 ${largeValue ? "text-2xl" : "text-3xl"}`}
+          className={`font-extrabold tracking-tight text-[#173a2b] ${largeValue ? "text-2xl" : "text-3xl"}`}
         >
           {value}
         </p>
       </div>
-      <div className={`${iconBg} ${iconColor} p-3 rounded-xl`}>{icon}</div>
+      <div className={`${iconBg} ${iconColor} rounded-xl p-3`}>{icon}</div>
     </div>
   );
 }

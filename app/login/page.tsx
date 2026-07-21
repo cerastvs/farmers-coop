@@ -5,6 +5,7 @@ import { useActionState, useState, useEffect } from "react";
 import { ActionState, login } from "./actions";
 import { useFormStatus } from "react-dom";
 import ReCAPTCHA from "react-google-recaptcha";
+import { ArrowLeft, Sprout } from "lucide-react";
 
 export default function Login() {
   const [state, loginAction] = useActionState<ActionState, FormData>(
@@ -26,11 +27,14 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-green-50 px-4">
-      <div className="w-full max-w-md bg-white/80 backdrop-blur-md p-6 sm:p-8 rounded-2xl shadow-xl">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-green-700">🌱 FarmCoop</h1>
-          <p className="text-gray-500 text-sm mt-1">Sign in to your account</p>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#edf5df] px-4 py-10">
+      <div className="absolute left-[-10rem] top-[-8rem] h-80 w-80 rounded-full bg-[#badb94]/50 blur-3xl" />
+      <div className="absolute bottom-[-12rem] right-[-8rem] h-96 w-96 rounded-full bg-[#86b87b]/35 blur-3xl" />
+      <div className="relative w-full max-w-md rounded-3xl border border-white/80 bg-white/90 p-7 shadow-2xl shadow-[#173a2b]/15 backdrop-blur-md sm:p-9">
+        <div className="mb-8 text-center">
+          <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-[#174b36] text-[#d6ed9f]"><Sprout size={24} /></div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-[#173a2b]">Welcome back</h1>
+          <p className="mt-1 text-sm text-[#718176]">Sign in to your FarmCoop account</p>
         </div>
         <form className="space-y-4" action={loginAction}>
           <div>
@@ -41,7 +45,7 @@ export default function Login() {
               name="username"
               type="text"
               placeholder="Email address"
-              className="w-full px-4 py-3 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-600"
+              className="w-full rounded-xl border border-[#dbe5d7] bg-[#fafcf8] px-4 py-3 text-[#173a2b] outline-none transition placeholder:text-[#9aa89e] focus:border-[#4f7e38] focus:ring-4 focus:ring-[#b9db9e]/35"
             />
           </div>
 
@@ -53,7 +57,7 @@ export default function Login() {
               name="password"
               type="password"
               placeholder="Password"
-              className="w-full px-4 py-3 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-600"
+              className="w-full rounded-xl border border-[#dbe5d7] bg-[#fafcf8] px-4 py-3 text-[#173a2b] outline-none transition placeholder:text-[#9aa89e] focus:border-[#4f7e38] focus:ring-4 focus:ring-[#b9db9e]/35"
             />
           </div>
 
@@ -73,7 +77,7 @@ export default function Login() {
           )}
 
           <div className="flex items-center justify-between text-sm">
-            <Link href="#" className="text-green-600 hover:underline">
+            <Link href="#" className="font-semibold text-[#39733e] hover:underline">
               Forgot password?
             </Link>
           </div>
@@ -81,16 +85,16 @@ export default function Login() {
           <SubmitButton />
         </form>
 
-        <p className="text-sm text-center mt-6 text-gray-600">
+        <p className="mt-7 text-center text-sm text-[#718176]">
           Don’t have an account?{" "}
-          <Link href="/signup" className="text-green-600 font-medium">
+          <Link href="/signup" className="font-bold text-[#39733e]">
             Sign up
           </Link>
         </p>
 
-        <div className="text-center mt-4">
-          <Link href="/" className="text-gray-400 text-sm hover:underline">
-            ← Back to home
+        <div className="mt-5 text-center">
+          <Link href="/home" className="inline-flex items-center gap-1 text-sm font-semibold text-[#718176] hover:text-[#39733e]">
+            <ArrowLeft size={15} /> Back to home
           </Link>
         </div>
       </div>
@@ -105,7 +109,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="w-full bg-green-700 text-white py-3 rounded-xl hover:bg-green-800 transition font-medium"
+      className="w-full rounded-xl bg-[#174b36] py-3.5 font-bold text-white shadow-lg shadow-[#174b36]/15 transition hover:bg-[#0e3b2a] disabled:cursor-not-allowed disabled:opacity-60"
     >
       {pending ? "Signing in..." : "Sign In"}
     </button>

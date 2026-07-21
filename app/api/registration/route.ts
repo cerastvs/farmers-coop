@@ -2,6 +2,7 @@ import prisma from "@/lib/client";
 import { getUserId } from "@/lib/session";
 import { NextRequest } from "next/server";
 import { imgbbUpload } from "sdk-imagebb";
+import { ApplicationSchema } from "@/lib/validators/registration";
 
 const uploadImage = async (file: File) => {
   try {
@@ -25,20 +26,40 @@ export async function POST(req: NextRequest) {
 
     console.log(formData);
 
-    const fullname = formData.get("fullName") as string;
-    const contact = formData.get("contact") as string;
-    const address = formData.get("address") as string;
-    const age = Number(formData.get("age"));
-    const gender = formData.get("gender") as string;
-    const farmSize = Number(formData.get("farmSize"));
-    const cropType = formData.get("cropType") as string;
-    const yearsFarming = Number(formData.get("yearsFarming"));
+    const dataObj = {
+      fullName: formData.get("fullName"),
+      contact: formData.get("contact"),
+      address: formData.get("address"),
+      age: formData.get("age"),
+      gender: formData.get("gender"),
+      farmSize: formData.get("farmSize"),
+      cropType: formData.get("cropType"),
+      yearsFarming: formData.get("yearsFarming"),
+      proofOfFarm: formData.get("proofOfFarm"),
+      validId: formData.get("validId"),
+    };
 
-    const proofOfFarm = formData.get("proofOfFarm") as File;
-    const validId = formData.get("validId") as File;
+    const result = ApplicationSchema.safeParse(dataObj);
 
-    const farmImgUrl = await uploadImage(proofOfFarm);
-    const validIdImgUrl = await uploadImage(validId);
+    if (!result.success) {
+      return Response.json({ error: result.error.issues[0].message }, { status: 400 });
+    }
+
+    const {
+      fullName: fullname,
+      contact,
+      address,
+      age,
+      gender,
+      farmSize,
+      cropType,
+      yearsFarming,
+      proofOfFarm,
+      validId,
+    } = result.data;
+
+    const farmImgUrl = await uploadImage(proofOfFarm as File);
+    const validIdImgUrl = await uploadImage(validId as File);
 
     const userId = await getUserId();
     await prisma.$transaction([
@@ -83,14 +104,42 @@ export async function PATCH(req: NextRequest) {
       return Response.json({ error: "Application not found" }, { status: 404 });
     }
 
-    const fullname = formData.get("fullName") as string;
-    const contact = formData.get("contact") as string;
-    const address = formData.get("address") as string;
-    const age = Number(formData.get("age"));
-    const gender = formData.get("gender") as string;
-    const farmSize = Number(formData.get("farmSize"));
-    const cropType = formData.get("cropType") as string;
-    const yearsFarming = Number(formData.get("yearsFarming"));
+    const dataObj = {
+      fullName: formData.get("fullName"),
+      contact: formData.get("contact"),
+      address: formData.get("address"),
+      age: formData.get("age"),
+      gender: formData.get("gender"),
+      farmSize: formData.get("farmSize"),
+      cropType: formData.get("cropType"),
+      yearsFarming: formData.get("yearsFarming"),
+      proofOfFarm: formData.get("proofOfFarm"),
+      validId: formData.get("validId"),
+    };
+
+    if ((dataObj.proofOfFarm as File)?.size === 0) {
+      dataObj.proofOfFarm = new File(["dummy"], "dummy.jpg", { type: "image/jpeg" });
+    }
+    if ((dataObj.validId as File)?.size === 0) {
+      dataObj.validId = new File(["dummy"], "dummy.jpg", { type: "image/jpeg" });
+    }
+
+    const result = ApplicationSchema.safeParse(dataObj);
+
+    if (!result.success) {
+      return Response.json({ error: result.error.issues[0].message }, { status: 400 });
+    }
+
+    const {
+      fullName: fullname,
+      contact,
+      address,
+      age,
+      gender,
+      farmSize,
+      cropType,
+      yearsFarming,
+    } = result.data;
 
     const proofOfFarm = formData.get("proofOfFarm") as File;
     const validId = formData.get("validId") as File;

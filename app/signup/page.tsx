@@ -43,6 +43,7 @@ export default function SignUp() {
       body: JSON.stringify({
         username: data.username,
         password: data.password,
+        confirmPassword: data.confirmPassword,
       }),
     });
     const responseData = await res.json();
@@ -82,11 +83,10 @@ export default function SignUp() {
             <input
               name="username"
               placeholder="e.g. janesmith"
-              className={`w-full px-5 py-3.5 bg-white/50 border border-green-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-green-500/10 focus:border-green-500 transition-all placeholder:text-gray-400 ${
-                errors.username
+              className={`w-full px-5 py-3.5 bg-white/50 border border-green-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-green-500/10 focus:border-green-500 transition-all placeholder:text-gray-400 ${errors.username
                   ? "border-red-300 bg-red-50/50 ring-4 ring-red-500/10"
                   : ""
-              }`}
+                }`}
             />
             {errors.username && (
               <p className="text-red-500 text-xs font-medium mt-1 ml-1">
@@ -103,11 +103,10 @@ export default function SignUp() {
               name="password"
               type="password"
               placeholder="••••••••"
-              className={`w-full px-5 py-3.5 bg-white/50 border border-green-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-green-500/10 focus:border-green-500 transition-all placeholder:text-gray-400 ${
-                errors.password
+              className={`w-full px-5 py-3.5 bg-white/50 border border-green-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-green-500/10 focus:border-green-500 transition-all placeholder:text-gray-400 ${errors.password
                   ? "border-red-300 bg-red-50/50 ring-4 ring-red-500/10"
                   : ""
-              }`}
+                }`}
             />
             {errors.password && (
               <p className="text-red-500 text-xs font-medium mt-1 ml-1">
@@ -124,11 +123,10 @@ export default function SignUp() {
               name="confirmPassword"
               type="password"
               placeholder="••••••••"
-              className={`w-full px-5 py-3.5 bg-white/50 border border-green-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-green-500/10 focus:border-green-500 transition-all placeholder:text-gray-400 ${
-                errors.confirmPassword
+              className={`w-full px-5 py-3.5 bg-white/50 border border-green-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-green-500/10 focus:border-green-500 transition-all placeholder:text-gray-400 ${errors.confirmPassword
                   ? "border-red-300 bg-red-50/50 ring-4 ring-red-500/10"
                   : ""
-              }`}
+                }`}
             />
             {errors.confirmPassword && (
               <p className="text-red-500 text-xs font-medium mt-1 ml-1">

@@ -157,7 +157,7 @@ model Machine {
   id          String           @id @default(uuid())
   name        String
   description String?
-  quantity    Int
+  imageUrl    String?
   createdAt   DateTime         @default(now())
   requests    MachineRequest[]
 }

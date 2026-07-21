@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { DashboardHeader } from "../components/DashboardHeader";
 import { SummaryCard } from "../components/SummaryCard";
 import { IconLoan, IconMachine } from "@/components/icons";
@@ -12,14 +12,27 @@ import {
   ChevronDown,
   ChevronUp,
   Banknote,
+  Plus,
+  Pencil,
+  Trash2,
+  X,
+  ImagePlus,
 } from "lucide-react";
 
 interface Application {
   id: string;
-  name: string;
-  date: string;
-  crop: string;
+  fullName: string;
+  age: number;
+  gender: string;
+  address: string;
+  contact: string;
+  farmSize: number;
+  cropType: string;
+  yearsFarming: number;
+  validIdUrl: string;
+  proofOfFarmUrl: string;
   status: string;
+  createdAt: string;
 }
 
 interface Member {
@@ -43,8 +56,8 @@ interface Machine {
   id: string;
   name: string;
   description: string | null;
-  total: number;
-  borrowed: number;
+  imageUrl: string | null;
+  isBorrowed: boolean;
   borrowedBy: string[];
 }
 
@@ -74,6 +87,12 @@ const LOAN_STATUS_STYLE: Record<string, string> = {
   PENDING: "bg-yellow-100 text-yellow-700",
   APPROVED: "bg-green-100 text-green-700",
   PAID: "bg-gray-100 text-gray-500",
+  REJECTED: "bg-red-100 text-red-600",
+};
+
+const APP_STATUS_STYLE: Record<string, string> = {
+  PENDING: "bg-yellow-100 text-yellow-700",
+  APPROVED: "bg-green-100 text-green-700",
   REJECTED: "bg-red-100 text-red-600",
 };
 
@@ -109,12 +128,14 @@ function SectionCard({
   count,
   expanded,
   onToggle,
+  headerAction,
   children,
 }: {
   section: Section;
   count: number;
   expanded: boolean;
   onToggle: () => void;
+  headerAction?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const meta = SECTION_META[section];
@@ -139,6 +160,7 @@ function SectionCard({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {headerAction}
           <span className="rounded-full bg-[#edf5df] px-2.5 py-0.5 text-[11px] font-bold text-[#39733e]">
             {count}
           </span>
@@ -162,14 +184,508 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
+function MachineDetailModal({
+  machine,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  machine: Machine;
+  onClose: () => void;
+  onEdit: (m: Machine) => void;
+  onDelete: (m: Machine) => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+        {/* Header image */}
+        <div className="relative h-56 bg-gray-100 shrink-0">
+          {machine.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={machine.imageUrl}
+              alt={machine.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <Tractor size={48} className="text-blue-300" />
+            </div>
+          )}
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 p-2 bg-black/40 hover:bg-black/60 rounded-full text-white transition"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          <div>
+            <h3 className="text-xl font-bold text-[#173a2b]">{machine.name}</h3>
+            <p className="mt-1 text-sm text-[#718176]">
+              {machine.description || "No description provided"}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-bold ${
+                machine.isBorrowed
+                  ? "bg-orange-100 text-orange-700"
+                  : "bg-green-100 text-green-700"
+              }`}
+            >
+              {machine.isBorrowed ? "Currently Borrowed" : "Available"}
+            </span>
+          </div>
+
+          {machine.isBorrowed && machine.borrowedBy.length > 0 && (
+            <div className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] p-4">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                Borrowed By
+              </p>
+              <div className="space-y-1.5">
+                {machine.borrowedBy.map((name) => (
+                  <div key={name} className="flex items-center gap-2">
+                    <div className="h-6 w-6 rounded-full bg-orange-100 flex items-center justify-center text-[10px] font-bold text-orange-700">
+                      {name.charAt(0)}
+                    </div>
+                    <span className="text-sm text-[#173a2b]">{name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="p-6 border-t border-gray-100 bg-gray-50 flex gap-3">
+          <button
+            onClick={() => onEdit(machine)}
+            className="flex-1 py-3 bg-[#174b36] hover:bg-[#1a5c42] text-white rounded-2xl font-bold transition flex items-center justify-center gap-2"
+          >
+            <Pencil size={16} />
+            Edit
+          </button>
+          <button
+            onClick={() => onDelete(machine)}
+            className="py-3 px-5 bg-white border-2 border-red-200 text-red-600 hover:bg-red-50 rounded-2xl font-bold transition flex items-center justify-center gap-2"
+          >
+            <Trash2 size={16} />
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MachineFormModal({
+  machine,
+  onClose,
+  onSave,
+}: {
+  machine: Machine | null;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const [name, setName] = useState(machine?.name || "");
+  const [description, setDescription] = useState(machine?.description || "");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(machine?.imageUrl || null);
+  const [removeImage, setRemoveImage] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isEditing = !!machine;
+
+  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageFile(file);
+    setRemoveImage(false);
+    const reader = new FileReader();
+    reader.onloadend = () => setImagePreview(reader.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  function handleRemoveImage() {
+    setImageFile(null);
+    setImagePreview(null);
+    setRemoveImage(true);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    if (!name.trim()) {
+      setError("Machine name is required");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const formData = new FormData();
+      formData.append("name", name.trim());
+      formData.append("description", description.trim());
+      if (imageFile) formData.append("image", imageFile);
+      if (removeImage) formData.append("removeImage", "true");
+
+      const url = isEditing ? `/api/machines/${machine.id}` : "/api/machines";
+      const method = isEditing ? "PUT" : "POST";
+
+      const res = await fetch(url, { method, body: formData });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Something went wrong");
+        return;
+      }
+
+      onSave();
+      onClose();
+    } catch {
+      setError("Failed to save machine");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-blue-50/50">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900">
+              {isEditing ? "Edit Machine" : "Add Machine"}
+            </h3>
+            <p className="text-xs text-blue-700 font-medium uppercase tracking-wider">
+              {isEditing ? "Update machine information" : "Register new equipment"}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-white rounded-full transition-colors text-gray-400 hover:text-gray-600"
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
+          {error && (
+            <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 font-medium">
+              {error}
+            </div>
+          )}
+
+          {/* Image Upload */}
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+              Image (optional)
+            </label>
+            {imagePreview ? (
+              <div className="relative rounded-2xl overflow-hidden border border-gray-200">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={imagePreview} alt="Preview" className="w-full h-48 object-cover" />
+                <button
+                  type="button"
+                  onClick={handleRemoveImage}
+                  className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full h-32 rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-500 transition"
+              >
+                <ImagePlus size={28} />
+                <span className="text-xs font-medium">Click to upload image</span>
+              </button>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="hidden"
+            />
+          </div>
+
+          {/* Name */}
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+              Machine Name *
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Rice Harvester"
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+              Description (optional)
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Brief description of the machine..."
+              rows={3}
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition resize-none"
+            />
+          </div>
+        </form>
+
+        <div className="p-6 border-t border-gray-100 bg-gray-50 flex gap-3">
+          <button
+            onClick={onClose}
+            type="button"
+            className="flex-1 py-3 bg-white border-2 border-gray-200 text-gray-600 hover:bg-gray-50 rounded-2xl font-bold transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving}
+            className="flex-1 py-3 bg-[#174b36] hover:bg-[#1a5c42] text-white rounded-2xl font-bold transition disabled:opacity-50 disabled:cursor-wait"
+          >
+            {saving ? "Saving..." : isEditing ? "Update Machine" : "Add Machine"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ApplicationDetailModal({
+  application,
+  onClose,
+  onAction,
+}: {
+  application: Application;
+  onClose: () => void;
+  onAction: () => void;
+}) {
+  const [acting, setActing] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<"approve" | "reject" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const isPending = application.status === "PENDING";
+
+  async function handleConfirm(action: "approve" | "reject") {
+    setActing(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/secretary/applications/${application.id}/${action}`,
+        { method: "POST" },
+      );
+      const data = await res.json();
+      if (res.ok) {
+        setConfirmAction(null);
+        onAction();
+        onClose();
+      } else {
+        setError(data.error || `Failed to ${action} application`);
+      }
+    } catch {
+      setError(`Failed to ${action} application`);
+    } finally {
+      setActing(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900">{application.fullName}</h3>
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">
+              Membership Application
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-bold ${APP_STATUS_STYLE[application.status] || ""}`}
+            >
+              {application.status}
+            </span>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          {error && (
+            <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 font-medium">
+              {error}
+            </div>
+          )}
+
+          {/* Personal Info */}
+          <div>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+              Personal Information
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <DetailField label="Full Name" value={application.fullName} />
+              <DetailField label="Age" value={String(application.age ?? "")} />
+              <DetailField label="Gender" value={application.gender} />
+              <DetailField label="Contact" value={application.contact} />
+              <div className="col-span-2">
+                <DetailField label="Address" value={application.address} />
+              </div>
+            </div>
+          </div>
+
+          {/* Farming Info */}
+          <div>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+              Farming Information
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              <DetailField label="Farm Size" value={`${application.farmSize} ha`} />
+              <DetailField label="Crop Type" value={application.cropType} />
+              <DetailField label="Years Farming" value={`${application.yearsFarming} years`} />
+            </div>
+          </div>
+
+          {/* Documents */}
+          <div>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+              Documents
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <a
+                href={application.validIdUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 rounded-xl border border-[#eef2e8] bg-[#fafdf7] px-4 py-3 hover:border-green-300 hover:bg-green-50/30 transition"
+              >
+                <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center shrink-0">
+                  <FileText size={18} className="text-green-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[#173a2b] truncate">Valid ID</p>
+                  <p className="text-[11px] text-[#718176]">Click to view</p>
+                </div>
+              </a>
+              <a
+                href={application.proofOfFarmUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 rounded-xl border border-[#eef2e8] bg-[#fafdf7] px-4 py-3 hover:border-green-300 hover:bg-green-50/30 transition"
+              >
+                <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center shrink-0">
+                  <FileText size={18} className="text-green-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[#173a2b] truncate">Proof of Farm</p>
+                  <p className="text-[11px] text-[#718176]">Click to view</p>
+                </div>
+              </a>
+            </div>
+          </div>
+
+          <div className="text-xs text-gray-400">
+            Applied on{" "}
+            {new Date(application.createdAt).toLocaleDateString("en-US", {
+              month: "long",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </div>
+        </div>
+
+        {/* Actions */}
+        {isPending && (
+          <div className="p-6 border-t border-gray-100 bg-gray-50 flex gap-3">
+            {confirmAction ? (
+              <>
+                <button
+                  onClick={() => setConfirmAction(null)}
+                  disabled={acting}
+                  className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleConfirm(confirmAction)}
+                  disabled={acting}
+                  className={`flex-1 py-3 text-white rounded-2xl font-bold transition disabled:opacity-50 ${
+                    confirmAction === "approve"
+                      ? "bg-green-600 hover:bg-green-700"
+                      : "bg-red-600 hover:bg-red-700"
+                  }`}
+                >
+                  {acting
+                    ? "Processing..."
+                    : confirmAction === "approve"
+                      ? "Confirm Approve"
+                      : "Confirm Reject"}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setConfirmAction("reject")}
+                  className="flex-1 py-3 bg-white border-2 border-red-200 text-red-600 hover:bg-red-50 rounded-2xl font-bold transition"
+                >
+                  Reject
+                </button>
+                <button
+                  onClick={() => setConfirmAction("approve")}
+                  className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold transition"
+                >
+                  Approve
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DetailField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-3 py-2">
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{label}</p>
+      <p className="text-sm font-semibold text-[#173a2b] mt-0.5">{value}</p>
+    </div>
+  );
+}
+
 function ApplicationsSection({
   items,
   expanded,
   onToggle,
+  onClickApp,
 }: {
   items: Application[];
   expanded: boolean;
   onToggle: () => void;
+  onClickApp: (app: Application) => void;
 }) {
   const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
 
@@ -177,30 +693,33 @@ function ApplicationsSection({
     <SectionCard section="applications" count={items.length} expanded={expanded} onToggle={onToggle}>
       {visible.length > 0 ? (
         visible.map((app) => (
-          <div
+          <button
             key={app.id}
-            className="flex items-center justify-between rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3"
+            onClick={() => onClickApp(app)}
+            className="w-full flex items-center justify-between rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3 text-left transition hover:border-blue-300 hover:bg-blue-50/30 active:scale-[0.99]"
           >
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-[#173a2b] truncate">
-                {app.name}
+                {app.fullName}
               </p>
               <p className="text-xs text-[#718176]">
-                {app.crop} · Applied{" "}
-                {new Date(app.date).toLocaleDateString("en-US", {
+                {app.cropType} · Applied{" "}
+                {new Date(app.createdAt).toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
                   year: "numeric",
                 })}
               </p>
             </div>
-            <span className="shrink-0 ml-3 rounded-full bg-yellow-100 px-2.5 py-0.5 text-[11px] font-bold text-yellow-700">
-              Pending
+            <span
+              className={`shrink-0 ml-3 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${APP_STATUS_STYLE[app.status] || ""}`}
+            >
+              {app.status.charAt(0) + app.status.slice(1).toLowerCase()}
             </span>
-          </div>
+          </button>
         ))
       ) : (
-        <EmptyState text="No pending applications" />
+        <EmptyState text="No applications found" />
       )}
     </SectionCard>
   );
@@ -309,51 +828,75 @@ function MachinesSection({
   items,
   expanded,
   onToggle,
+  onAdd,
+  onClickMachine,
 }: {
   items: Machine[];
   expanded: boolean;
   onToggle: () => void;
+  onAdd: () => void;
+  onClickMachine: (m: Machine) => void;
 }) {
   const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
 
   return (
-    <SectionCard section="machines" count={items.length} expanded={expanded} onToggle={onToggle}>
+    <SectionCard
+      section="machines"
+      count={items.length}
+      expanded={expanded}
+      onToggle={onToggle}
+      headerAction={
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onAdd();
+          }}
+          className="rounded-lg bg-blue-500 p-1.5 text-white hover:bg-blue-600 transition"
+        >
+          <Plus size={14} />
+        </button>
+      }
+    >
       {visible.length > 0 ? (
-        visible.map((machine) => {
-          const isAvailable = machine.borrowed === 0;
-          return (
-            <div
-              key={machine.id}
-              className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3"
-            >
-              <div className="flex items-center justify-between">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-[#173a2b] truncate">
-                      {machine.name}
-                    </p>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                        isAvailable
-                          ? "bg-green-100 text-green-700"
-                          : "bg-orange-100 text-orange-700"
-                      }`}
-                    >
-                      {isAvailable
-                        ? "Available"
-                        : `${machine.borrowed}/${machine.total} borrowed`}
-                    </span>
-                  </div>
-                  {!isAvailable && (
-                    <p className="text-xs text-[#718176] mt-1 truncate">
-                      Borrowed by: {machine.borrowedBy.join(", ")}
-                    </p>
-                  )}
-                </div>
+        visible.map((machine) => (
+          <button
+            key={machine.id}
+            onClick={() => onClickMachine(machine)}
+            className="w-full flex items-center gap-3 rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3 text-left transition hover:border-blue-300 hover:bg-blue-50/30 active:scale-[0.99]"
+          >
+            {machine.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={machine.imageUrl}
+                alt={machine.name}
+                className="h-11 w-11 rounded-lg object-cover shrink-0 border border-gray-200"
+              />
+            ) : (
+              <div className="h-11 w-11 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                <Tractor size={18} className="text-blue-500" />
               </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-[#173a2b] truncate">
+                {machine.name}
+              </p>
+              <p className="text-[11px] text-[#718176] truncate">
+                {machine.isBorrowed
+                  ? `Borrowed by ${machine.borrowedBy.join(", ")}`
+                  : "Available"}
+              </p>
             </div>
-          );
-        })
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                machine.isBorrowed
+                  ? "bg-orange-100 text-orange-700"
+                  : "bg-green-100 text-green-700"
+              }`}
+            >
+              {machine.isBorrowed ? "Borrowed" : "Available"}
+            </span>
+          </button>
+        ))
       ) : (
         <EmptyState text="No machines found" />
       )}
@@ -424,26 +967,74 @@ export default function SecretaryDashboard() {
   });
   const [activeTab, setActiveTab] = useState<Section>("applications");
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const res = await fetch("/api/secretary/stats");
-        if (res.ok) {
-          const json = await res.json();
-          setData(json);
-        }
-      } catch (error) {
-        console.error("Failed to fetch secretary data:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
+  const [detailMachine, setDetailMachine] = useState<Machine | null>(null);
+  const [formMachine, setFormMachine] = useState<Machine | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<Machine | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [detailApp, setDetailApp] = useState<Application | null>(null);
 
+  async function fetchData() {
+    try {
+      const res = await fetch("/api/secretary/stats");
+      if (res.ok) {
+        const json = await res.json();
+        setData(json);
+      }
+    } catch (error) {
+      console.error("Failed to fetch secretary data:", error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
     fetchData();
   }, []);
 
   function toggleSection(section: Section) {
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  }
+
+  function handleClickMachine(machine: Machine) {
+    setDetailMachine(machine);
+  }
+
+  function handleEditFromDetail(machine: Machine) {
+    setDetailMachine(null);
+    setFormMachine(machine);
+    setShowForm(true);
+  }
+
+  function handleDeleteFromDetail(machine: Machine) {
+    setDetailMachine(null);
+    setDeleteConfirm(machine);
+  }
+
+  function handleAddMachine() {
+    setFormMachine(null);
+    setShowForm(true);
+  }
+
+  async function handleDeleteMachine() {
+    if (!deleteConfirm) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/machines/${deleteConfirm.id}`, {
+        method: "DELETE",
+      });
+      const result = await res.json();
+      if (res.ok) {
+        setDeleteConfirm(null);
+        fetchData();
+      } else {
+        alert(result.error || "Failed to delete machine");
+      }
+    } catch {
+      alert("Failed to delete machine");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   if (loading) {
@@ -493,6 +1084,7 @@ export default function SecretaryDashboard() {
           items={data?.applications || []}
           expanded={expandedSections.applications}
           onToggle={() => toggleSection("applications")}
+          onClickApp={(app) => setDetailApp(app)}
         />
       ),
     },
@@ -523,6 +1115,8 @@ export default function SecretaryDashboard() {
           items={data?.machines || []}
           expanded={expandedSections.machines}
           onToggle={() => toggleSection("machines")}
+          onAdd={handleAddMachine}
+          onClickMachine={handleClickMachine}
         />
       ),
     },
@@ -599,6 +1193,76 @@ export default function SecretaryDashboard() {
 
         <div className="h-4" />
       </main>
+
+      {/* Machine Detail Modal */}
+      {detailMachine && (
+        <MachineDetailModal
+          machine={detailMachine}
+          onClose={() => setDetailMachine(null)}
+          onEdit={handleEditFromDetail}
+          onDelete={handleDeleteFromDetail}
+        />
+      )}
+
+      {/* Application Detail Modal */}
+      {detailApp && (
+        <ApplicationDetailModal
+          application={detailApp}
+          onClose={() => setDetailApp(null)}
+          onAction={fetchData}
+        />
+      )}
+
+      {/* Machine Form Modal */}
+      {showForm && (
+        <MachineFormModal
+          machine={formMachine}
+          onClose={() => {
+            setShowForm(false);
+            setFormMachine(null);
+          }}
+          onSave={fetchData}
+        />
+      )}
+
+      {/* Delete Confirmation */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
+            <div className="text-center">
+              <div className="mx-auto h-12 w-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
+                <Trash2 size={20} className="text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">
+                Delete Machine
+              </h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Are you sure you want to delete{" "}
+                <span className="font-semibold text-gray-700">
+                  {deleteConfirm.name}
+                </span>
+                ? This action cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteConfirm(null)}
+                  disabled={deleting}
+                  className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteMachine}
+                  disabled={deleting}
+                  className="flex-1 py-3 bg-red-600 text-white hover:bg-red-700 rounded-2xl font-bold transition disabled:opacity-50"
+                >
+                  {deleting ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -27,14 +27,13 @@ export async function GET() {
 
   try {
     const [
-      pendingApplications,
+      applications,
       members,
       loans,
       machines,
       supplies,
     ] = await Promise.all([
       prisma.application.findMany({
-        where: { status: ApplicationStatus.PENDING },
         orderBy: { createdAt: "desc" },
       }),
 
@@ -75,14 +74,15 @@ export async function GET() {
       }),
     ]);
 
-    const pendingApplicationsCount = pendingApplications.length;
+    const pendingApplicationsCount = applications.filter(
+      (a) => a.status === ApplicationStatus.PENDING,
+    ).length;
     const activeLoansCount = loans.filter(
       (l) => l.status === LoanStatus.ACTIVE,
     ).length;
-    const totalBorrowedMachines = machines.reduce(
-      (sum, m) => sum + m.requests.length,
-      0,
-    );
+    const totalBorrowedMachines = machines.filter(
+      (m) => m.requests.length > 0,
+    ).length;
 
     return NextResponse.json({
       summary: {
@@ -91,12 +91,20 @@ export async function GET() {
         totalBorrowedMachines,
         totalMembers: members.length,
       },
-      applications: pendingApplications.map((a) => ({
+      applications: applications.map((a) => ({
         id: a.id,
-        name: a.fullName,
-        date: a.createdAt,
-        crop: a.cropType,
-        status: a.status,
+        fullName: a.fullName,
+        age: a.age,
+        gender: a.gender,
+        address: a.address,
+        contact: a.contact,
+        farmSize: a.farmSize,
+        cropType: a.cropType,
+        yearsFarming: a.yearsFarming,
+        validIdUrl: a.validIdUrl,
+        proofOfFarmUrl: a.proofOfFarmUrl,
+        status: String(a.status),
+        createdAt: a.createdAt.toISOString(),
       })),
       members: members.map((m) => ({
         id: m.id,
@@ -119,8 +127,8 @@ export async function GET() {
         id: m.id,
         name: m.name,
         description: m.description,
-        total: m.quantity,
-        borrowed: m.requests.length,
+        imageUrl: m.imageUrl,
+        isBorrowed: m.requests.length > 0,
         borrowedBy: m.requests.map((r) => r.user.name || "Unknown"),
       })),
       supplies: supplies.map((s) => ({

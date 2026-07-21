@@ -4,15 +4,194 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DashboardHeader } from "../components/DashboardHeader";
 import { IconChevronLeft } from "@/components/icons";
+import { Tractor, X } from "lucide-react";
+
+interface BookedDate {
+  startDate: string;
+  endDate: string;
+  status: string;
+}
+
+interface MyRequest {
+  id: string;
+  status: string;
+  startDate: string | null;
+  endDate: string | null;
+}
+
+interface OtherRequest {
+  id: string;
+  borrower: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+}
 
 interface Machine {
   id: string;
   name: string;
   description: string | null;
-  quantity: number;
-  activeRequests: number;
-  available: number;
-  userHasActiveRequest: boolean;
+  imageUrl: string | null;
+  myRequests: MyRequest[];
+  otherRequests: OtherRequest[];
+  bookedDates: BookedDate[];
+}
+
+function formatShortDate(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function todayISO() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function toISODate(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function BookingCalendar({
+  bookedDates,
+  startDate,
+  endDate,
+}: {
+  bookedDates: BookedDate[];
+  startDate: string;
+  endDate: string;
+}) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+
+  const monthLabel = new Date(viewYear, viewMonth).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  function prevMonth() {
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear((y) => y - 1);
+    } else {
+      setViewMonth((m) => m - 1);
+    }
+  }
+
+  function nextMonth() {
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear((y) => y + 1);
+    } else {
+      setViewMonth((m) => m + 1);
+    }
+  }
+
+  function getDayStatus(day: number): "approved" | "pending" | "selected" | null {
+    const dateStr = toISODate(new Date(viewYear, viewMonth, day));
+
+    if (startDate && endDate && dateStr >= startDate && dateStr <= endDate) {
+      return "selected";
+    }
+
+    for (const bd of bookedDates) {
+      const bdStart = bd.startDate.split("T")[0];
+      const bdEnd = bd.endDate.split("T")[0];
+      if (dateStr >= bdStart && dateStr <= bdEnd) {
+        return bd.status === "QUEUED" ? "pending" : "approved";
+      }
+    }
+
+    return null;
+  }
+
+  const DAY_STYLE: Record<string, string> = {
+    approved: "bg-red-100 text-red-700 font-bold",
+    pending: "bg-orange-100 text-orange-700 font-bold",
+    selected: "bg-[#174b36] text-white font-bold",
+  };
+
+  return (
+    <div className="rounded-xl border border-[#d0dbd0] bg-white p-3">
+      <div className="flex items-center justify-between mb-2">
+        <button
+          type="button"
+          onClick={prevMonth}
+          className="rounded-lg px-2 py-1 text-sm font-bold text-gray-500 hover:bg-gray-100 transition"
+        >
+          ←
+        </button>
+        <span className="text-sm font-bold text-[#173a2b]">{monthLabel}</span>
+        <button
+          type="button"
+          onClick={nextMonth}
+          className="rounded-lg px-2 py-1 text-sm font-bold text-gray-500 hover:bg-gray-100 transition"
+        >
+          →
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-0.5 text-center">
+        {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
+          <div key={d} className="text-[10px] font-bold text-gray-400 py-1">
+            {d}
+          </div>
+        ))}
+        {cells.map((day, i) => {
+          if (day === null) {
+            return <div key={`empty-${i}`} />;
+          }
+
+          const dateStr = toISODate(new Date(viewYear, viewMonth, day));
+          const isPast = dateStr < todayISO();
+          const status = isPast ? null : getDayStatus(day);
+
+          return (
+            <div
+              key={day}
+              className={`aspect-square flex items-center justify-center rounded-lg text-xs ${
+                status ? DAY_STYLE[status] : isPast ? "text-gray-300" : "text-[#173a2b]"
+              }`}
+            >
+              {day}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100">
+        <div className="flex items-center gap-1">
+          <span className="h-2.5 w-2.5 rounded-full bg-orange-300" />
+          <span className="text-[10px] text-gray-500">Pending</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="h-2.5 w-2.5 rounded-full bg-red-300" />
+          <span className="text-[10px] text-gray-500">Approved</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="h-2.5 w-2.5 rounded-full bg-[#174b36]" />
+          <span className="text-[10px] text-gray-500">Your selection</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function RentMachinePage() {
@@ -23,6 +202,11 @@ export default function RentMachinePage() {
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  const [formMachineId, setFormMachineId] = useState<string | null>(null);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [cancelling, setCancelling] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMachines();
@@ -42,7 +226,30 @@ export default function RentMachinePage() {
     }
   }
 
+  function openBorrowForm(machineId: string) {
+    setFormMachineId(machineId);
+    setStartDate("");
+    setEndDate("");
+    setMessage(null);
+  }
+
+  function closeBorrowForm() {
+    setFormMachineId(null);
+    setStartDate("");
+    setEndDate("");
+  }
+
   async function handleBorrow(machineId: string) {
+    if (!startDate || !endDate) {
+      setMessage({ type: "error", text: "Please select both start and end dates" });
+      return;
+    }
+
+    if (endDate < startDate) {
+      setMessage({ type: "error", text: "End date must be on or after start date" });
+      return;
+    }
+
     setBorrowing(machineId);
     setMessage(null);
 
@@ -50,7 +257,32 @@ export default function RentMachinePage() {
       const res = await fetch("/api/machines/borrow", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ machineId }),
+        body: JSON.stringify({ machineId, startDate, endDate }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setMessage({ type: "success", text: data.message });
+        closeBorrowForm();
+        fetchMachines();
+      } else {
+        setMessage({ type: "error", text: data.error });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to submit request" });
+    } finally {
+      setBorrowing(null);
+    }
+  }
+
+  async function handleCancel(requestId: string) {
+    setCancelling(requestId);
+    setMessage(null);
+
+    try {
+      const res = await fetch(`/api/machines/request/${requestId}`, {
+        method: "DELETE",
       });
 
       const data = await res.json();
@@ -61,11 +293,10 @@ export default function RentMachinePage() {
       } else {
         setMessage({ type: "error", text: data.error });
       }
-    } catch (error) {
-      console.error("Borrow request failed:", error);
-      setMessage({ type: "error", text: "Failed to submit request" });
+    } catch {
+      setMessage({ type: "error", text: "Failed to cancel request" });
     } finally {
-      setBorrowing(null);
+      setCancelling(null);
     }
   }
 
@@ -76,9 +307,6 @@ export default function RentMachinePage() {
       </div>
     );
   }
-
-  const availableMachines = machines.filter((m) => m.available > 0);
-  const unavailableMachines = machines.filter((m) => m.available === 0);
 
   return (
     <div className="min-h-screen bg-[#f7f7f2] flex flex-col">
@@ -95,7 +323,7 @@ export default function RentMachinePage() {
           </Link>
           <h1 className="text-2xl font-bold text-gray-900">Rent Machine</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Browse available equipment and submit a borrow request
+            Browse equipment and submit a borrow request
           </p>
         </div>
 
@@ -113,58 +341,217 @@ export default function RentMachinePage() {
 
         <section>
           <h2 className="mb-3 text-base font-extrabold text-[#173a2b]">
-            Available Machines
+            Machines
           </h2>
           <div className="space-y-3">
-            {availableMachines.length > 0 ? (
-              availableMachines.map((machine) => (
-                <div
-                  key={machine.id}
-                  className="rounded-2xl border border-[#e2e7dc] bg-white p-5 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-bold text-[#173a2b] truncate">
-                          {machine.name}
-                        </h3>
-                        <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">
-                          {machine.available} available
-                        </span>
+            {machines.length > 0 ? (
+              machines.map((machine) => {
+                const isFormOpen = formMachineId === machine.id;
+
+                return (
+                  <div
+                    key={machine.id}
+                    className="rounded-2xl border border-[#e2e7dc] bg-white shadow-sm overflow-hidden"
+                  >
+                    <div className="p-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                          {machine.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={machine.imageUrl}
+                              alt={machine.name}
+                              className="h-16 w-16 rounded-xl object-cover shrink-0 border border-gray-200"
+                            />
+                          ) : (
+                            <div className="h-16 w-16 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+                              <Tractor size={24} className="text-blue-500" />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <h3 className="text-base font-bold text-[#173a2b] truncate">
+                              {machine.name}
+                            </h3>
+                            {machine.description && (
+                              <p className="mt-1 text-sm text-[#718176] line-clamp-2">
+                                {machine.description}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        {isFormOpen ? (
+                          <button
+                            onClick={closeBorrowForm}
+                            className="shrink-0 rounded-xl px-3 py-2.5 text-sm font-bold bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors"
+                          >
+                            <X size={16} />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => openBorrowForm(machine.id)}
+                            className="shrink-0 rounded-xl px-5 py-2.5 text-sm font-bold bg-[#174b36] text-white hover:bg-[#1a5c42] transition-colors"
+                          >
+                            Borrow
+                          </button>
+                        )}
                       </div>
-                      {machine.description && (
-                        <p className="mt-1 text-sm text-[#718176] line-clamp-2">
-                          {machine.description}
-                        </p>
-                      )}
-                      <p className="mt-1.5 text-xs text-[#718176]">
-                        {machine.quantity - machine.available} of{" "}
-                        {machine.quantity} units currently borrowed
-                      </p>
                     </div>
-                    <button
-                      onClick={() => handleBorrow(machine.id)}
-                      disabled={
-                        borrowing === machine.id ||
-                        machine.userHasActiveRequest
-                      }
-                      className={`shrink-0 rounded-xl px-5 py-2.5 text-sm font-bold transition-colors ${
-                        machine.userHasActiveRequest
-                          ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                          : borrowing === machine.id
-                            ? "bg-gray-200 text-gray-500 cursor-wait"
-                            : "bg-[#174b36] text-white hover:bg-[#1a5c42]"
-                      }`}
-                    >
-                      {machine.userHasActiveRequest
-                        ? "Already Borrowed"
-                        : borrowing === machine.id
-                          ? "Requesting..."
-                          : "Borrow"}
-                    </button>
+
+                    {isFormOpen && (
+                      <div className="border-t border-[#e2e7dc] bg-[#f7f7f2] px-5 py-4 space-y-4">
+                        <BookingCalendar
+                          bookedDates={machine.bookedDates}
+                          startDate={startDate}
+                          endDate={endDate}
+                        />
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-[#173a2b] mb-1">
+                              Start Date
+                            </label>
+                            <input
+                              type="date"
+                              min={todayISO()}
+                              value={startDate}
+                              onChange={(e) => {
+                                setStartDate(e.target.value);
+                                if (endDate && e.target.value > endDate) {
+                                  setEndDate("");
+                                }
+                              }}
+                              className="w-full rounded-xl border border-[#d0dbd0] bg-white px-3 py-2.5 text-sm text-[#173a2b] focus:outline-none focus:ring-2 focus:ring-[#39733e] focus:border-transparent"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-[#173a2b] mb-1">
+                              End Date
+                            </label>
+                            <input
+                              type="date"
+                              min={startDate || todayISO()}
+                              value={endDate}
+                              onChange={(e) => setEndDate(e.target.value)}
+                              className="w-full rounded-xl border border-[#d0dbd0] bg-white px-3 py-2.5 text-sm text-[#173a2b] focus:outline-none focus:ring-2 focus:ring-[#39733e] focus:border-transparent"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={closeBorrowForm}
+                            className="rounded-xl px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-200 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => handleBorrow(machine.id)}
+                            disabled={borrowing === machine.id || !startDate || !endDate}
+                            className={`rounded-xl px-5 py-2 text-sm font-bold transition-colors ${
+                              borrowing === machine.id || !startDate || !endDate
+                                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                                : "bg-[#174b36] text-white hover:bg-[#1a5c42]"
+                            }`}
+                          >
+                            {borrowing === machine.id ? "Requesting..." : "Submit Request"}
+                          </button>
+                        </div>
+
+                        {(machine.myRequests ?? []).length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-[#173a2b] mb-2">
+                              My Requests
+                            </p>
+                            <div className="space-y-2">
+                              {machine.myRequests.map((req) => (
+                                <div
+                                  key={req.id}
+                                  className="flex items-center justify-between rounded-xl bg-white border border-[#eef2e8] px-4 py-3"
+                                >
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span
+                                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                          req.status === "QUEUED"
+                                            ? "bg-yellow-100 text-yellow-700"
+                                            : req.status === "APPROVED"
+                                              ? "bg-green-100 text-green-700"
+                                              : req.status === "IN_USE"
+                                                ? "bg-blue-100 text-blue-700"
+                                                : "bg-gray-100 text-gray-500"
+                                        }`}
+                                      >
+                                        {req.status.charAt(0) + req.status.slice(1).toLowerCase()}
+                                      </span>
+                                      {req.startDate && req.endDate && (
+                                        <span className="text-xs text-[#718176]">
+                                          {formatShortDate(req.startDate)} – {formatShortDate(req.endDate)}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {req.status === "QUEUED" && (
+                                    <button
+                                      onClick={() => handleCancel(req.id)}
+                                      disabled={cancelling === req.id}
+                                      className="shrink-0 ml-3 rounded-lg px-3 py-1.5 text-xs font-bold text-red-600 border border-red-200 hover:bg-red-50 transition-colors disabled:opacity-50"
+                                    >
+                                      {cancelling === req.id ? "Cancelling..." : "Cancel"}
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {(machine.otherRequests ?? []).length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-[#173a2b] mb-2">
+                              Other Members&apos; Requests
+                            </p>
+                            <div className="space-y-2">
+                              {machine.otherRequests.map((req) => (
+                                <div
+                                  key={req.id}
+                                  className="flex items-center justify-between rounded-xl bg-white border border-[#eef2e8] px-4 py-3"
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="h-7 w-7 rounded-full bg-blue-100 flex items-center justify-center shrink-0 text-[10px] font-bold text-blue-700">
+                                      {req.borrower.charAt(0)}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-semibold text-[#173a2b] truncate">
+                                        {req.borrower}
+                                      </p>
+                                      <div className="flex items-center gap-2 mt-0.5">
+                                        <span
+                                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                            req.status === "QUEUED"
+                                              ? "bg-orange-100 text-orange-700"
+                                              : req.status === "APPROVED"
+                                                ? "bg-red-100 text-red-700"
+                                                : "bg-blue-100 text-blue-700"
+                                          }`}
+                                        >
+                                          {req.status.charAt(0) + req.status.slice(1).toLowerCase()}
+                                        </span>
+                                        <span className="text-[11px] text-[#718176]">
+                                          {formatShortDate(req.startDate)} – {formatShortDate(req.endDate)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="rounded-2xl border border-dashed border-[#ccd9c8] bg-white p-5 text-center text-sm text-[#718176]">
                 No machines available at the moment
@@ -172,46 +559,6 @@ export default function RentMachinePage() {
             )}
           </div>
         </section>
-
-        {unavailableMachines.length > 0 && (
-          <section>
-            <h2 className="mb-3 text-base font-extrabold text-[#173a2b]">
-              Currently Unavailable
-            </h2>
-            <div className="space-y-3">
-              {unavailableMachines.map((machine) => (
-                <div
-                  key={machine.id}
-                  className="rounded-2xl border border-[#e2e7dc] bg-white p-5 shadow-sm opacity-70"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-bold text-[#173a2b] truncate">
-                          {machine.name}
-                        </h3>
-                        <span className="shrink-0 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-600">
-                          All units borrowed
-                        </span>
-                      </div>
-                      {machine.description && (
-                        <p className="mt-1 text-sm text-[#718176] line-clamp-2">
-                          {machine.description}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      disabled
-                      className="shrink-0 rounded-xl px-5 py-2.5 text-sm font-bold bg-gray-100 text-gray-400 cursor-not-allowed"
-                    >
-                      Unavailable
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
 
         <div className="h-4" />
       </main>

@@ -215,19 +215,38 @@ async function main() {
     ],
   });
 
-  const tractor = await prisma.machine.create({
+  const tractor1 = await prisma.machine.create({
     data: {
       name: "Tractor",
       description: "Used for plowing fields",
-      quantity: 3,
     },
   });
 
-  const harvester = await prisma.machine.create({
+  const tractor2 = await prisma.machine.create({
+    data: {
+      name: "Tractor",
+      description: "Used for plowing fields",
+    },
+  });
+
+  const tractor3 = await prisma.machine.create({
+    data: {
+      name: "Tractor",
+      description: "Used for plowing fields",
+    },
+  });
+
+  const harvester1 = await prisma.machine.create({
     data: {
       name: "Rice Harvester",
       description: "Used for harvesting rice",
-      quantity: 2,
+    },
+  });
+
+  const harvester2 = await prisma.machine.create({
+    data: {
+      name: "Rice Harvester",
+      description: "Used for harvesting rice",
     },
   });
 
@@ -235,14 +254,14 @@ async function main() {
     data: [
       {
         userId: member.id,
-        machineId: tractor.id,
+        machineId: tractor1.id,
         status: MachineStatus.APPROVED,
         startDate: new Date(),
         endDate: new Date(new Date().setDate(new Date().getDate() + 2)),
       },
       {
         userId: member.id,
-        machineId: harvester.id,
+        machineId: harvester1.id,
         status: MachineStatus.QUEUED,
       },
     ],

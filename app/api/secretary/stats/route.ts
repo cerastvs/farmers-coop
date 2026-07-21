@@ -63,6 +63,8 @@ export async function GET() {
             select: {
               id: true,
               status: true,
+              startDate: true,
+              endDate: true,
               user: { select: { name: true } },
             },
           },
@@ -130,6 +132,13 @@ export async function GET() {
         imageUrl: m.imageUrl,
         isBorrowed: m.requests.length > 0,
         borrowedBy: m.requests.map((r) => r.user.name || "Unknown"),
+        requests: m.requests.map((r) => ({
+          id: r.id,
+          borrower: r.user.name || "Unknown",
+          status: r.status,
+          startDate: r.startDate?.toISOString() ?? null,
+          endDate: r.endDate?.toISOString() ?? null,
+        })),
       })),
       supplies: supplies.map((s) => ({
         id: s.id,

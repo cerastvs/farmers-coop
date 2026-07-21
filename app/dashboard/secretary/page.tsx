@@ -59,6 +59,13 @@ interface Machine {
   imageUrl: string | null;
   isBorrowed: boolean;
   borrowedBy: string[];
+  requests: {
+    id: string;
+    borrower: string;
+    status: string;
+    startDate: string | null;
+    endDate: string | null;
+  }[];
 }
 
 interface Supply {
@@ -189,11 +196,13 @@ function MachineDetailModal({
   onClose,
   onEdit,
   onDelete,
+  onApprove,
 }: {
   machine: Machine;
   onClose: () => void;
   onEdit: (m: Machine) => void;
   onDelete: (m: Machine) => void;
+  onApprove: (requestId: string) => void;
 }) {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -241,18 +250,50 @@ function MachineDetailModal({
             </span>
           </div>
 
-          {machine.isBorrowed && machine.borrowedBy.length > 0 && (
+          {machine.requests && machine.requests.length > 0 && (
             <div className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] p-4">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
-                Borrowed By
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                Borrow Requests ({machine.requests.length})
               </p>
-              <div className="space-y-1.5">
-                {machine.borrowedBy.map((name) => (
-                  <div key={name} className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded-full bg-orange-100 flex items-center justify-center text-[10px] font-bold text-orange-700">
-                      {name.charAt(0)}
+              <div className="space-y-2.5">
+                {machine.requests.map((req) => (
+                  <div
+                    key={req.id}
+                    className="flex items-center justify-between rounded-lg bg-white border border-[#eef2e8] px-3 py-2.5"
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <div className="h-7 w-7 rounded-full bg-orange-100 flex items-center justify-center text-[11px] font-bold text-orange-700 shrink-0">
+                        {req.borrower.charAt(0)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-sm font-medium text-[#173a2b] block truncate">{req.borrower}</span>
+                        {req.startDate && req.endDate ? (
+                          <p className="text-xs text-[#718176]">
+                            {new Date(req.startDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                            {" – "}
+                            {new Date(req.endDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-gray-400 italic">No dates set</p>
+                        )}
+                      </div>
                     </div>
-                    <span className="text-sm text-[#173a2b]">{name}</span>
+                    <div className="shrink-0 ml-2">
+                      {req.status === "QUEUED" && (
+                        <button
+                          onClick={() => onApprove(req.id)}
+                          className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition"
+                        >
+                          Approve
+                        </button>
+                      )}
+                      {req.status === "APPROVED" && (
+                        <span className="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full">Approved</span>
+                      )}
+                      {req.status === "IN_USE" && (
+                        <span className="px-2.5 py-1 bg-blue-50 text-blue-700 text-[10px] font-bold rounded-full">In Use</span>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1011,6 +1052,31 @@ export default function SecretaryDashboard() {
     setDeleteConfirm(machine);
   }
 
+  async function handleApproveRequest(requestId: string) {
+    try {
+      const res = await fetch(`/api/machines/request/${requestId}`, {
+        method: "PATCH",
+      });
+      const result = await res.json();
+      if (res.ok) {
+        await fetchData();
+        setDetailMachine((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            requests: prev.requests.map((r) =>
+              r.id === requestId ? { ...r, status: "APPROVED" } : r,
+            ),
+          };
+        });
+      } else {
+        alert(result.error || "Failed to approve request");
+      }
+    } catch {
+      alert("Failed to approve request");
+    }
+  }
+
   function handleAddMachine() {
     setFormMachine(null);
     setShowForm(true);
@@ -1201,6 +1267,7 @@ export default function SecretaryDashboard() {
           onClose={() => setDetailMachine(null)}
           onEdit={handleEditFromDetail}
           onDelete={handleDeleteFromDetail}
+          onApprove={handleApproveRequest}
         />
       )}
 

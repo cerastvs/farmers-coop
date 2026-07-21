@@ -27,7 +27,8 @@ const LoginSchema = z.object({
     .min(6, "Password must be at least 6 characters")
     .max(100, "Password is too long"),
 
-  captchaToken: z.string().min(1, "Please complete the reCAPTCHA"),
+  // captchaToken: z.string().min(1, "Please complete the reCAPTCHA"),
+  captchaToken: z.string().optional(),
 });
 
 async function verifyCaptcha(token: string) {
@@ -66,16 +67,16 @@ export async function login(prevState: ActionState, formData: FormData) {
     };
   }
 
-  const { username, password, captchaToken } = result.data;
+  const { username, password } = result.data;
 
-  const isCaptchaValid = await verifyCaptcha(captchaToken);
-  if (!isCaptchaValid) {
-    return {
-      errors: {
-        captchaToken: ["reCAPTCHA verification failed. Please try again."],
-      },
-    };
-  }
+  // const isCaptchaValid = await verifyCaptcha(captchaToken);
+  // if (!isCaptchaValid) {
+  //   return {
+  //     errors: {
+  //       captchaToken: ["reCAPTCHA verification failed. Please try again."],
+  //     },
+  //   };
+  // }
 
   const user = await prisma.user.findUnique({
     where: { username },

@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState, useEffect } from "react";
+import { useActionState } from "react";
 import { ActionState, login } from "./actions";
 import { useFormStatus } from "react-dom";
-import ReCAPTCHA from "react-google-recaptcha";
+// import ReCAPTCHA from "react-google-recaptcha";
 import { ArrowLeft, Sprout } from "lucide-react";
 
 export default function Login() {
@@ -12,19 +12,19 @@ export default function Login() {
     login,
     undefined,
   );
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const [envKey, setEnvKey] = useState<string>("");
-  const [isMounted, setIsMounted] = useState<boolean>(false);
+  // const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  // const [envKey, setEnvKey] = useState<string>("");
+  // const [isMounted, setIsMounted] = useState<boolean>(false);
 
-  useEffect(() => {
-    setIsMounted(true);
-    setEnvKey(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "");
-    console.log("Client-side Site Key:", process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY);
-  }, []);
+  // useEffect(() => {
+  //   setIsMounted(true);
+  //   setEnvKey(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "");
+  //   console.log("Client-side Site Key:", process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY);
+  // }, []);
 
-  const onCaptchaChange = (token: string | null) => {
-    setCaptchaToken(token);
-  };
+  // const onCaptchaChange = (token: string | null) => {
+  //   setCaptchaToken(token);
+  // };
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#edf5df] px-4 py-10">
@@ -61,7 +61,7 @@ export default function Login() {
             />
           </div>
 
-          <div className="flex justify-center py-2" style={{ minHeight: '78px' }}>
+          {/* <div className="flex justify-center py-2" style={{ minHeight: '78px' }}>
             {isMounted && (
               <ReCAPTCHA
                 sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || ""}
@@ -75,7 +75,7 @@ export default function Login() {
               {state.errors.captchaToken[0]}
             </p>
           )}
-
+          */}
           <div className="flex items-center justify-between text-sm">
             <Link href="#" className="font-semibold text-[#39733e] hover:underline">
               Forgot password?

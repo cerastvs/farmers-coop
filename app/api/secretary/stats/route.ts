@@ -63,9 +63,27 @@ export async function GET() {
             select: {
               id: true,
               status: true,
+              requestDate: true,
               startDate: true,
               endDate: true,
-              user: { select: { name: true } },
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  username: true,
+                  applications: {
+                    select: {
+                      fullName: true,
+                      contact: true,
+                      address: true,
+                      farmSize: true,
+                      cropType: true,
+                      yearsFarming: true,
+                    },
+                    take: 1,
+                  },
+                },
+              },
             },
           },
         },
@@ -134,10 +152,20 @@ export async function GET() {
         borrowedBy: m.requests.map((r) => r.user.name || "Unknown"),
         requests: m.requests.map((r) => ({
           id: r.id,
-          borrower: r.user.name || "Unknown",
           status: r.status,
+          requestDate: r.requestDate.toISOString(),
           startDate: r.startDate?.toISOString() ?? null,
           endDate: r.endDate?.toISOString() ?? null,
+          member: {
+            id: r.user.id,
+            name: r.user.name || "Unknown",
+            email: r.user.username,
+            contact: r.user.applications[0]?.contact ?? null,
+            address: r.user.applications[0]?.address ?? null,
+            farmSize: r.user.applications[0]?.farmSize ?? null,
+            cropType: r.user.applications[0]?.cropType ?? null,
+            yearsFarming: r.user.applications[0]?.yearsFarming ?? null,
+          },
         })),
       })),
       supplies: supplies.map((s) => ({

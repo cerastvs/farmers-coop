@@ -4,7 +4,7 @@ import { getSession } from "@/lib/session";
 import { MachineStatus, Role } from "@/app/generated/prisma";
 
 export async function PATCH(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await getSession();
@@ -18,6 +18,15 @@ export async function PATCH(
   }
 
   const { id } = await params;
+  const body = await req.json().catch(() => ({}));
+  const action = body.action as string;
+
+  if (action !== "approve" && action !== "reject") {
+    return NextResponse.json(
+      { error: "Invalid action. Must be 'approve' or 'reject'" },
+      { status: 400 },
+    );
+  }
 
   try {
     const request = await prisma.machineRequest.findUnique({
@@ -33,21 +42,27 @@ export async function PATCH(
 
     if (request.status !== MachineStatus.QUEUED) {
       return NextResponse.json(
-        { error: "Only pending requests can be approved" },
+        { error: "Only pending requests can be processed" },
         { status: 400 },
       );
     }
 
+    const newStatus =
+      action === "approve" ? MachineStatus.APPROVED : MachineStatus.REJECTED;
+
     const updated = await prisma.machineRequest.update({
       where: { id },
-      data: { status: MachineStatus.APPROVED },
+      data: { status: newStatus },
     });
 
-    return NextResponse.json({ message: "Request approved", request: updated });
+    return NextResponse.json({
+      message: `Request ${action === "approve" ? "approved" : "rejected"}`,
+      request: updated,
+    });
   } catch (error) {
-    console.error("Approve request error:", error);
+    console.error("Update request error:", error);
     return NextResponse.json(
-      { error: "Failed to approve request" },
+      { error: "Failed to update request" },
       { status: 500 },
     );
   }

@@ -17,6 +17,12 @@ import {
   Trash2,
   X,
   ImagePlus,
+  Check,
+  CheckCircle,
+  Phone,
+  MapPin,
+  Wheat,
+  Calendar,
 } from "lucide-react";
 
 interface Application {
@@ -59,13 +65,25 @@ interface Machine {
   imageUrl: string | null;
   isBorrowed: boolean;
   borrowedBy: string[];
-  requests: {
+  requests: MachineRequestInfo[];
+}
+
+interface MachineRequestInfo {
+  id: string;
+  status: string;
+  requestDate: string;
+  startDate: string | null;
+  endDate: string | null;
+  member: {
     id: string;
-    borrower: string;
-    status: string;
-    startDate: string | null;
-    endDate: string | null;
-  }[];
+    name: string;
+    email: string;
+    contact: string | null;
+    address: string | null;
+    farmSize: number | null;
+    cropType: string | null;
+    yearsFarming: number | null;
+  };
 }
 
 interface Supply {
@@ -196,13 +214,13 @@ function MachineDetailModal({
   onClose,
   onEdit,
   onDelete,
-  onApprove,
+  onViewRequest,
 }: {
   machine: Machine;
   onClose: () => void;
   onEdit: (m: Machine) => void;
   onDelete: (m: Machine) => void;
-  onApprove: (requestId: string) => void;
+  onViewRequest: (request: MachineRequestInfo) => void;
 }) {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -250,55 +268,86 @@ function MachineDetailModal({
             </span>
           </div>
 
-          {machine.requests && machine.requests.length > 0 && (
-            <div className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] p-4">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
-                Borrow Requests ({machine.requests.length})
-              </p>
-              <div className="space-y-2.5">
-                {machine.requests.map((req) => (
-                  <div
-                    key={req.id}
-                    className="flex items-center justify-between rounded-lg bg-white border border-[#eef2e8] px-3 py-2.5"
-                  >
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <div className="h-7 w-7 rounded-full bg-orange-100 flex items-center justify-center text-[11px] font-bold text-orange-700 shrink-0">
-                        {req.borrower.charAt(0)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <span className="text-sm font-medium text-[#173a2b] block truncate">{req.borrower}</span>
-                        {req.startDate && req.endDate ? (
-                          <p className="text-xs text-[#718176]">
-                            {new Date(req.startDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
-                            {" – "}
-                            {new Date(req.endDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
-                          </p>
-                        ) : (
-                          <p className="text-xs text-gray-400 italic">No dates set</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="shrink-0 ml-2">
-                      {req.status === "QUEUED" && (
+          {(() => {
+            const pending = machine.requests?.filter((r) => r.status === "QUEUED") ?? [];
+            const approved = machine.requests?.filter((r) => r.status !== "QUEUED") ?? [];
+            return (
+              <>
+                {pending.length > 0 && (
+                  <div className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] p-4">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                      Pending Requests ({pending.length})
+                    </p>
+                    <div className="space-y-2.5">
+                      {pending.map((req) => (
                         <button
-                          onClick={() => onApprove(req.id)}
-                          className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition"
+                          key={req.id}
+                          onClick={() => onViewRequest(req)}
+                          className="w-full flex items-center justify-between rounded-lg bg-white border border-[#eef2e8] px-3 py-2.5 text-left transition hover:border-green-300 hover:bg-green-50/30 active:scale-[0.99]"
                         >
-                          Approve
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <div className="h-7 w-7 rounded-full bg-orange-100 flex items-center justify-center text-[11px] font-bold text-orange-700 shrink-0">
+                              {req.member.name.charAt(0)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-sm font-medium text-[#173a2b] block truncate">{req.member.name}</span>
+                              {req.startDate && req.endDate ? (
+                                <p className="text-xs text-[#718176]">
+                                  {new Date(req.startDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                                  {" – "}
+                                  {new Date(req.endDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                                </p>
+                              ) : (
+                                <p className="text-xs text-gray-400 italic">No dates set</p>
+                              )}
+                            </div>
+                          </div>
+                          <span className="shrink-0 ml-2 px-3 py-1.5 bg-green-600 text-white text-xs font-bold rounded-lg">
+                            Check Request
+                          </span>
                         </button>
-                      )}
-                      {req.status === "APPROVED" && (
-                        <span className="px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full">Approved</span>
-                      )}
-                      {req.status === "IN_USE" && (
-                        <span className="px-2.5 py-1 bg-blue-50 text-blue-700 text-[10px] font-bold rounded-full">In Use</span>
-                      )}
+                      ))}
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                )}
+
+                {approved.length > 0 && (
+                  <div className="rounded-xl bg-[#f0f7ff] border border-[#dbeafe] p-4">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                      Approved ({approved.length})
+                    </p>
+                    <div className="space-y-2.5">
+                      {approved.map((req) => (
+                        <div
+                          key={req.id}
+                          className="flex items-center justify-between rounded-lg bg-white border border-[#eef2e8] px-3 py-2.5"
+                        >
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <div className="h-7 w-7 rounded-full bg-blue-100 flex items-center justify-center text-[11px] font-bold text-blue-700 shrink-0">
+                              {req.member.name.charAt(0)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-sm font-medium text-[#173a2b] block truncate">{req.member.name}</span>
+                              {req.startDate && req.endDate ? (
+                                <p className="text-xs text-[#718176]">
+                                  {new Date(req.startDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                                  {" – "}
+                                  {new Date(req.endDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                                </p>
+                              ) : (
+                                <p className="text-xs text-gray-400 italic">No dates set</p>
+                              )}
+                            </div>
+                          </div>
+                          <span className="shrink-0 ml-2 px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full">Approved</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
 
         {/* Actions */}
@@ -318,6 +367,152 @@ function MachineDetailModal({
             Delete
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function RequestDetailModal({
+  request,
+  onClose,
+  onDecide,
+}: {
+  request: MachineRequestInfo;
+  onClose: () => void;
+  onDecide: (requestId: string, action: "approve" | "reject") => void;
+}) {
+  const [confirming, setConfirming] = useState<"approve" | "reject" | null>(null);
+  const member = request.member;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+        {/* Header */}
+        <div className="relative bg-gradient-to-br from-[#174b36] to-[#246b4a] p-6 text-white shrink-0">
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 p-2 bg-white/20 hover:bg-white/30 rounded-full transition"
+          >
+            <X size={18} />
+          </button>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center text-lg font-bold">
+              {member.name.charAt(0)}
+            </div>
+            <div>
+              <h3 className="text-lg font-bold">{member.name}</h3>
+              <p className="text-sm text-white/70">Borrow Request</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-white/80">
+            <Calendar size={14} />
+            {request.startDate && request.endDate ? (
+              <span>
+                {new Date(request.startDate).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })}
+                {" – "}
+                {new Date(request.endDate).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })}
+              </span>
+            ) : (
+              <span className="italic">No dates set</span>
+            )}
+          </div>
+        </div>
+
+        {/* Member Info */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] p-4 space-y-3">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Member Information</p>
+            <div className="space-y-2.5 text-sm">
+              <div className="flex items-center gap-2.5 text-[#173a2b]">
+                <Users size={14} className="text-gray-400 shrink-0" />
+                <span className="font-medium">{member.email}</span>
+              </div>
+              {member.contact && (
+                <div className="flex items-center gap-2.5 text-[#173a2b]">
+                  <Phone size={14} className="text-gray-400 shrink-0" />
+                  <span>{member.contact}</span>
+                </div>
+              )}
+              {member.address && (
+                <div className="flex items-center gap-2.5 text-[#173a2b]">
+                  <MapPin size={14} className="text-gray-400 shrink-0" />
+                  <span>{member.address}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {member.farmSize && (
+            <div className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] p-4 space-y-3">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Farm Details</p>
+              <div className="space-y-2.5 text-sm">
+                <div className="flex items-center gap-2.5 text-[#173a2b]">
+                  <Wheat size={14} className="text-gray-400 shrink-0" />
+                  <span>{member.farmSize} hectares — {member.cropType}</span>
+                </div>
+                {member.yearsFarming != null && (
+                  <div className="flex items-center gap-2.5 text-[#173a2b]">
+                    <Calendar size={14} className="text-gray-400 shrink-0" />
+                    <span>{member.yearsFarming} year{member.yearsFarming !== 1 ? "s" : ""} of farming</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        {request.status === "QUEUED" && (
+          <div className="p-6 border-t border-gray-100 bg-gray-50 space-y-3">
+            {confirming ? (
+              <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-center">
+                <p className="text-sm font-semibold text-amber-800 mb-3">
+                  {confirming === "approve"
+                    ? "Are you sure you want to approve this request?"
+                    : "Are you sure you want to reject this request?"}
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setConfirming(null)}
+                    className="flex-1 py-2.5 bg-white border border-gray-200 text-gray-600 hover:bg-gray-100 rounded-xl font-bold text-sm transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      onDecide(request.id, confirming);
+                      onClose();
+                    }}
+                    className={`flex-1 py-2.5 rounded-xl font-bold text-sm text-white transition ${
+                      confirming === "approve"
+                        ? "bg-green-600 hover:bg-green-700"
+                        : "bg-red-600 hover:bg-red-700"
+                    }`}
+                  >
+                    {confirming === "approve" ? "Yes, Approve" : "Yes, Reject"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => onDecide(request.id, "reject")}
+                  className="flex-1 py-3 bg-white border-2 border-red-200 text-red-600 hover:bg-red-50 rounded-2xl font-bold transition flex items-center justify-center gap-2"
+                >
+                  <X size={16} />
+                  Reject
+                </button>
+                <button
+                  onClick={() => setConfirming("approve")}
+                  className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold transition flex items-center justify-center gap-2"
+                >
+                  <CheckCircle size={16} />
+                  Approve
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1014,6 +1209,7 @@ export default function SecretaryDashboard() {
   const [deleteConfirm, setDeleteConfirm] = useState<Machine | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [detailApp, setDetailApp] = useState<Application | null>(null);
+  const [viewRequest, setViewRequest] = useState<MachineRequestInfo | null>(null);
 
   async function fetchData() {
     try {
@@ -1052,28 +1248,35 @@ export default function SecretaryDashboard() {
     setDeleteConfirm(machine);
   }
 
-  async function handleApproveRequest(requestId: string) {
+  async function handleDecideRequest(requestId: string, action: "approve" | "reject") {
     try {
       const res = await fetch(`/api/machines/request/${requestId}`, {
         method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
       });
       const result = await res.json();
       if (res.ok) {
         await fetchData();
+        const newStatus = action === "approve" ? "APPROVED" : "REJECTED";
         setDetailMachine((prev) => {
           if (!prev) return null;
           return {
             ...prev,
             requests: prev.requests.map((r) =>
-              r.id === requestId ? { ...r, status: "APPROVED" } : r,
+              r.id === requestId ? { ...r, status: newStatus } : r,
             ),
           };
         });
+        setViewRequest((prev) => {
+          if (!prev || prev.id !== requestId) return prev;
+          return { ...prev, status: newStatus };
+        });
       } else {
-        alert(result.error || "Failed to approve request");
+        alert(result.error || `Failed to ${action} request`);
       }
     } catch {
-      alert("Failed to approve request");
+      alert(`Failed to ${action} request`);
     }
   }
 
@@ -1267,7 +1470,16 @@ export default function SecretaryDashboard() {
           onClose={() => setDetailMachine(null)}
           onEdit={handleEditFromDetail}
           onDelete={handleDeleteFromDetail}
-          onApprove={handleApproveRequest}
+          onViewRequest={setViewRequest}
+        />
+      )}
+
+      {/* Request Detail Modal */}
+      {viewRequest && (
+        <RequestDetailModal
+          request={viewRequest}
+          onClose={() => setViewRequest(null)}
+          onDecide={handleDecideRequest}
         />
       )}
 

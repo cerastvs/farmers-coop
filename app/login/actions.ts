@@ -97,7 +97,7 @@ export async function login(prevState: ActionState, formData: FormData) {
 
   await createSession(user.id, user.role, !!application);
 
-  redirect("/dashboard");
+  redirect(user.role === "SECRETARY" ? "/dashboard/secretary" : "/dashboard");
 }
 
 export async function logout() {

@@ -41,7 +41,11 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
   if (session?.userId && isPublicRoute) {
-    return NextResponse.redirect(dashboardUrl);
+    return NextResponse.redirect(
+      session.userRole === "SECRETARY"
+        ? new URL("/dashboard/secretary", req.url)
+        : dashboardUrl,
+    );
   }
   const match = Object.keys(routeAccess).find(
     (route) => pathname === route || pathname.startsWith(route + "/"),

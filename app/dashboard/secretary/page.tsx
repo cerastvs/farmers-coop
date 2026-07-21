@@ -1,379 +1,604 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, Users, DollarSign, AlertCircle, Clock, X, LucideIcon } from "lucide-react";
 import { DashboardHeader } from "../components/DashboardHeader";
-
-const StatCard = ({ title, value, trend, icon: Icon }: { title: string, value: string, trend: string, icon: LucideIcon }) => (
-  <div className="bg-white rounded-2xl shadow p-5 flex items-center justify-between">
-    <div>
-      <p className="text-gray-500 text-sm">{title}</p>
-      <h2 className="text-2xl font-semibold">{value}</h2>
-      <span className="text-xs text-red-500">{trend}</span>
-    </div>
-    <div className="bg-green-100 p-3 rounded-full">
-      <Icon className="text-green-600" size={20} />
-    </div>
-  </div>
-);
-
-const ActionButton = ({ icon: Icon, label }: { icon: LucideIcon, label: string }) => (
-  <button className="w-full border-2 border-green-600 text-green-700 rounded-xl p-3 flex items-center justify-center gap-2 hover:bg-green-50 transition">
-    <Icon size={18} />
-    {label}
-  </button>
-);
-
-const TaskItem = ({ title, status, due, onClick, isClickable }: { title: string, status: string, due: string, onClick?: () => void, isClickable?: boolean }) => (
-  <div 
-    onClick={onClick}
-    className={`bg-gray-50 rounded-xl p-4 flex items-start gap-3 transition ${isClickable ? "cursor-pointer hover:bg-gray-100 border border-transparent hover:border-green-200" : ""}`}
-  >
-    <Clock className="text-orange-500 mt-1" size={18} />
-    <div className="flex-1">
-      <p className="font-medium text-gray-700">{title}</p>
-      <div className="flex items-center gap-2 mt-1">
-        <span
-          className={`text-xs px-2 py-1 rounded-full ${
-            status === "Pending"
-              ? "bg-yellow-100 text-yellow-700"
-              : "bg-blue-100 text-blue-700"
-          }`}
-        >
-          {status}
-        </span>
-        <span className="text-xs text-gray-500">Due: {due}</span>
-      </div>
-    </div>
-  </div>
-);
+import { SummaryCard } from "../components/SummaryCard";
+import { IconLoan, IconMachine } from "@/components/icons";
+import {
+  FileText,
+  Users,
+  Package,
+  Tractor,
+  ChevronDown,
+  ChevronUp,
+  Banknote,
+} from "lucide-react";
 
 interface Application {
   id: string;
-  fullName: string;
-  age: number;
-  gender: string;
-  address: string;
-  contact: string;
-  farmSize: number;
-  cropType: string;
-  yearsFarming: number;
-  validIdUrl: string;
-  proofOfFarmUrl: string;
+  name: string;
+  date: string;
+  crop: string;
   status: string;
-  createdAt: string;
 }
 
-interface SecretaryStats {
-  pendingApplicationsCount: number;
-  pendingLoansCount: number;
-  pendingPaymentsCount: number;
-  membersCount: number;
-  pendingApplications: Application[];
-  pendingTasks: Array<{
-    title: string;
-    status: string;
-    due: string;
-    type: string;
-  }>;
+interface Member {
+  id: string;
+  name: string;
+  role: string;
+  joined: string;
+  farm: string | null;
+}
+
+interface Loan {
+  id: string;
+  borrower: string;
+  name: string;
+  amount: number;
+  status: string;
+  due: string | null;
+}
+
+interface Machine {
+  id: string;
+  name: string;
+  description: string | null;
+  total: number;
+  borrowed: number;
+  borrowedBy: string[];
+}
+
+interface Supply {
+  id: string;
+  name: string;
+  stock: number;
+  price: number;
+}
+
+interface SecretaryData {
+  summary: {
+    pendingApplicationsCount: number;
+    activeLoansCount: number;
+    totalBorrowedMachines: number;
+    totalMembers: number;
+  };
+  applications: Application[];
+  members: Member[];
+  loans: Loan[];
+  machines: Machine[];
+  supplies: Supply[];
+}
+
+const LOAN_STATUS_STYLE: Record<string, string> = {
+  ACTIVE: "bg-blue-100 text-blue-700",
+  PENDING: "bg-yellow-100 text-yellow-700",
+  APPROVED: "bg-green-100 text-green-700",
+  PAID: "bg-gray-100 text-gray-500",
+  REJECTED: "bg-red-100 text-red-600",
+};
+
+const SECTIONS = [
+  "applications",
+  "members",
+  "loans",
+  "machines",
+  "supplies",
+] as const;
+type Section = (typeof SECTIONS)[number];
+
+const SECTION_META: Record<
+  Section,
+  {
+    label: string;
+    icon: React.ComponentType<{ size?: number }>;
+    accent: string;
+    iconBg: string;
+  }
+> = {
+  applications: { label: "Applications", icon: FileText, accent: "border-l-yellow-400", iconBg: "bg-yellow-100 text-yellow-600" },
+  members: { label: "Members", icon: Users, accent: "border-l-purple-400", iconBg: "bg-purple-100 text-purple-600" },
+  loans: { label: "Loans", icon: Banknote, accent: "border-l-green-400", iconBg: "bg-green-100 text-green-600" },
+  machines: { label: "Machines", icon: Tractor, accent: "border-l-blue-400", iconBg: "bg-blue-100 text-blue-600" },
+  supplies: { label: "Supplies", icon: Package, accent: "border-l-orange-400", iconBg: "bg-orange-100 text-orange-600" },
+};
+
+const VISIBLE_COUNT = 3;
+
+function SectionCard({
+  section,
+  count,
+  expanded,
+  onToggle,
+  children,
+}: {
+  section: Section;
+  count: number;
+  expanded: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  const meta = SECTION_META[section];
+  const Icon = meta.icon;
+
+  return (
+    <div className={`flex flex-col rounded-2xl border border-[#e2e7dc] bg-white shadow-sm shadow-[#173a2b]/[.03] overflow-hidden border-l-4 ${meta.accent} lg:h-[400px]`}>
+      <button
+        onClick={onToggle}
+        className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-gray-50/50 active:scale-[0.995]"
+      >
+        <div className="flex items-center gap-3">
+          <div className={`rounded-xl p-2.5 ${meta.iconBg}`}>
+            <Icon size={18} />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-[#173a2b]">{meta.label}</h3>
+            <p className="text-xs text-[#718176]">
+              {count} total
+              {!expanded && count > VISIBLE_COUNT && ` · Showing ${VISIBLE_COUNT}`}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-[#edf5df] px-2.5 py-0.5 text-[11px] font-bold text-[#39733e]">
+            {count}
+          </span>
+          <div className="rounded-lg bg-gray-100 p-1.5 text-gray-400">
+            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </div>
+        </div>
+      </button>
+      <div className="flex-1 border-t border-[#f0f3ed] px-5 py-3 space-y-2 overflow-y-auto">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="rounded-xl border border-dashed border-[#d5ddd0] bg-[#fafdf7] p-6 text-center text-xs text-[#718176]">
+      {text}
+    </div>
+  );
+}
+
+function ApplicationsSection({
+  items,
+  expanded,
+  onToggle,
+}: {
+  items: Application[];
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
+
+  return (
+    <SectionCard section="applications" count={items.length} expanded={expanded} onToggle={onToggle}>
+      {visible.length > 0 ? (
+        visible.map((app) => (
+          <div
+            key={app.id}
+            className="flex items-center justify-between rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-[#173a2b] truncate">
+                {app.name}
+              </p>
+              <p className="text-xs text-[#718176]">
+                {app.crop} · Applied{" "}
+                {new Date(app.date).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </p>
+            </div>
+            <span className="shrink-0 ml-3 rounded-full bg-yellow-100 px-2.5 py-0.5 text-[11px] font-bold text-yellow-700">
+              Pending
+            </span>
+          </div>
+        ))
+      ) : (
+        <EmptyState text="No pending applications" />
+      )}
+    </SectionCard>
+  );
+}
+
+function MembersSection({
+  items,
+  expanded,
+  onToggle,
+}: {
+  items: Member[];
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
+
+  return (
+    <SectionCard section="members" count={items.length} expanded={expanded} onToggle={onToggle}>
+      {visible.length > 0 ? (
+        <div className="space-y-2">
+          {visible.map((m) => (
+            <div
+              key={m.id}
+              className="flex items-center gap-3 rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3"
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-100 text-sm font-bold text-purple-700">
+                {m.name.charAt(0)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-[#173a2b] truncate">
+                  {m.name}
+                </p>
+                <p className="text-[11px] text-[#718176] truncate">
+                  {m.farm || "No farm info"}
+                </p>
+                <span
+                  className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                    m.role === "PRESIDENT"
+                      ? "bg-red-100 text-red-600"
+                      : m.role === "TREASURER"
+                        ? "bg-purple-100 text-purple-700"
+                        : "bg-green-100 text-green-700"
+                  }`}
+                >
+                  {m.role.charAt(0) + m.role.slice(1).toLowerCase()}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState text="No members found" />
+      )}
+    </SectionCard>
+  );
+}
+
+function LoansSection({
+  items,
+  expanded,
+  onToggle,
+}: {
+  items: Loan[];
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
+
+  return (
+    <SectionCard section="loans" count={items.length} expanded={expanded} onToggle={onToggle}>
+      {visible.length > 0 ? (
+        visible.map((loan) => (
+          <div
+            key={loan.id}
+            className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3"
+          >
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-[#173a2b] truncate">
+                    {loan.borrower}
+                  </p>
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${LOAN_STATUS_STYLE[loan.status] || ""}`}
+                  >
+                    {loan.status}
+                  </span>
+                </div>
+                <p className="text-xs text-[#718176] mt-0.5">
+                  {loan.name} · ₱{loan.amount.toLocaleString()}
+                  {loan.due &&
+                    ` · Due ${new Date(loan.due).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
+                </p>
+              </div>
+            </div>
+          </div>
+        ))
+      ) : (
+        <EmptyState text="No loans found" />
+      )}
+    </SectionCard>
+  );
+}
+
+function MachinesSection({
+  items,
+  expanded,
+  onToggle,
+}: {
+  items: Machine[];
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
+
+  return (
+    <SectionCard section="machines" count={items.length} expanded={expanded} onToggle={onToggle}>
+      {visible.length > 0 ? (
+        visible.map((machine) => {
+          const isAvailable = machine.borrowed === 0;
+          return (
+            <div
+              key={machine.id}
+              className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3"
+            >
+              <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-[#173a2b] truncate">
+                      {machine.name}
+                    </p>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        isAvailable
+                          ? "bg-green-100 text-green-700"
+                          : "bg-orange-100 text-orange-700"
+                      }`}
+                    >
+                      {isAvailable
+                        ? "Available"
+                        : `${machine.borrowed}/${machine.total} borrowed`}
+                    </span>
+                  </div>
+                  {!isAvailable && (
+                    <p className="text-xs text-[#718176] mt-1 truncate">
+                      Borrowed by: {machine.borrowedBy.join(", ")}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })
+      ) : (
+        <EmptyState text="No machines found" />
+      )}
+    </SectionCard>
+  );
+}
+
+function SuppliesSection({
+  items,
+  expanded,
+  onToggle,
+}: {
+  items: Supply[];
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
+
+  return (
+    <SectionCard section="supplies" count={items.length} expanded={expanded} onToggle={onToggle}>
+      {visible.length > 0 ? (
+        visible.map((supply) => (
+          <div
+            key={supply.id}
+            className="flex items-center justify-between rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-[#173a2b] truncate">
+                {supply.name}
+              </p>
+              <p className="text-xs text-[#718176]">
+                ₱{supply.price.toLocaleString()} per unit
+              </p>
+            </div>
+            <span
+              className={`shrink-0 ml-3 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                supply.stock === 0
+                  ? "bg-red-100 text-red-600"
+                  : supply.stock <= 30
+                    ? "bg-yellow-100 text-yellow-700"
+                    : "bg-green-100 text-green-700"
+              }`}
+            >
+              {supply.stock === 0
+                ? "Out of stock"
+                : `${supply.stock} in stock`}
+            </span>
+          </div>
+        ))
+      ) : (
+        <EmptyState text="No supplies found" />
+      )}
+    </SectionCard>
+  );
 }
 
 export default function SecretaryDashboard() {
-  const [stats, setStats] = useState<SecretaryStats | null>(null);
+  const [data, setData] = useState<SecretaryData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
-  const [processing, setProcessing] = useState(false);
-
-  const fetchStats = async () => {
-    try {
-      const res = await fetch("/api/secretary/stats");
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch secretary stats:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [expandedSections, setExpandedSections] = useState<
+    Record<Section, boolean>
+  >({
+    applications: false,
+    members: false,
+    loans: false,
+    machines: false,
+    supplies: false,
+  });
+  const [activeTab, setActiveTab] = useState<Section>("applications");
 
   useEffect(() => {
-    fetchStats();
+    async function fetchData() {
+      try {
+        const res = await fetch("/api/secretary/stats");
+        if (res.ok) {
+          const json = await res.json();
+          setData(json);
+        }
+      } catch (error) {
+        console.error("Failed to fetch secretary data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchData();
   }, []);
 
-  const closeApplicationModal = () => setSelectedApplication(null);
-
-  const handleApprove = async () => {
-    if (!selectedApplication) return;
-    setProcessing(true);
-    try {
-      const res = await fetch(`/api/secretary/applications/${selectedApplication.id}/approve`, {
-        method: "POST",
-      });
-      if (res.ok) {
-        closeApplicationModal();
-        fetchStats();
-      } else {
-        const error = await res.json();
-        alert(error.error || "Failed to approve application");
-      }
-    } catch (error) {
-      console.error("Approve error:", error);
-      alert("Something went wrong");
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleReject = async () => {
-    if (!selectedApplication) return;
-    if (!confirm("Are you sure you want to reject this application?")) return;
-    setProcessing(true);
-    try {
-      const res = await fetch(`/api/secretary/applications/${selectedApplication.id}/reject`, {
-        method: "POST",
-      });
-      if (res.ok) {
-        closeApplicationModal();
-        fetchStats();
-      } else {
-        const error = await res.json();
-        alert(error.error || "Failed to reject application");
-      }
-    } catch (error) {
-      console.error("Reject error:", error);
-      alert("Something went wrong");
-    } finally {
-      setProcessing(false);
-    }
-  };
+  function toggleSection(section: Section) {
+    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+      <div className="min-h-screen bg-[#f7f7f2] flex flex-col items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#39733e]"></div>
       </div>
     );
   }
 
+  const summaryCards = [
+    {
+      label: "Pending Applications",
+      value: data?.summary.pendingApplicationsCount.toString() || "0",
+      icon: <FileText size={20} />,
+      iconBg: "bg-yellow-100",
+      iconColor: "text-yellow-600",
+    },
+    {
+      label: "Active Loans",
+      value: data?.summary.activeLoansCount.toString() || "0",
+      icon: <IconLoan />,
+      iconBg: "bg-green-100",
+      iconColor: "text-green-600",
+    },
+    {
+      label: "Machines Borrowed",
+      value: data?.summary.totalBorrowedMachines.toString() || "0",
+      icon: <IconMachine />,
+      iconBg: "bg-blue-100",
+      iconColor: "text-blue-600",
+    },
+    {
+      label: "Total Members",
+      value: data?.summary.totalMembers.toString() || "0",
+      icon: <Users size={20} />,
+      iconBg: "bg-purple-100",
+      iconColor: "text-purple-600",
+    },
+  ];
+
+  const sections: { key: Section; component: React.ReactNode }[] = [
+    {
+      key: "applications",
+      component: (
+        <ApplicationsSection
+          items={data?.applications || []}
+          expanded={expandedSections.applications}
+          onToggle={() => toggleSection("applications")}
+        />
+      ),
+    },
+    {
+      key: "members",
+      component: (
+        <MembersSection
+          items={data?.members || []}
+          expanded={expandedSections.members}
+          onToggle={() => toggleSection("members")}
+        />
+      ),
+    },
+    {
+      key: "loans",
+      component: (
+        <LoansSection
+          items={data?.loans || []}
+          expanded={expandedSections.loans}
+          onToggle={() => toggleSection("loans")}
+        />
+      ),
+    },
+    {
+      key: "machines",
+      component: (
+        <MachinesSection
+          items={data?.machines || []}
+          expanded={expandedSections.machines}
+          onToggle={() => toggleSection("machines")}
+        />
+      ),
+    },
+    {
+      key: "supplies",
+      component: (
+        <SuppliesSection
+          items={data?.supplies || []}
+          expanded={expandedSections.supplies}
+          onToggle={() => toggleSection("supplies")}
+        />
+      ),
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col relative">
+    <div className="min-h-screen bg-[#f7f7f2] flex flex-col">
       <DashboardHeader />
 
-      <div className="p-6 max-w-7xl mx-auto space-y-6 w-full">
+      <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 space-y-6">
         <div>
-          <h2 className="text-2xl font-bold">Secretary Dashboard</h2>
-          <p className="text-gray-500">
-            Manage documents, payments, and loan requests
+          <p className="text-xs font-bold uppercase tracking-[.14em] text-[#4f7e38]">
+            Secretary Portal
+          </p>
+          <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight text-[#173a2b]">
+            Secretary Dashboard
+          </h1>
+          <p className="mt-1 text-sm text-[#718176]">
+            Manage applications, members, loans, machines, and supplies
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            title="Pending Documents"
-            value={stats?.pendingApplicationsCount.toString() || "0"}
-            trend="neutral"
-            icon={FileText}
-          />
-          <StatCard
-            title="Loan Requests"
-            value={stats?.pendingLoansCount.toString() || "0"}
-            trend="neutral"
-            icon={AlertCircle}
-          />
-          <StatCard
-            title="Payments to Process"
-            value={stats?.pendingPaymentsCount.toString() || "0"}
-            trend="neutral"
-            icon={DollarSign}
-          />
-          <StatCard
-            title="Members"
-            value={stats?.membersCount.toString() || "0"}
-            trend="up"
-            icon={Users}
-          />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {summaryCards.map((card) => (
+            <SummaryCard key={card.label} {...card} />
+          ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="bg-white rounded-2xl shadow p-5 space-y-3 lg:col-span-1 h-fit">
-            <h3 className="font-semibold text-lg">Quick Actions</h3>
-            <ActionButton icon={Users} label="Manage Members" />
-            <ActionButton icon={FileText} label="Verify Applications" />
-            <ActionButton icon={AlertCircle} label="Review Loans" />
-            <ActionButton icon={DollarSign} label="Process Payments" />
-          </div>
-
-          <div className="bg-white rounded-2xl shadow p-5 space-y-4 lg:col-span-2">
-            <h3 className="font-semibold text-lg">Pending Tasks</h3>
-
-            {/* Pending Applications Section */}
-            {stats?.pendingApplications && stats.pendingApplications.length > 0 && (
-              <div className="space-y-3">
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Pending Membership Applications</p>
-                {stats.pendingApplications.map((app) => (
-                  <TaskItem
-                    key={app.id}
-                    title={`New Application: ${app.fullName}`}
-                    status="Pending"
-                    due="ASAP"
-                    isClickable={true}
-                    onClick={() => setSelectedApplication(app)}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Other Pending Tasks */}
-            <div className="space-y-3 pt-2">
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">System Tasks</p>
-              {stats?.pendingTasks && stats.pendingTasks.length > 0 ? (
-                stats.pendingTasks.map((task, index) => (
-                  <TaskItem
-                    key={index}
-                    title={task.title}
-                    status={task.status}
-                    due={task.due}
-                  />
-                ))
-              ) : null}
-              
-              <TaskItem
-                title="Prepare monthly financial report"
-                status="Active"
-                due="April 5, 2026"
-              />
-            </div>
-
-            {(!stats?.pendingApplications || stats.pendingApplications.length === 0) && 
-             (!stats?.pendingTasks || stats.pendingTasks.length === 0) && (
-              <div className="text-center py-8 text-gray-500 italic">
-                No pending tasks at the moment
-              </div>
-            )}
+        {/* Mobile Tab Navigation */}
+        <div className="lg:hidden -mx-4 px-4 overflow-x-auto scrollbar-hide">
+          <div className="flex gap-2 min-w-max">
+            {SECTIONS.map((section) => {
+              const meta = SECTION_META[section];
+              const Icon = meta.icon;
+              return (
+                <button
+                  key={section}
+                  onClick={() => setActiveTab(section)}
+                  className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-bold whitespace-nowrap transition ${
+                    activeTab === section
+                      ? "bg-[#174b36] text-white shadow-md"
+                      : "bg-white text-[#315646] border border-[#e2e7dc]"
+                  }`}
+                >
+                  <Icon size={14} />
+                  {meta.label}
+                </button>
+              );
+            })}
           </div>
         </div>
-      </div>
 
-      {/* Application Details Modal */}
-      {selectedApplication && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-green-50/50">
-              <div>
-                <h3 className="text-xl font-bold text-gray-900">Application Details</h3>
-                <p className="text-xs text-green-700 font-medium uppercase tracking-wider">Membership Application Review</p>
-              </div>
-              <button 
-                onClick={closeApplicationModal}
-                className="p-2 hover:bg-white rounded-full transition-colors text-gray-400 hover:text-gray-600"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 space-y-8">
-              {/* Personal Information */}
-              <section className="space-y-4">
-                <div className="flex items-center gap-2 text-[#2d6a2d]">
-                  <Users size={20} />
-                  <h4 className="font-bold">Personal Information</h4>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                  <div>
-                    <p className="text-xs text-gray-500 font-medium">Full Name</p>
-                    <p className="font-bold text-gray-800">{selectedApplication.fullName}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 font-medium">Age / Gender</p>
-                    <p className="font-bold text-gray-800">{selectedApplication.age} years old / {selectedApplication.gender}</p>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <p className="text-xs text-gray-500 font-medium">Contact Number</p>
-                    <p className="font-bold text-gray-800">{selectedApplication.contact}</p>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <p className="text-xs text-gray-500 font-medium">Residential Address</p>
-                    <p className="font-bold text-gray-800 leading-relaxed">{selectedApplication.address}</p>
-                  </div>
-                </div>
-              </section>
-
-              {/* Farm Information */}
-              <section className="space-y-4">
-                <div className="flex items-center gap-2 text-[#2d6a2d]">
-                  <FileText size={20} />
-                  <h4 className="font-bold">Farm Details</h4>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                  <div>
-                    <p className="text-xs text-gray-500 font-medium">Farm Size (Hectares)</p>
-                    <p className="font-bold text-gray-800">{selectedApplication.farmSize} ha</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 font-medium">Primary Crop Type</p>
-                    <p className="font-bold text-gray-800">{selectedApplication.cropType}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 font-medium">Experience</p>
-                    <p className="font-bold text-gray-800">{selectedApplication.yearsFarming} Years Farming</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 font-medium">Application Date</p>
-                    <p className="font-bold text-gray-800">{new Date(selectedApplication.createdAt).toLocaleDateString()}</p>
-                  </div>
-                </div>
-              </section>
-
-              {/* Verification Documents */}
-              <section className="space-y-4">
-                <div className="flex items-center gap-2 text-[#2d6a2d]">
-                  <AlertCircle size={20} />
-                  <h4 className="font-bold">Submitted Documents</h4>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="group relative aspect-[4/3] rounded-2xl bg-gray-100 overflow-hidden border border-gray-200">
-                    <div className="absolute inset-0 flex items-center justify-center">
-                       <p className="text-xs font-bold text-gray-400">Valid ID Document</p>
-                    </div>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={selectedApplication.validIdUrl} alt="Valid ID" className="absolute inset-0 w-full h-full object-cover transition-transform group-hover:scale-110" />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
-                    <a href={selectedApplication.validIdUrl} target="_blank" rel="noreferrer" className="absolute bottom-3 right-3 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-[#2d6a2d] opacity-0 group-hover:opacity-100 transition-opacity">View Full Size</a>
-                  </div>
-                  <div className="group relative aspect-[4/3] rounded-2xl bg-gray-100 overflow-hidden border border-gray-200">
-                    <div className="absolute inset-0 flex items-center justify-center">
-                       <p className="text-xs font-bold text-gray-400">Proof of Farming Document</p>
-                    </div>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={selectedApplication.proofOfFarmUrl} alt="Proof of Farming" className="absolute inset-0 w-full h-full object-cover transition-transform group-hover:scale-110" />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
-                    <a href={selectedApplication.proofOfFarmUrl} target="_blank" rel="noreferrer" className="absolute bottom-3 right-3 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold text-[#2d6a2d] opacity-0 group-hover:opacity-100 transition-opacity">View Full Size</a>
-                  </div>
-                </div>
-              </section>
-            </div>
-
-            <div className="p-6 border-t border-gray-100 bg-gray-50 flex gap-3">
-              <button 
-                onClick={handleApprove}
-                disabled={processing}
-                className="flex-1 py-4 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold transition-all transform active:scale-[0.98] shadow-lg shadow-green-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {processing ? "Processing..." : "Approve Member"}
-              </button>
-              <button 
-                onClick={handleReject}
-                disabled={processing}
-                className="flex-1 py-4 bg-white border-2 border-red-100 text-red-600 hover:bg-red-50 rounded-2xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {processing ? "Processing..." : "Reject Application"}
-              </button>
-            </div>
-          </div>
+        {/* Mobile: Single active section */}
+        <div className="lg:hidden">
+          {sections.find((s) => s.key === activeTab)?.component}
         </div>
-      )}
+
+        {/* Desktop: All sections in 2-column grid */}
+        <div className="hidden lg:grid lg:grid-cols-2 gap-4">
+          {sections.map((s) => (
+            <div key={s.key}>{s.component}</div>
+          ))}
+        </div>
+
+        <div className="h-4" />
+      </main>
     </div>
   );
 }

@@ -1,11 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import { logout } from "../../login/actions";
 import { IconMenu, IconLeaf } from "@/components/icons";
+import { Bell } from "lucide-react";
 
 export function DashboardHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    fetch("/api/notifications")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setUnreadCount(data.filter((n: { read: boolean }) => !n.read).length);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[#174b36] text-white shadow-lg shadow-[#173a2b]/10">
@@ -14,13 +28,27 @@ export function DashboardHeader() {
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#d6ed9f] text-[#174b36]"><IconLeaf className="h-4 w-4" /></span>
           <span className="font-extrabold tracking-tight">FarmCoop</span>
         </div>
-        <button
-          onClick={() => setMenuOpen(!menuOpen)}
-          className="rounded-lg p-2 transition-colors hover:bg-white/15"
-          aria-label="Menu"
-        >
-          <IconMenu />
-        </button>
+        <div className="flex items-center gap-1">
+          <Link
+            href="/dashboard/notifications"
+            className="relative rounded-lg p-2 transition-colors hover:bg-white/15"
+            aria-label="Notifications"
+          >
+            <Bell size={20} />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </Link>
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="rounded-lg p-2 transition-colors hover:bg-white/15"
+            aria-label="Menu"
+          >
+            <IconMenu />
+          </button>
+        </div>
       </div>
 
       {menuOpen && (

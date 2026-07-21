@@ -20,6 +20,7 @@ export async function PATCH(
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
   const action = body.action as string;
+  const rejectionMessage = (body.message as string) || "";
 
   if (action !== "approve" && action !== "reject") {
     return NextResponse.json(
@@ -28,9 +29,17 @@ export async function PATCH(
     );
   }
 
+  if (action === "reject" && !rejectionMessage.trim()) {
+    return NextResponse.json(
+      { error: "Rejection message is required" },
+      { status: 400 },
+    );
+  }
+
   try {
     const request = await prisma.machineRequest.findUnique({
       where: { id },
+      include: { machine: { select: { name: true } } },
     });
 
     if (!request) {
@@ -50,14 +59,29 @@ export async function PATCH(
     const newStatus =
       action === "approve" ? MachineStatus.APPROVED : MachineStatus.REJECTED;
 
-    const updated = await prisma.machineRequest.update({
-      where: { id },
-      data: { status: newStatus },
-    });
+    if (action === "reject") {
+      await prisma.$transaction([
+        prisma.machineRequest.update({
+          where: { id },
+          data: { status: newStatus, rejectionReason: rejectionMessage.trim() },
+        }),
+        prisma.notification.create({
+          data: {
+            userId: request.userId,
+            title: `Machine Request Rejected`,
+            message: `Your borrow request for "${request.machine.name}" was rejected. Reason: ${rejectionMessage.trim()}`,
+          },
+        }),
+      ]);
+    } else {
+      await prisma.machineRequest.update({
+        where: { id },
+        data: { status: newStatus },
+      });
+    }
 
     return NextResponse.json({
       message: `Request ${action === "approve" ? "approved" : "rejected"}`,
-      request: updated,
     });
   } catch (error) {
     console.error("Update request error:", error);

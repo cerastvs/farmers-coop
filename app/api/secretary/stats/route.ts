@@ -12,6 +12,7 @@ const ACTIVE_MACHINE_STATUSES = [
   MachineStatus.QUEUED,
   MachineStatus.APPROVED,
   MachineStatus.IN_USE,
+  MachineStatus.REJECTED,
 ];
 
 export async function GET() {
@@ -63,6 +64,7 @@ export async function GET() {
             select: {
               id: true,
               status: true,
+              rejectionReason: true,
               requestDate: true,
               startDate: true,
               endDate: true,
@@ -153,6 +155,7 @@ export async function GET() {
         requests: m.requests.map((r) => ({
           id: r.id,
           status: r.status,
+          rejectionReason: r.rejectionReason,
           requestDate: r.requestDate.toISOString(),
           startDate: r.startDate?.toISOString() ?? null,
           endDate: r.endDate?.toISOString() ?? null,

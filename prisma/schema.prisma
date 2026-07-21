@@ -77,6 +77,7 @@ model User {
   machineRequests    MachineRequest[]
   supplyTransactions SupplyTransaction[]
   availability       Availability[]
+  notifications      Notification[]
 }
 
 model Post {
@@ -170,7 +171,8 @@ model MachineRequest {
   user    User    @relation(fields: [userId], references: [id])
   machine Machine @relation(fields: [machineId], references: [id])
 
-  status MachineStatus @default(QUEUED)
+  status          MachineStatus @default(QUEUED)
+  rejectionReason String?
 
   requestDate DateTime  @default(now())
   startDate   DateTime?
@@ -237,5 +239,15 @@ model AuditTrail {
   action    String
   entity    String
   entityId  String?
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  message   String
+  read      Boolean  @default(false)
   createdAt DateTime @default(now())
 }

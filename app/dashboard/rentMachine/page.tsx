@@ -62,10 +62,12 @@ function toISODate(d: Date) {
 
 function BookingCalendar({
   bookedDates,
+  myRequests,
   startDate,
   endDate,
 }: {
   bookedDates: BookedDate[];
+  myRequests: MyRequest[];
   startDate: string;
   endDate: string;
 }) {
@@ -104,7 +106,7 @@ function BookingCalendar({
     }
   }
 
-  function getDayStatus(day: number): "approved" | "pending" | "selected" | null {
+  function getDayStatus(day: number): "my-approved" | "approved" | "pending" | "selected" | null {
     const dateStr = toISODate(new Date(viewYear, viewMonth, day));
 
     if (startDate && endDate && dateStr >= startDate && dateStr <= endDate) {
@@ -115,7 +117,17 @@ function BookingCalendar({
       const bdStart = bd.startDate.split("T")[0];
       const bdEnd = bd.endDate.split("T")[0];
       if (dateStr >= bdStart && dateStr <= bdEnd) {
-        return bd.status === "QUEUED" ? "pending" : "approved";
+        if (bd.status === "QUEUED") return "pending";
+
+        const isOwn = myRequests.some(
+          (r) =>
+            r.status !== "QUEUED" &&
+            r.startDate &&
+            r.endDate &&
+            r.startDate.split("T")[0] === bdStart &&
+            r.endDate.split("T")[0] === bdEnd,
+        );
+        return isOwn ? "my-approved" : "approved";
       }
     }
 
@@ -123,6 +135,7 @@ function BookingCalendar({
   }
 
   const DAY_STYLE: Record<string, string> = {
+    "my-approved": "bg-green-100 text-green-700 font-bold",
     approved: "bg-red-100 text-red-700 font-bold",
     pending: "bg-orange-100 text-orange-700 font-bold",
     selected: "bg-[#174b36] text-white font-bold",
@@ -183,7 +196,11 @@ function BookingCalendar({
         </div>
         <div className="flex items-center gap-1">
           <span className="h-2.5 w-2.5 rounded-full bg-red-300" />
-          <span className="text-[10px] text-gray-500">Approved</span>
+          <span className="text-[10px] text-gray-500">Others&apos; approved</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="h-2.5 w-2.5 rounded-full bg-green-300" />
+          <span className="text-[10px] text-gray-500">Your approved</span>
         </div>
         <div className="flex items-center gap-1">
           <span className="h-2.5 w-2.5 rounded-full bg-[#174b36]" />
@@ -401,6 +418,7 @@ export default function RentMachinePage() {
                       <div className="border-t border-[#e2e7dc] bg-[#f7f7f2] px-5 py-4 space-y-4">
                         <BookingCalendar
                           bookedDates={machine.bookedDates}
+                          myRequests={machine.myRequests}
                           startDate={startDate}
                           endDate={endDate}
                         />

@@ -71,6 +71,7 @@ interface Machine {
 interface MachineRequestInfo {
   id: string;
   status: string;
+  rejectionReason: string | null;
   requestDate: string;
   startDate: string | null;
   endDate: string | null;
@@ -215,13 +216,20 @@ function MachineDetailModal({
   onEdit,
   onDelete,
   onViewRequest,
+  onViewRejected,
 }: {
   machine: Machine;
   onClose: () => void;
   onEdit: (m: Machine) => void;
   onDelete: (m: Machine) => void;
   onViewRequest: (request: MachineRequestInfo) => void;
+  onViewRejected: (request: MachineRequestInfo) => void;
 }) {
+  const [rejectedExpanded, setRejectedExpanded] = useState(false);
+
+  const pending = machine.requests?.filter((r) => r.status === "QUEUED") ?? [];
+  const approved = machine.requests?.filter((r) => r.status === "APPROVED" || r.status === "IN_USE") ?? [];
+  const rejected = machine.requests?.filter((r) => r.status === "REJECTED") ?? [];
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
@@ -269,8 +277,6 @@ function MachineDetailModal({
           </div>
 
           {(() => {
-            const pending = machine.requests?.filter((r) => r.status === "QUEUED") ?? [];
-            const approved = machine.requests?.filter((r) => r.status !== "QUEUED") ?? [];
             return (
               <>
                 {pending.length > 0 && (
@@ -345,6 +351,52 @@ function MachineDetailModal({
                     </div>
                   </div>
                 )}
+
+                {rejected.length > 0 && (
+                  <div className="rounded-xl bg-red-50 border border-red-200 p-4">
+                    <button
+                      onClick={() => setRejectedExpanded(!rejectedExpanded)}
+                      className="w-full flex items-center justify-between"
+                    >
+                      <p className="text-xs font-bold text-red-600 uppercase tracking-wider">
+                        Rejected ({rejected.length})
+                      </p>
+                      {rejectedExpanded ? <ChevronUp size={16} className="text-red-400" /> : <ChevronDown size={16} className="text-red-400" />}
+                    </button>
+                    {rejectedExpanded && (
+                      <div className="mt-3 space-y-2.5">
+                        {rejected.map((req) => (
+                          <button
+                            key={req.id}
+                            onClick={() => onViewRejected(req)}
+                            className="w-full flex items-center justify-between rounded-lg bg-white border border-red-100 px-3 py-2.5 text-left transition hover:border-red-300 hover:bg-red-50/50 active:scale-[0.99]"
+                          >
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <div className="h-7 w-7 rounded-full bg-red-100 flex items-center justify-center text-[11px] font-bold text-red-700 shrink-0">
+                                {req.member.name.charAt(0)}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <span className="text-sm font-medium text-[#173a2b] block truncate">{req.member.name}</span>
+                                {req.startDate && req.endDate ? (
+                                  <p className="text-xs text-[#718176]">
+                                    {new Date(req.startDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                                    {" – "}
+                                    {new Date(req.endDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                                  </p>
+                                ) : (
+                                  <p className="text-xs text-gray-400 italic">No dates set</p>
+                                )}
+                              </div>
+                            </div>
+                            <span className="shrink-0 ml-2 px-3 py-1.5 bg-red-100 text-red-700 text-xs font-bold rounded-lg">
+                              View
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             );
           })()}
@@ -379,9 +431,10 @@ function RequestDetailModal({
 }: {
   request: MachineRequestInfo;
   onClose: () => void;
-  onDecide: (requestId: string, action: "approve" | "reject") => void;
+  onDecide: (requestId: string, action: "approve" | "reject", message?: string) => void;
 }) {
-  const [confirming, setConfirming] = useState<"approve" | "reject" | null>(null);
+  const [step, setStep] = useState<"idle" | "confirm-approve" | "reject-message">("idle");
+  const [rejectionMessage, setRejectionMessage] = useState("");
   const member = request.member;
 
   return (
@@ -464,46 +517,79 @@ function RequestDetailModal({
         {/* Actions */}
         {request.status === "QUEUED" && (
           <div className="p-6 border-t border-gray-100 bg-gray-50 space-y-3">
-            {confirming ? (
+            {step === "confirm-approve" && (
               <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-center">
                 <p className="text-sm font-semibold text-amber-800 mb-3">
-                  {confirming === "approve"
-                    ? "Are you sure you want to approve this request?"
-                    : "Are you sure you want to reject this request?"}
+                  Are you sure you want to approve this request?
                 </p>
                 <div className="flex gap-3">
                   <button
-                    onClick={() => setConfirming(null)}
+                    onClick={() => setStep("idle")}
                     className="flex-1 py-2.5 bg-white border border-gray-200 text-gray-600 hover:bg-gray-100 rounded-xl font-bold text-sm transition"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={() => {
-                      onDecide(request.id, confirming);
+                      onDecide(request.id, "approve");
                       onClose();
                     }}
-                    className={`flex-1 py-2.5 rounded-xl font-bold text-sm text-white transition ${
-                      confirming === "approve"
-                        ? "bg-green-600 hover:bg-green-700"
-                        : "bg-red-600 hover:bg-red-700"
-                    }`}
+                    className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 rounded-xl font-bold text-sm text-white transition"
                   >
-                    {confirming === "approve" ? "Yes, Approve" : "Yes, Reject"}
+                    Yes, Approve
                   </button>
                 </div>
               </div>
-            ) : (
+            )}
+
+            {step === "reject-message" && (
+              <div className="rounded-xl bg-red-50 border border-red-200 p-4 space-y-3">
+                <p className="text-sm font-semibold text-red-800">
+                  Rejection Message
+                </p>
+                <textarea
+                  value={rejectionMessage}
+                  onChange={(e) => setRejectionMessage(e.target.value)}
+                  placeholder="Enter the reason for rejection. This will be sent to the member."
+                  rows={3}
+                  className="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 resize-none"
+                />
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setStep("idle");
+                      setRejectionMessage("");
+                    }}
+                    className="flex-1 py-2.5 bg-white border border-gray-200 text-gray-600 hover:bg-gray-100 rounded-xl font-bold text-sm transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!rejectionMessage.trim()) return;
+                      onDecide(request.id, "reject", rejectionMessage.trim());
+                      onClose();
+                    }}
+                    disabled={!rejectionMessage.trim()}
+                    className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 rounded-xl font-bold text-sm text-white transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Confirm Reject
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {step === "idle" && (
               <div className="flex gap-3">
                 <button
-                  onClick={() => onDecide(request.id, "reject")}
+                  onClick={() => setStep("reject-message")}
                   className="flex-1 py-3 bg-white border-2 border-red-200 text-red-600 hover:bg-red-50 rounded-2xl font-bold transition flex items-center justify-center gap-2"
                 >
                   <X size={16} />
                   Reject
                 </button>
                 <button
-                  onClick={() => setConfirming("approve")}
+                  onClick={() => setStep("confirm-approve")}
                   className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold transition flex items-center justify-center gap-2"
                 >
                   <CheckCircle size={16} />
@@ -513,6 +599,113 @@ function RequestDetailModal({
             )}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function RejectionDetailModal({
+  request,
+  onClose,
+}: {
+  request: MachineRequestInfo;
+  onClose: () => void;
+}) {
+  const member = request.member;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+        {/* Header */}
+        <div className="relative bg-gradient-to-br from-red-500 to-red-700 p-6 text-white shrink-0">
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 p-2 bg-white/20 hover:bg-white/30 rounded-full transition"
+          >
+            <X size={18} />
+          </button>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center text-lg font-bold">
+              {member.name.charAt(0)}
+            </div>
+            <div>
+              <h3 className="text-lg font-bold">{member.name}</h3>
+              <p className="text-sm text-white/70">Rejected Request</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-white/80">
+            <Calendar size={14} />
+            {request.startDate && request.endDate ? (
+              <span>
+                {new Date(request.startDate).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })}
+                {" – "}
+                {new Date(request.endDate).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })}
+              </span>
+            ) : (
+              <span className="italic">No dates set</span>
+            )}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] p-4 space-y-3">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Member Information</p>
+            <div className="space-y-2.5 text-sm">
+              <div className="flex items-center gap-2.5 text-[#173a2b]">
+                <Users size={14} className="text-gray-400 shrink-0" />
+                <span className="font-medium">{member.email}</span>
+              </div>
+              {member.contact && (
+                <div className="flex items-center gap-2.5 text-[#173a2b]">
+                  <Phone size={14} className="text-gray-400 shrink-0" />
+                  <span>{member.contact}</span>
+                </div>
+              )}
+              {member.address && (
+                <div className="flex items-center gap-2.5 text-[#173a2b]">
+                  <MapPin size={14} className="text-gray-400 shrink-0" />
+                  <span>{member.address}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {member.farmSize && (
+            <div className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] p-4 space-y-3">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Farm Details</p>
+              <div className="space-y-2.5 text-sm">
+                <div className="flex items-center gap-2.5 text-[#173a2b]">
+                  <Wheat size={14} className="text-gray-400 shrink-0" />
+                  <span>{member.farmSize} hectares — {member.cropType}</span>
+                </div>
+                {member.yearsFarming != null && (
+                  <div className="flex items-center gap-2.5 text-[#173a2b]">
+                    <Calendar size={14} className="text-gray-400 shrink-0" />
+                    <span>{member.yearsFarming} year{member.yearsFarming !== 1 ? "s" : ""} of farming</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {request.rejectionReason && (
+            <div className="rounded-xl bg-red-50 border border-red-200 p-4 space-y-2">
+              <p className="text-xs font-bold text-red-600 uppercase tracking-wider">Rejection Reason</p>
+              <p className="text-sm text-red-800 leading-relaxed">{request.rejectionReason}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Close */}
+        <div className="p-6 border-t border-gray-100 bg-gray-50">
+          <button
+            onClick={onClose}
+            className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl font-bold transition"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1210,6 +1403,7 @@ export default function SecretaryDashboard() {
   const [deleting, setDeleting] = useState(false);
   const [detailApp, setDetailApp] = useState<Application | null>(null);
   const [viewRequest, setViewRequest] = useState<MachineRequestInfo | null>(null);
+  const [viewRejectedRequest, setViewRejectedRequest] = useState<MachineRequestInfo | null>(null);
 
   async function fetchData() {
     try {
@@ -1248,12 +1442,12 @@ export default function SecretaryDashboard() {
     setDeleteConfirm(machine);
   }
 
-  async function handleDecideRequest(requestId: string, action: "approve" | "reject") {
+  async function handleDecideRequest(requestId: string, action: "approve" | "reject", message?: string) {
     try {
       const res = await fetch(`/api/machines/request/${requestId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, message }),
       });
       const result = await res.json();
       if (res.ok) {
@@ -1264,13 +1458,13 @@ export default function SecretaryDashboard() {
           return {
             ...prev,
             requests: prev.requests.map((r) =>
-              r.id === requestId ? { ...r, status: newStatus } : r,
+              r.id === requestId ? { ...r, status: newStatus, rejectionReason: action === "reject" ? message ?? r.rejectionReason : r.rejectionReason } : r,
             ),
           };
         });
         setViewRequest((prev) => {
           if (!prev || prev.id !== requestId) return prev;
-          return { ...prev, status: newStatus };
+          return { ...prev, status: newStatus, rejectionReason: action === "reject" ? message ?? prev.rejectionReason : prev.rejectionReason };
         });
       } else {
         alert(result.error || `Failed to ${action} request`);
@@ -1471,6 +1665,7 @@ export default function SecretaryDashboard() {
           onEdit={handleEditFromDetail}
           onDelete={handleDeleteFromDetail}
           onViewRequest={setViewRequest}
+          onViewRejected={setViewRejectedRequest}
         />
       )}
 
@@ -1480,6 +1675,14 @@ export default function SecretaryDashboard() {
           request={viewRequest}
           onClose={() => setViewRequest(null)}
           onDecide={handleDecideRequest}
+        />
+      )}
+
+      {/* Rejection Detail Modal */}
+      {viewRejectedRequest && (
+        <RejectionDetailModal
+          request={viewRejectedRequest}
+          onClose={() => setViewRejectedRequest(null)}
         />
       )}
 

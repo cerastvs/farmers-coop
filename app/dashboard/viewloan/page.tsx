@@ -27,11 +27,26 @@ interface PaymentSubmission {
   id: string;
   loanId: string | null;
   amount: number;
+  receiptUrl: string | null;
   referenceNo: string | null;
   status: "PENDING" | "VERIFIED" | "REJECTED";
   rejectionReason?: string | null;
   createdAt: string;
   loan?: { name: string } | null;
+}
+
+const MAX_PROOF_SIZE_BYTES = 5 * 1024 * 1024;
+const ACCEPTED_PROOF_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+function getSecureProofUrl(receiptUrl: string | null) {
+  if (!receiptUrl) return null;
+
+  try {
+    const url = new URL(receiptUrl);
+    return url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 export default function ViewLoanPage() {
@@ -71,17 +86,30 @@ export default function ViewLoanPage() {
     setSubmitting(true);
     setMessage(null);
     const form = new FormData(formElement);
+    const proofOfPayment = form.get("proofOfPayment");
+
+    if (!(proofOfPayment instanceof File) || proofOfPayment.size === 0) {
+      setMessage({ kind: "error", text: "Choose a proof-of-payment image." });
+      setSubmitting(false);
+      return;
+    }
+    if (!ACCEPTED_PROOF_TYPES.has(proofOfPayment.type)) {
+      setMessage({ kind: "error", text: "Use a JPEG, PNG, or WebP image." });
+      setSubmitting(false);
+      return;
+    }
+    if (proofOfPayment.size > MAX_PROOF_SIZE_BYTES) {
+      setMessage({ kind: "error", text: "The proof image must be 5 MB or smaller." });
+      setSubmitting(false);
+      return;
+    }
+
     try {
       const response = await fetch("/api/payments", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          loanId: form.get("loanId"),
-          amount: Number(form.get("amount")),
-          referenceNo: form.get("referenceNo"),
-        }),
+        body: form,
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error ?? data.message ?? "Unable to submit payment");
       setMessage({ kind: "success", text: data.message ?? "Payment submitted for verification." });
       formElement.reset();
@@ -143,7 +171,7 @@ export default function ViewLoanPage() {
         {loans.some((loan) => loan.status === "ACTIVE") && (
           <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <h2 className="text-base font-bold text-gray-800">Submit a Payment</h2>
-            <p className="mt-1 text-sm text-gray-500">Enter the reference number from your bank, e-wallet, or cooperative receipt.</p>
+            <p className="mt-1 text-sm text-gray-500">Upload a clear image of your bank, e-wallet, or cooperative payment receipt.</p>
             <form onSubmit={submitPayment} className="mt-4 grid gap-4 sm:grid-cols-3">
               <label className="text-sm font-semibold text-gray-700">
                 Loan
@@ -160,8 +188,17 @@ export default function ViewLoanPage() {
                 <input name="amount" required type="number" min="0.01" step="0.01" className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5" />
               </label>
               <label className="text-sm font-semibold text-gray-700">
-                Reference number
-                <input name="referenceNo" required minLength={3} maxLength={100} className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5" />
+                Proof of payment
+                <input
+                  name="proofOfPayment"
+                  required
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-green-50 file:px-3 file:py-1.5 file:font-semibold file:text-green-700"
+                />
+                <span className="mt-1 block text-xs font-normal text-gray-500">
+                  JPEG, PNG, or WebP. Maximum file size: 5 MB.
+                </span>
               </label>
               <div className="sm:col-span-3 flex flex-wrap items-center gap-3">
                 <button disabled={submitting} className="rounded-xl bg-green-700 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-60">
@@ -182,18 +219,36 @@ export default function ViewLoanPage() {
           <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
             {submissions.length === 0 ? (
               <p className="p-6 text-center text-sm text-gray-400">No payment submissions yet.</p>
-            ) : submissions.map((payment) => (
-              <div key={payment.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 last:border-0">
-                <div>
-                  <p className="text-sm font-semibold text-gray-800">{payment.loan?.name ?? "Loan payment"} · ₱{payment.amount.toLocaleString()}</p>
-                  <p className="text-xs text-gray-500">Ref: {payment.referenceNo ?? "—"} · {new Date(payment.createdAt).toLocaleDateString()}</p>
-                  {payment.rejectionReason && <p className="mt-1 text-xs text-red-600">{payment.rejectionReason}</p>}
+            ) : submissions.map((payment) => {
+              const proofUrl = getSecureProofUrl(payment.receiptUrl);
+              const legacyReference = payment.referenceNo?.trim();
+              return (
+                <div key={payment.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 last:border-0">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{payment.loan?.name ?? "Loan payment"} · ₱{payment.amount.toLocaleString()}</p>
+                    <p className="text-xs text-gray-500">{new Date(payment.createdAt).toLocaleDateString()}</p>
+                    {proofUrl ? (
+                      <a
+                        href={proofUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 inline-flex text-xs font-semibold text-green-700 hover:underline"
+                      >
+                        View proof of payment
+                      </a>
+                    ) : legacyReference ? (
+                      <p className="mt-1 text-xs text-gray-500">Legacy reference: {legacyReference}</p>
+                    ) : (
+                      <p className="mt-1 text-xs font-semibold text-amber-700">Missing payment evidence</p>
+                    )}
+                    {payment.rejectionReason && <p className="mt-1 text-xs text-red-600">{payment.rejectionReason}</p>}
+                  </div>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                    payment.status === "VERIFIED" ? "bg-green-100 text-green-700" : payment.status === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                  }`}>{payment.status}</span>
                 </div>
-                <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                  payment.status === "VERIFIED" ? "bg-green-100 text-green-700" : payment.status === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
-                }`}>{payment.status}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
 

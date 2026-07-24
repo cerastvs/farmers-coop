@@ -18,6 +18,7 @@ import {
   loanTransitions,
   paymentTransitions,
 } from "@/lib/lifecycles";
+import { hasPaymentEvidence } from "@/lib/payment-proof";
 import { FINANCE_ROLES } from "@/lib/permissions";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -58,6 +59,15 @@ export async function PATCH(
           result.data.action === "verify"
             ? PaymentStatus.VERIFIED
             : PaymentStatus.REJECTED;
+        if (
+          nextStatus === PaymentStatus.VERIFIED &&
+          !hasPaymentEvidence(payment)
+        ) {
+          throw new ApiError(
+            409,
+            "Payment cannot be verified without proof of payment",
+          );
+        }
         assertTransition(
           paymentTransitions,
           payment.status,

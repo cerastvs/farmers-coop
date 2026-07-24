@@ -9,21 +9,16 @@ import { notifyUser, writeAudit } from "@/lib/activity";
 import {
   apiErrorResponse,
   ApiError,
-  readJsonBody,
   requireUser,
 } from "@/lib/api";
 import prisma from "@/lib/client";
+import {
+  readPaymentSubmission,
+  runReservedPaymentProofUpload,
+  uploadPaymentProof,
+} from "@/lib/payment-proof";
 import { MEMBER_ROLES } from "@/lib/permissions";
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-
-const PaymentSchema = z.object({
-  loanId: z.string().uuid(),
-  amount: z.number().positive().max(5000).multipleOf(0.01),
-  referenceNo: z.string().trim().min(3).max(100).transform((value) =>
-    value.toUpperCase()
-  ),
-}).strict();
 
 export async function GET() {
   try {
@@ -48,92 +43,32 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const actor = await requireUser(MEMBER_ROLES);
-    const result = PaymentSchema.safeParse(await readJsonBody(req));
-    if (!result.success) {
-      throw new ApiError(400, result.error.issues[0].message);
-    }
+    const submission = await readPaymentSubmission(req);
 
-    const payment = await prisma.$transaction(
-      async (tx) => {
-        const loan = await tx.loan.findFirst({
-          where: { id: result.data.loanId, userId: actor.userId },
-          include: { payments: true },
-        });
-        if (!loan) throw new ApiError(404, "Loan not found");
-        if (loan.status !== LoanStatus.ACTIVE) {
-          throw new ApiError(409, "Only active loans can receive payments");
-        }
-
-        const paid = loan.payments.reduce(
-          (sum, entry) => sum.plus(entry.amount),
-          new Prisma.Decimal(0),
-        );
-        const balance = loan.amount.minus(paid);
-        if (new Prisma.Decimal(result.data.amount).greaterThan(balance)) {
-          throw new ApiError(
-            400,
-            `Payment cannot exceed the remaining balance of ₱${balance.toNumber().toLocaleString()}`,
-          );
-        }
-
-        const duplicate = await tx.payment.findFirst({
+    const payment = await runReservedPaymentProofUpload({
+      reserve: () =>
+        reservePayment(actor.userId, submission.loanId, submission.amount),
+      upload: () => uploadPaymentProof(submission.proofOfPayment),
+      complete: (paymentId, receiptUrl) =>
+        completePayment(
+          paymentId,
+          actor.userId,
+          submission.loanId,
+          submission.amount,
+          receiptUrl,
+        ),
+      release: async (paymentId) => {
+        await prisma.payment.deleteMany({
           where: {
+            id: paymentId,
             userId: actor.userId,
-            referenceNo: {
-              equals: result.data.referenceNo,
-              mode: "insensitive",
-            },
-            status: { not: PaymentStatus.REJECTED },
-          },
-          select: { id: true },
-        });
-        if (duplicate) {
-          throw new ApiError(
-            409,
-            "This payment reference was already submitted",
-          );
-        }
-
-        const created = await tx.payment.create({
-          data: {
-            userId: actor.userId,
-            loanId: loan.id,
-            type: PaymentType.LOAN_PAYMENT,
-            amount: result.data.amount,
-            referenceNo: result.data.referenceNo,
+            status: PaymentStatus.PENDING,
+            receiptUrl: null,
+            referenceNo: null,
           },
         });
-        await writeAudit(tx, {
-          userId: actor.userId,
-          action: "PAYMENT_SUBMITTED",
-          entity: "Payment",
-          entityId: created.id,
-          metadata: {
-            loanId: loan.id,
-            amount: result.data.amount,
-            referenceNo: result.data.referenceNo,
-          },
-        });
-        const reviewers = await tx.user.findMany({
-          where: {
-            role: { in: [Role.TREASURER, Role.PRESIDENT] },
-            active: true,
-          },
-          select: { id: true },
-        });
-        await Promise.all(
-          reviewers.map((reviewer) =>
-            notifyUser(tx, {
-              userId: reviewer.id,
-              title: "Payment awaiting verification",
-              message: `A ₱${result.data.amount.toLocaleString()} loan payment is ready for review.`,
-            }),
-          ),
-        );
-        return created;
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    );
+    });
 
     return NextResponse.json(
       { message: "Payment submitted for verification", paymentId: payment.id },
@@ -142,4 +77,154 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     return apiErrorResponse(error, "Failed to submit payment");
   }
+}
+
+type LoanForPayment = {
+  status: LoanStatus;
+  amount: Prisma.Decimal;
+  payments: { amount: Prisma.Decimal }[];
+} | null;
+
+function assertPaymentFitsLoan(
+  loan: LoanForPayment,
+  amount: number,
+): asserts loan is NonNullable<LoanForPayment> {
+  if (!loan) throw new ApiError(404, "Loan not found");
+  if (loan.status !== LoanStatus.ACTIVE) {
+    throw new ApiError(409, "Only active loans can receive payments");
+  }
+
+  const paid = loan.payments.reduce(
+    (sum, entry) => sum.plus(entry.amount),
+    new Prisma.Decimal(0),
+  );
+  const balance = loan.amount.minus(paid);
+  if (new Prisma.Decimal(amount).greaterThan(balance)) {
+    throw new ApiError(
+      400,
+      `Payment cannot exceed the remaining balance of ₱${balance.toNumber().toLocaleString()}`,
+    );
+  }
+}
+
+async function reservePayment(
+  userId: string,
+  loanId: string,
+  amount: number,
+) {
+  try {
+    return await prisma.$transaction(
+      async (tx) => {
+        const loan = await tx.loan.findFirst({
+          where: { id: loanId, userId },
+          include: { payments: true },
+        });
+        assertPaymentFitsLoan(loan, amount);
+
+        const pending = await tx.payment.findFirst({
+          where: {
+            userId,
+            loanId,
+            type: PaymentType.LOAN_PAYMENT,
+            status: PaymentStatus.PENDING,
+          },
+          select: { id: true },
+        });
+        if (pending) {
+          throw new ApiError(
+            409,
+            "A payment submission is already pending for this loan",
+          );
+        }
+
+        const reservation = await tx.payment.create({
+          data: {
+            userId,
+            loanId,
+            type: PaymentType.LOAN_PAYMENT,
+            amount,
+          },
+          select: { id: true },
+        });
+        return reservation.id;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      throw new ApiError(
+        409,
+        "A payment submission is already pending for this loan",
+      );
+    }
+    throw error;
+  }
+}
+
+async function completePayment(
+  paymentId: string,
+  userId: string,
+  loanId: string,
+  amount: number,
+  receiptUrl: string,
+) {
+  return prisma.$transaction(
+    async (tx) => {
+      const loan = await tx.loan.findFirst({
+        where: { id: loanId, userId },
+        include: { payments: true },
+      });
+      assertPaymentFitsLoan(loan, amount);
+
+      const completed = await tx.payment.updateMany({
+        where: {
+          id: paymentId,
+          userId,
+          loanId,
+          type: PaymentType.LOAN_PAYMENT,
+          status: PaymentStatus.PENDING,
+          receiptUrl: null,
+          referenceNo: null,
+        },
+        data: { receiptUrl },
+      });
+      if (completed.count !== 1) {
+        throw new ApiError(409, "Payment reservation changed during upload");
+      }
+
+      await writeAudit(tx, {
+        userId,
+        action: "PAYMENT_SUBMITTED",
+        entity: "Payment",
+        entityId: paymentId,
+        metadata: {
+          loanId,
+          amount,
+          proofAttached: true,
+        },
+      });
+      const reviewers = await tx.user.findMany({
+        where: {
+          role: { in: [Role.TREASURER, Role.PRESIDENT] },
+          active: true,
+        },
+        select: { id: true },
+      });
+      await Promise.all(
+        reviewers.map((reviewer) =>
+          notifyUser(tx, {
+            userId: reviewer.id,
+            title: "Payment awaiting verification",
+            message: `A ₱${amount.toLocaleString()} loan payment is ready for review.`,
+          }),
+        ),
+      );
+
+      return { id: paymentId };
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 }

@@ -26,6 +26,7 @@ interface Payment {
   user: { name: string | null; username: string };
   loan: { name: string } | null;
   amount: number;
+  receiptUrl: string | null;
   referenceNo: string | null;
   status: string;
   rejectionReason: string | null;
@@ -77,6 +78,17 @@ interface Post {
 const fieldClass = "rounded-xl border border-[#dce5d9] bg-white px-3 py-2 text-sm text-[#173a2b] outline-none focus:border-[#39733e] focus:ring-2 focus:ring-[#dcefd0]";
 const buttonClass = "rounded-xl bg-[#26633f] px-3.5 py-2 text-xs font-bold text-white transition hover:bg-[#174b36] disabled:cursor-not-allowed disabled:opacity-50";
 const secondaryButton = "rounded-xl border border-[#cddbc9] bg-white px-3.5 py-2 text-xs font-bold text-[#315646] transition hover:bg-[#f0f7eb] disabled:opacity-50";
+
+function getSecureProofUrl(receiptUrl: string | null) {
+  if (!receiptUrl) return null;
+
+  try {
+    const url = new URL(receiptUrl);
+    return url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
 
 async function requestJson(url: string, options?: RequestInit) {
   const response = await fetch(url, options);
@@ -254,22 +266,45 @@ export default function AdminPage() {
             )}
 
             {tab === "payments" && (
-              <AdminSection title="Payment Verification" description="Verify references before applying payments to member balances.">
+              <AdminSection title="Payment Verification" description="Review uploaded proof before applying payments to member balances.">
                 <RecordList empty="No payment submissions found.">
-                  {payments.map((payment) => (
-                    <Record key={payment.id} title={payment.user.name ?? payment.user.username} meta={`₱${payment.amount.toLocaleString()} · Ref ${payment.referenceNo ?? "—"} · ${new Date(payment.createdAt).toLocaleDateString()}`} status={payment.status}>
-                      {payment.rejectionReason && <p className="text-xs text-red-600">Reason: {payment.rejectionReason}</p>}
-                      {payment.status === "PENDING" && (
-                        <ActionRow>
-                          <button disabled={busy === payment.id} onClick={() => mutate(payment.id, `/api/admin/payments/${payment.id}`, { action: "verify" }, "Payment verified.")} className={buttonClass}>Verify</button>
-                          <button disabled={busy === payment.id} onClick={() => {
-                            const reason = rejectReason();
-                            if (reason) void mutate(payment.id, `/api/admin/payments/${payment.id}`, { action: "reject", reason }, "Payment rejected.");
-                          }} className={secondaryButton}>Reject</button>
-                        </ActionRow>
-                      )}
-                    </Record>
-                  ))}
+                  {payments.map((payment) => {
+                    const proofUrl = getSecureProofUrl(payment.receiptUrl);
+                    const legacyReference = payment.referenceNo?.trim();
+                    const hasPaymentEvidence = Boolean(proofUrl || legacyReference);
+                    return (
+                      <Record key={payment.id} title={payment.user.name ?? payment.user.username} meta={`₱${payment.amount.toLocaleString()} · ${payment.loan?.name ?? "Loan payment"} · ${new Date(payment.createdAt).toLocaleDateString()}`} status={payment.status}>
+                        {proofUrl ? (
+                          <a
+                            href={proofUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex rounded-lg border border-[#cddbc9] bg-[#f7faf5] px-3 py-2 text-xs font-bold text-[#26633f] transition hover:bg-[#edf6e8]"
+                          >
+                            View proof of payment
+                          </a>
+                        ) : legacyReference ? (
+                          <p className="rounded-lg bg-[#f7faf5] px-3 py-2 text-xs font-semibold text-[#496558]">
+                            Legacy reference: {legacyReference}
+                          </p>
+                        ) : (
+                          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                            Missing payment evidence
+                          </p>
+                        )}
+                        {payment.rejectionReason && <p className="text-xs text-red-600">Reason: {payment.rejectionReason}</p>}
+                        {payment.status === "PENDING" && (
+                          <ActionRow>
+                            <button disabled={busy === payment.id || !hasPaymentEvidence} onClick={() => mutate(payment.id, `/api/admin/payments/${payment.id}`, { action: "verify" }, "Payment verified.")} className={buttonClass}>Verify</button>
+                            <button disabled={busy === payment.id} onClick={() => {
+                              const reason = rejectReason();
+                              if (reason) void mutate(payment.id, `/api/admin/payments/${payment.id}`, { action: "reject", reason }, "Payment rejected.");
+                            }} className={secondaryButton}>Reject</button>
+                          </ActionRow>
+                        )}
+                      </Record>
+                    );
+                  })}
                 </RecordList>
               </AdminSection>
             )}

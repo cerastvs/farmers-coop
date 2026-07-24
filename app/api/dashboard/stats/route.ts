@@ -4,7 +4,6 @@ import { getSession } from "@/lib/session";
 import {
   LoanStatus,
   MachineStatus,
-  PaymentStatus,
   TransactionStatus,
 } from "@/app/generated/prisma";
 

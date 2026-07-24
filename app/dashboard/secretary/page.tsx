@@ -17,7 +17,6 @@ import {
   Trash2,
   X,
   ImagePlus,
-  Check,
   CheckCircle,
   Phone,
   MapPin,
@@ -130,6 +129,7 @@ const SECTIONS = [
   "supplies",
 ] as const;
 type Section = (typeof SECTIONS)[number];
+type MachineRequestAction = "approve" | "reject" | "start" | "return" | "overdue";
 
 const SECTION_META: Record<
   Section,
@@ -169,11 +169,11 @@ function SectionCard({
 
   return (
     <div className={`flex flex-col rounded-2xl border border-[#e2e7dc] bg-white shadow-sm shadow-[#173a2b]/[.03] overflow-hidden border-l-4 ${meta.accent} lg:h-[400px]`}>
-      <button
-        onClick={onToggle}
-        className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-gray-50/50 active:scale-[0.995]"
-      >
-        <div className="flex items-center gap-3">
+      <div className="flex w-full items-center justify-between gap-3 px-5 py-4 transition hover:bg-gray-50/50">
+        <button
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left active:scale-[0.995]"
+        >
           <div className={`rounded-xl p-2.5 ${meta.iconBg}`}>
             <Icon size={18} />
           </div>
@@ -184,17 +184,21 @@ function SectionCard({
               {!expanded && count > VISIBLE_COUNT && ` · Showing ${VISIBLE_COUNT}`}
             </p>
           </div>
-        </div>
+        </button>
         <div className="flex items-center gap-2">
           {headerAction}
           <span className="rounded-full bg-[#edf5df] px-2.5 py-0.5 text-[11px] font-bold text-[#39733e]">
             {count}
           </span>
-          <div className="rounded-lg bg-gray-100 p-1.5 text-gray-400">
+          <button
+            onClick={onToggle}
+            aria-label={`${expanded ? "Collapse" : "Expand"} ${meta.label}`}
+            className="rounded-lg bg-gray-100 p-1.5 text-gray-400"
+          >
             {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </div>
+          </button>
         </div>
-      </button>
+      </div>
       <div className="flex-1 border-t border-[#f0f3ed] px-5 py-3 space-y-2 overflow-y-auto">
         {children}
       </div>
@@ -217,6 +221,7 @@ function MachineDetailModal({
   onDelete,
   onViewRequest,
   onViewRejected,
+  onLifecycle,
 }: {
   machine: Machine;
   onClose: () => void;
@@ -224,11 +229,12 @@ function MachineDetailModal({
   onDelete: (m: Machine) => void;
   onViewRequest: (request: MachineRequestInfo) => void;
   onViewRejected: (request: MachineRequestInfo) => void;
+  onLifecycle: (requestId: string, action: MachineRequestAction, message?: string) => void;
 }) {
   const [rejectedExpanded, setRejectedExpanded] = useState(false);
 
   const pending = machine.requests?.filter((r) => r.status === "QUEUED") ?? [];
-  const approved = machine.requests?.filter((r) => r.status === "APPROVED" || r.status === "IN_USE") ?? [];
+  const approved = machine.requests?.filter((r) => ["APPROVED", "IN_USE", "OVERDUE"].includes(r.status)) ?? [];
   const rejected = machine.requests?.filter((r) => r.status === "REJECTED") ?? [];
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -345,7 +351,21 @@ function MachineDetailModal({
                               )}
                             </div>
                           </div>
-                          <span className="shrink-0 ml-2 px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full">Approved</span>
+                          <div className="ml-2 flex shrink-0 flex-wrap justify-end gap-1.5">
+                            <span className="rounded-full bg-green-50 px-2.5 py-1 text-[10px] font-bold text-green-700">{req.status.replace("_", " ")}</span>
+                            {req.status === "APPROVED" && (
+                              <button onClick={() => onLifecycle(req.id, "start")} className="rounded-lg bg-blue-600 px-2.5 py-1 text-[10px] font-bold text-white">Start use</button>
+                            )}
+                            {req.status === "IN_USE" && (
+                              <>
+                                <button onClick={() => onLifecycle(req.id, "return")} className="rounded-lg bg-green-600 px-2.5 py-1 text-[10px] font-bold text-white">Returned</button>
+                                <button onClick={() => onLifecycle(req.id, "overdue")} className="rounded-lg border border-red-200 px-2.5 py-1 text-[10px] font-bold text-red-600">Overdue</button>
+                              </>
+                            )}
+                            {req.status === "OVERDUE" && (
+                              <button onClick={() => onLifecycle(req.id, "return")} className="rounded-lg bg-green-600 px-2.5 py-1 text-[10px] font-bold text-white">Returned</button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -909,6 +929,7 @@ function ApplicationDetailModal({
 }) {
   const [acting, setActing] = useState(false);
   const [confirmAction, setConfirmAction] = useState<"approve" | "reject" | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const isPending = application.status === "PENDING";
@@ -919,7 +940,11 @@ function ApplicationDetailModal({
     try {
       const res = await fetch(
         `/api/secretary/applications/${application.id}/${action}`,
-        { method: "POST" },
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(action === "reject" ? { reason: rejectionReason.trim() } : {}),
+        },
       );
       const data = await res.json();
       if (res.ok) {
@@ -1049,9 +1074,23 @@ function ApplicationDetailModal({
         {isPending && (
           <div className="p-6 border-t border-gray-100 bg-gray-50 flex gap-3">
             {confirmAction ? (
-              <>
+              <div className="flex-1 space-y-3">
+                {confirmAction === "reject" && (
+                  <textarea
+                    value={rejectionReason}
+                    onChange={(event) => setRejectionReason(event.target.value)}
+                    placeholder="Reason for rejection"
+                    rows={3}
+                    maxLength={500}
+                    className="w-full resize-none rounded-xl border border-red-200 bg-white px-3 py-2 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                  />
+                )}
+                <div className="flex gap-3">
                 <button
-                  onClick={() => setConfirmAction(null)}
+                  onClick={() => {
+                    setConfirmAction(null);
+                    setRejectionReason("");
+                  }}
                   disabled={acting}
                   className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition"
                 >
@@ -1059,7 +1098,7 @@ function ApplicationDetailModal({
                 </button>
                 <button
                   onClick={() => handleConfirm(confirmAction)}
-                  disabled={acting}
+                  disabled={acting || (confirmAction === "reject" && !rejectionReason.trim())}
                   className={`flex-1 py-3 text-white rounded-2xl font-bold transition disabled:opacity-50 ${
                     confirmAction === "approve"
                       ? "bg-green-600 hover:bg-green-700"
@@ -1072,7 +1111,8 @@ function ApplicationDetailModal({
                       ? "Confirm Approve"
                       : "Confirm Reject"}
                 </button>
-              </>
+                </div>
+              </div>
             ) : (
               <>
                 <button
@@ -1442,7 +1482,7 @@ export default function SecretaryDashboard() {
     setDeleteConfirm(machine);
   }
 
-  async function handleDecideRequest(requestId: string, action: "approve" | "reject", message?: string) {
+  async function handleDecideRequest(requestId: string, action: MachineRequestAction, message?: string) {
     try {
       const res = await fetch(`/api/machines/request/${requestId}`, {
         method: "PATCH",
@@ -1452,7 +1492,13 @@ export default function SecretaryDashboard() {
       const result = await res.json();
       if (res.ok) {
         await fetchData();
-        const newStatus = action === "approve" ? "APPROVED" : "REJECTED";
+        const newStatus = {
+          approve: "APPROVED",
+          reject: "REJECTED",
+          start: "IN_USE",
+          return: "RETURNED",
+          overdue: "OVERDUE",
+        }[action];
         setDetailMachine((prev) => {
           if (!prev) return null;
           return {
@@ -1666,6 +1712,7 @@ export default function SecretaryDashboard() {
           onDelete={handleDeleteFromDetail}
           onViewRequest={setViewRequest}
           onViewRejected={setViewRejectedRequest}
+          onLifecycle={handleDecideRequest}
         />
       )}
 

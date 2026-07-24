@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "tsx --test tests/**/*.test.ts",
+    "db:start": "docker compose up -d postgres",
+    "db:stop": "docker compose stop postgres",
+    "db:migrate": "prisma migrate deploy && prisma generate",
+    "db:seed": "prisma db seed"
   },
   "dependencies": {
     "@pipedream/imgbb": "^1.0.2",

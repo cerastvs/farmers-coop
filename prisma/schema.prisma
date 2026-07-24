@@ -62,6 +62,16 @@ enum LoanStatus {
   PAID
 }
 
+enum ReportType {
+  SUMMARY
+  MEMBERS
+  LOANS
+  PAYMENTS
+  SUPPLIES
+  MACHINES
+  AUDIT
+}
+
 model User {
   id                 String              @id @default(uuid())
   name               String?
@@ -70,6 +80,7 @@ model User {
   password           String
   username           String              @unique
   role               Role                @default(APPLICANT)
+  active             Boolean             @default(true)
   loans              Loan[]
   posts              Post[]
   applications       Application[]
@@ -78,6 +89,8 @@ model User {
   supplyTransactions SupplyTransaction[]
   availability       Availability[]
   notifications      Notification[]
+  auditEntries       AuditTrail[]
+  logs               Log[]
 }
 
 model Post {
@@ -90,15 +103,22 @@ model Post {
 }
 
 model Loan {
-  id        String        @id @default(uuid())
-  userId    String
-  name      String        @default("Cash Loan") // Loan type / label (e.g. Cash Loan, Emergency Loan)
-  status    LoanStatus    @default(PENDING)
-  amount    Decimal       @db.Decimal(10, 2)
-  createdAt DateTime      @default(now())
-  due       DateTime
-  user      User          @relation(fields: [userId], references: [id])
-  payments  LoanPayment[]
+  id                 String              @id @default(uuid())
+  userId             String
+  name               String              @default("Cash Loan")
+  status             LoanStatus          @default(PENDING)
+  amount             Decimal             @db.Decimal(10, 2)
+  termMonths         Int                 @default(6)
+  purpose            String?
+  createdAt          DateTime            @default(now())
+  due                DateTime
+  reviewedBy         String?
+  reviewedAt         DateTime?
+  rejectionReason    String?
+  user               User                @relation(fields: [userId], references: [id])
+  payments           LoanPayment[]
+  paymentSubmissions Payment[]
+  statusHistory      LoanStatusHistory[]
 }
 
 model Supply {
@@ -112,13 +132,17 @@ model Supply {
 
 model Log {
   id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String   @default("SYSTEM")
+  success   Boolean  @default(true)
   info      String
   createdAt DateTime @default(now())
 }
 
 model Application {
   id     String @id @default(uuid())
-  userId String
+  userId String @unique
   user   User   @relation(fields: [userId], references: [id])
 
   fullName String
@@ -134,9 +158,11 @@ model Application {
   validIdUrl     String
   proofOfFarmUrl String
 
-  status     ApplicationStatus @default(PENDING)
-  createdAt  DateTime          @default(now())
-  reviewedBy String?
+  status          ApplicationStatus @default(PENDING)
+  createdAt       DateTime          @default(now())
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  rejectionReason String?
 }
 
 model Payment {
@@ -146,12 +172,17 @@ model Payment {
 
   type   PaymentType
   amount Decimal     @db.Decimal(10, 2)
+  loanId String?
+  loan   Loan?       @relation(fields: [loanId], references: [id], onDelete: SetNull)
 
-  receiptUrl String?
-  status     PaymentStatus @default(PENDING)
+  receiptUrl  String?
+  referenceNo String?
+  status      PaymentStatus @default(PENDING)
 
-  createdAt  DateTime @default(now())
-  verifiedBy String?
+  createdAt       DateTime  @default(now())
+  verifiedBy      String?
+  verifiedAt      DateTime?
+  rejectionReason String?
 }
 
 model Machine {
@@ -191,8 +222,11 @@ model SupplyTransaction {
   quantity   Int
   totalPrice Decimal @db.Decimal(10, 2)
 
-  type   SupplyTransactionType
-  status TransactionStatus     @default(PENDING)
+  type            SupplyTransactionType
+  status          TransactionStatus     @default(PENDING)
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  rejectionReason String?
 
   createdAt DateTime @default(now())
 }
@@ -210,6 +244,7 @@ model LoanPayment {
 model LoanStatusHistory {
   id        String     @id @default(uuid())
   loanId    String
+  loan      Loan       @relation(fields: [loanId], references: [id], onDelete: Cascade)
   status    LoanStatus
   changedAt DateTime   @default(now())
 }
@@ -227,18 +262,22 @@ model Availability {
 }
 
 model Report {
-  id          String   @id @default(uuid())
+  id          String     @id @default(uuid())
   title       String
+  type        ReportType @default(SUMMARY)
+  data        Json?
   generatedBy String
-  createdAt   DateTime @default(now())
+  createdAt   DateTime   @default(now())
 }
 
 model AuditTrail {
   id        String   @id @default(uuid())
   userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   action    String
   entity    String
   entityId  String?
+  metadata  Json?
   createdAt DateTime @default(now())
 }
 

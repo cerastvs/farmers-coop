@@ -25,11 +25,6 @@ export default function Registration() {
   const [loading, setLoading] = useState(false);
   const [application, setApplicaton] = useState<Application | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     fetch("/api/registration")
@@ -49,7 +44,6 @@ export default function Registration() {
         console.error("Fetch failed:", err);
       });
   }, []);
-  if (!mounted) return null;
 
   const isUpdate = !!application;
 

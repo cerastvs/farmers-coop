@@ -1,16 +1,19 @@
+import type { FormEvent } from "react";
+
 import { ApplicationSchema } from "@/lib/validators/registration";
 import { refreshSession } from "./server-actions";
 
 export async function handleSubmit(
-  e: any,
+  e: FormEvent<HTMLFormElement>,
   setLoading: (args: boolean) => void,
   setErrors: (args: Record<string, string>) => void,
   isUpdate: boolean = false,
 ) {
   e.preventDefault();
+  const form = e.currentTarget;
   setLoading(true);
   setErrors({});
-  const formData = new FormData(e.target);
+  const formData = new FormData(form);
   const formValues = Object.fromEntries(formData.entries());
 
   const result = ApplicationSchema.safeParse(formValues);
@@ -57,8 +60,8 @@ export async function handleSubmit(
     await refreshSession();
 
     alert(isUpdate ? "Profile updated!" : "Application submitted!");
-    if (!isUpdate) e.target.reset();
-  } catch (err) {
+    if (!isUpdate) form.reset();
+  } catch {
     alert("Something went wrong");
   } finally {
     setLoading(false);

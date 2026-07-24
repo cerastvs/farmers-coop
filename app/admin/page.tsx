@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { runAdminMutation } from "@/lib/admin-mutation";
 
 type Role = "APPLICANT" | "MEMBER" | "TREASURER" | "PRESIDENT" | "SECRETARY";
 type Tab = "loans" | "payments" | "supplies" | "members" | "reports" | "posts";
@@ -148,15 +149,21 @@ export default function AdminPage() {
     setBusy(key);
     setNotice(null);
     try {
-      await requestJson(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+      await runAdminMutation({
+        request: () =>
+          requestJson(url, {
+            method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          }),
+        refresh: () => loadTab(tab),
+        onSuccess: () => setNotice({ kind: "success", text: success }),
+        onError: (error) =>
+          setNotice({
+            kind: "error",
+            text: error instanceof Error ? error.message : "Action failed",
+          }),
       });
-      setNotice({ kind: "success", text: success });
-      await loadTab(tab);
-    } catch (error) {
-      setNotice({ kind: "error", text: error instanceof Error ? error.message : "Action failed" });
     } finally {
       setBusy(null);
     }

@@ -25,7 +25,7 @@ export const quickActions = [
     icon: <IconBuySupplies />,
     iconBg: "bg-yellow-100",
     iconColor: "text-yellow-700",
-    href: "#",
+    href: "/dashboard/supplies",
   },
   {
     label: "View Loans",

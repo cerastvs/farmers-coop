@@ -19,6 +19,7 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   // Cleanup existing data
+  await prisma.notification.deleteMany();
   await prisma.auditTrail.deleteMany();
   await prisma.report.deleteMany();
   await prisma.log.deleteMany();
@@ -162,11 +163,14 @@ async function main() {
     data: [
       {
         userId: member.id,
-        type: PaymentType.APPLICATION_FEE,
+        loanId: loan.id,
+        type: PaymentType.LOAN_PAYMENT,
         amount: 100,
         status: PaymentStatus.VERIFIED,
         receiptUrl: "https://example.com/receipt1.jpg",
+        referenceNo: "SEED-PAYMENT-001",
         verifiedBy: treasurer.id,
+        verifiedAt: new Date(),
       },
       {
         userId: applicant.id,
@@ -222,14 +226,14 @@ async function main() {
     },
   });
 
-  const tractor2 = await prisma.machine.create({
+  await prisma.machine.create({
     data: {
       name: "Tractor",
       description: "Used for plowing fields",
     },
   });
 
-  const tractor3 = await prisma.machine.create({
+  await prisma.machine.create({
     data: {
       name: "Tractor",
       description: "Used for plowing fields",
@@ -243,7 +247,7 @@ async function main() {
     },
   });
 
-  const harvester2 = await prisma.machine.create({
+  await prisma.machine.create({
     data: {
       name: "Rice Harvester",
       description: "Used for harvesting rice",

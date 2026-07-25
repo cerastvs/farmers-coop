@@ -9,6 +9,7 @@ import { Bell } from "lucide-react";
 export function DashboardHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/notifications")
@@ -18,6 +19,10 @@ export function DashboardHeader() {
           setUnreadCount(data.filter((n: { read: boolean }) => !n.read).length);
         }
       })
+      .catch(() => {});
+    fetch("/api/me")
+      .then((res) => res.json())
+      .then((data) => setUserRole(data.role ?? null))
       .catch(() => {});
   }, []);
 
@@ -53,13 +58,31 @@ export function DashboardHeader() {
 
       {menuOpen && (
         <div className="absolute right-4 top-[4.25rem] z-50 w-52 rounded-2xl border border-[#dfe7dc] bg-white py-2 shadow-2xl shadow-[#173a2b]/15">
-          <a
+          <Link
             href="/registration"
             onClick={() => setMenuOpen(false)}
             className="block w-full px-4 py-3 text-left text-sm font-semibold text-[#315646] transition-colors hover:bg-[#f0f7eb]"
           >
             Edit Profile
-          </a>
+          </Link>
+          {["PRESIDENT", "TREASURER", "SECRETARY"].includes(userRole ?? "") && (
+            <Link
+              href="/admin"
+              onClick={() => setMenuOpen(false)}
+              className="block w-full px-4 py-3 text-left text-sm font-semibold text-[#315646] transition-colors hover:bg-[#f0f7eb]"
+            >
+              Administration
+            </Link>
+          )}
+          {userRole === "SECRETARY" && (
+            <Link
+              href="/dashboard/secretary"
+              onClick={() => setMenuOpen(false)}
+              className="block w-full px-4 py-3 text-left text-sm font-semibold text-[#315646] transition-colors hover:bg-[#f0f7eb]"
+            >
+              Membership Applications
+            </Link>
+          )}
           <form action={logout}>
             <button
               type="submit"

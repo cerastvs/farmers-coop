@@ -1,7 +1,8 @@
 "use server";
 
 import prisma from "@/lib/client";
-import { createSession, deleteSession } from "@/lib/session";
+import { writeActivityLog } from "@/lib/activity";
+import { createSession, deleteSession, getSession } from "@/lib/session";
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -30,22 +31,6 @@ const LoginSchema = z.object({
   // captchaToken: z.string().min(1, "Please complete the reCAPTCHA"),
   captchaToken: z.string().optional(),
 });
-
-async function verifyCaptcha(token: string) {
-  const secretKey = process.env.RECAPTCHA_SECRET_KEY;
-  if (!secretKey) {
-    console.error("RECAPTCHA_SECRET_KEY is not set");
-    return false;
-  }
-
-  const response = await fetch(
-    `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${token}`,
-    { method: "POST" },
-  );
-
-  const data = await response.json();
-  return data.success;
-}
 
 export type ActionState =
   | {
@@ -83,12 +68,33 @@ export async function login(prevState: ActionState, formData: FormData) {
   });
 
   if (!user) {
+    await writeActivityLog({
+      action: "LOGIN",
+      success: false,
+      info: `Login failed for unknown username ${username}`,
+    });
     return { errors: { username: ["User not found"] } };
+  }
+
+  if (!user.active) {
+    await writeActivityLog({
+      userId: user.id,
+      action: "LOGIN",
+      success: false,
+      info: "Login rejected because account is inactive",
+    });
+    return { message: "Your account is inactive. Contact a cooperative officer." };
   }
 
   const isValid = await bcrypt.compare(password, user.password);
 
   if (!isValid) {
+    await writeActivityLog({
+      userId: user.id,
+      action: "LOGIN",
+      success: false,
+      info: "Login failed because the password was invalid",
+    });
     return { errors: { password: ["Invalid password"] } };
   }
 
@@ -97,11 +103,26 @@ export async function login(prevState: ActionState, formData: FormData) {
   });
 
   await createSession(user.id, user.role, !!application);
+  await writeActivityLog({
+    userId: user.id,
+    action: "LOGIN",
+    success: true,
+    info: "User logged in",
+  });
 
   redirect(user.role === "SECRETARY" ? "/dashboard/secretary" : "/dashboard");
 }
 
 export async function logout() {
+  const session = await getSession();
   await deleteSession();
+  await writeActivityLog({
+    userId: session?.userId,
+    action: "LOGOUT",
+    success: true,
+    info: "User logged out",
+  }).catch((error) => {
+    console.error("Failed to write logout activity", error);
+  });
   redirect("/login");
 }

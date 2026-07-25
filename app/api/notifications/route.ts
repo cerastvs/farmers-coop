@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/client";
 import { getSession } from "@/lib/session";
 
-export async function GET(_req: NextRequest) {
+export async function GET() {
   const session = await getSession();
 
   if (!session) {

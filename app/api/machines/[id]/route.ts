@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/client";
 import { getSession } from "@/lib/session";
 import { Role } from "@/app/generated/prisma";
+import { writeAudit } from "@/lib/activity";
 
 async function uploadToImgbb(file: File): Promise<string> {
   const formData = new FormData();
@@ -64,13 +65,26 @@ export async function PUT(
       imageUrl = null;
     }
 
-    const machine = await prisma.machine.update({
-      where: { id },
-      data: {
-        name: name.trim(),
-        description: description?.trim() || null,
-        imageUrl,
-      },
+    const machine = await prisma.$transaction(async (tx) => {
+      const updated = await tx.machine.update({
+        where: { id },
+        data: {
+          name: name.trim(),
+          description: description?.trim() || null,
+          imageUrl,
+        },
+      });
+      await writeAudit(tx, {
+        userId: session.userId,
+        action: "MACHINE_UPDATED",
+        entity: "Machine",
+        entityId: id,
+        metadata: {
+          name: updated.name,
+          imageChanged: existing.imageUrl !== updated.imageUrl,
+        },
+      });
+      return updated;
     });
 
     return NextResponse.json({
@@ -113,7 +127,7 @@ export async function DELETE(
       include: {
         requests: {
           where: {
-            status: { in: ["QUEUED", "APPROVED", "IN_USE"] },
+            status: { in: ["QUEUED", "APPROVED", "IN_USE", "OVERDUE"] },
           },
         },
       },
@@ -133,7 +147,16 @@ export async function DELETE(
       );
     }
 
-    await prisma.machine.delete({ where: { id } });
+    await prisma.$transaction(async (tx) => {
+      await tx.machine.delete({ where: { id } });
+      await writeAudit(tx, {
+        userId: session.userId,
+        action: "MACHINE_DELETED",
+        entity: "Machine",
+        entityId: id,
+        metadata: { name: existing.name },
+      });
+    });
 
     return NextResponse.json({ message: "Machine deleted successfully" });
   } catch (error) {

@@ -5,6 +5,13 @@ import { cookies } from "next/headers";
 import { Role } from "@/app/generated/prisma";
 
 const secretKey = process.env.SESSION_SECRET;
+
+if (!secretKey || secretKey.length < 32) {
+  throw new Error(
+    "SESSION_SECRET must be set to a random value of at least 32 characters.",
+  );
+}
+
 const encodedKey = new TextEncoder().encode(secretKey);
 
 export async function createSession(
@@ -88,7 +95,7 @@ export async function decrypt(
     });
 
     return payload as SessionData;
-  } catch (error) {
+  } catch {
     return null;
   }
 }

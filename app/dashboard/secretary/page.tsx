@@ -17,7 +17,6 @@ import {
   Trash2,
   X,
   ImagePlus,
-  Check,
   CheckCircle,
   Phone,
   MapPin,
@@ -135,6 +134,12 @@ const SECTIONS = [
   "supplies",
 ] as const;
 type Section = (typeof SECTIONS)[number];
+type MachineRequestAction =
+  | "approve"
+  | "reject"
+  | "start"
+  | "return"
+  | "overdue";
 
 const SECTION_META: Record<
   Section,
@@ -145,11 +150,36 @@ const SECTION_META: Record<
     iconBg: string;
   }
 > = {
-  applications: { label: "Applications", icon: FileText, accent: "border-l-yellow-400", iconBg: "bg-yellow-100 text-yellow-600" },
-  members: { label: "Members", icon: Users, accent: "border-l-purple-400", iconBg: "bg-purple-100 text-purple-600" },
-  loans: { label: "Loans", icon: Banknote, accent: "border-l-green-400", iconBg: "bg-green-100 text-green-600" },
-  machines: { label: "Machines", icon: Tractor, accent: "border-l-blue-400", iconBg: "bg-blue-100 text-blue-600" },
-  supplies: { label: "Supplies", icon: Package, accent: "border-l-orange-400", iconBg: "bg-orange-100 text-orange-600" },
+  applications: {
+    label: "Applications",
+    icon: FileText,
+    accent: "border-l-yellow-400",
+    iconBg: "bg-yellow-100 text-yellow-600",
+  },
+  members: {
+    label: "Members",
+    icon: Users,
+    accent: "border-l-purple-400",
+    iconBg: "bg-purple-100 text-purple-600",
+  },
+  loans: {
+    label: "Loans",
+    icon: Banknote,
+    accent: "border-l-green-400",
+    iconBg: "bg-green-100 text-green-600",
+  },
+  machines: {
+    label: "Machines",
+    icon: Tractor,
+    accent: "border-l-blue-400",
+    iconBg: "bg-blue-100 text-blue-600",
+  },
+  supplies: {
+    label: "Supplies",
+    icon: Package,
+    accent: "border-l-orange-400",
+    iconBg: "bg-orange-100 text-orange-600",
+  },
 };
 
 const VISIBLE_COUNT = 3;
@@ -173,12 +203,14 @@ function SectionCard({
   const Icon = meta.icon;
 
   return (
-    <div className={`flex flex-col rounded-2xl border border-[#e2e7dc] bg-white shadow-sm shadow-[#173a2b]/[.03] overflow-hidden border-l-4 ${meta.accent} lg:h-[400px]`}>
-      <button
-        onClick={onToggle}
-        className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-gray-50/50 active:scale-[0.995]"
-      >
-        <div className="flex items-center gap-3">
+    <div
+      className={`flex flex-col rounded-2xl border border-[#e2e7dc] bg-white shadow-sm shadow-[#173a2b]/[.03] overflow-hidden border-l-4 ${meta.accent} lg:h-[400px]`}
+    >
+      <div className="flex w-full items-center justify-between gap-3 px-5 py-4 transition hover:bg-gray-50/50">
+        <button
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left active:scale-[0.995]"
+        >
           <div className={`rounded-xl p-2.5 ${meta.iconBg}`}>
             <Icon size={18} />
           </div>
@@ -186,20 +218,26 @@ function SectionCard({
             <h3 className="text-sm font-bold text-[#173a2b]">{meta.label}</h3>
             <p className="text-xs text-[#718176]">
               {count} total
-              {!expanded && count > VISIBLE_COUNT && ` · Showing ${VISIBLE_COUNT}`}
+              {!expanded &&
+                count > VISIBLE_COUNT &&
+                ` · Showing ${VISIBLE_COUNT}`}
             </p>
           </div>
-        </div>
+        </button>
         <div className="flex items-center gap-2">
           {headerAction}
           <span className="rounded-full bg-[#edf5df] px-2.5 py-0.5 text-[11px] font-bold text-[#39733e]">
             {count}
           </span>
-          <div className="rounded-lg bg-gray-100 p-1.5 text-gray-400">
+          <button
+            onClick={onToggle}
+            aria-label={`${expanded ? "Collapse" : "Expand"} ${meta.label}`}
+            className="rounded-lg bg-gray-100 p-1.5 text-gray-400"
+          >
             {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </div>
+          </button>
         </div>
-      </button>
+      </div>
       <div className="flex-1 border-t border-[#f0f3ed] px-5 py-3 space-y-2 overflow-y-auto">
         {children}
       </div>
@@ -222,6 +260,7 @@ function MachineDetailModal({
   onDelete,
   onViewRequest,
   onViewRejected,
+  onLifecycle,
 }: {
   machine: Machine;
   onClose: () => void;
@@ -229,11 +268,19 @@ function MachineDetailModal({
   onDelete: (m: Machine) => void;
   onViewRequest: (request: MachineRequestInfo) => void;
   onViewRejected: (request: MachineRequestInfo) => void;
+  onLifecycle: (
+    requestId: string,
+    action: MachineRequestAction,
+    message?: string,
+  ) => void;
 }) {
   const [rejectedExpanded, setRejectedExpanded] = useState(false);
 
   const pending = machine.requests?.filter((r) => r.status === "QUEUED") ?? [];
-  const allApproved = machine.requests?.filter((r) => r.status === "APPROVED" || r.status === "IN_USE") ?? [];
+  const allApproved =
+    machine.requests?.filter(
+      (r) => r.status === "APPROVED" || r.status === "IN_USE",
+    ) ?? [];
   const todayISO = (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -252,7 +299,8 @@ function MachineDetailModal({
     const startISO = `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, "0")}-${String(s.getDate()).padStart(2, "0")}`;
     return todayISO < startISO;
   });
-  const rejected = machine.requests?.filter((r) => r.status === "REJECTED") ?? [];
+  const rejected =
+    machine.requests?.filter((r) => r.status === "REJECTED") ?? [];
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
@@ -319,15 +367,25 @@ function MachineDetailModal({
                               {req.member.name.charAt(0)}
                             </div>
                             <div className="min-w-0 flex-1">
-                              <span className="text-sm font-medium text-[#173a2b] block truncate">{req.member.name}</span>
+                              <span className="text-sm font-medium text-[#173a2b] block truncate">
+                                {req.member.name}
+                              </span>
                               {req.startDate && req.endDate ? (
                                 <p className="text-xs text-[#718176]">
-                                  {new Date(req.startDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                                  {new Date(req.startDate).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
                                   {" – "}
-                                  {new Date(req.endDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                                  {new Date(req.endDate).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
                                 </p>
                               ) : (
-                                <p className="text-xs text-gray-400 italic">No dates set</p>
+                                <p className="text-xs text-gray-400 italic">
+                                  No dates set
+                                </p>
                               )}
                             </div>
                           </div>
@@ -356,19 +414,31 @@ function MachineDetailModal({
                               {req.member.name.charAt(0)}
                             </div>
                             <div className="min-w-0 flex-1">
-                              <span className="text-sm font-medium text-[#173a2b] block truncate">{req.member.name}</span>
+                              <span className="text-sm font-medium text-[#173a2b] block truncate">
+                                {req.member.name}
+                              </span>
                               {req.startDate && req.endDate ? (
                                 <p className="text-xs text-[#718176]">
-                                  {new Date(req.startDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                                  {new Date(req.startDate).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
                                   {" – "}
-                                  {new Date(req.endDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                                  {new Date(req.endDate).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
                                 </p>
                               ) : (
-                                <p className="text-xs text-gray-400 italic">No dates set</p>
+                                <p className="text-xs text-gray-400 italic">
+                                  No dates set
+                                </p>
                               )}
                             </div>
                           </div>
-                          <span className="shrink-0 ml-2 px-2.5 py-1 bg-orange-100 text-orange-700 text-[10px] font-bold rounded-full">In Use</span>
+                          <span className="shrink-0 ml-2 px-2.5 py-1 bg-orange-100 text-orange-700 text-[10px] font-bold rounded-full">
+                            In Use
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -391,19 +461,65 @@ function MachineDetailModal({
                               {req.member.name.charAt(0)}
                             </div>
                             <div className="min-w-0 flex-1">
-                              <span className="text-sm font-medium text-[#173a2b] block truncate">{req.member.name}</span>
+                              <span className="text-sm font-medium text-[#173a2b] block truncate">
+                                {req.member.name}
+                              </span>
                               {req.startDate && req.endDate ? (
                                 <p className="text-xs text-[#718176]">
-                                  {new Date(req.startDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                                  {new Date(req.startDate).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
                                   {" – "}
-                                  {new Date(req.endDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                                  {new Date(req.endDate).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
                                 </p>
                               ) : (
-                                <p className="text-xs text-gray-400 italic">No dates set</p>
+                                <p className="text-xs text-gray-400 italic">
+                                  No dates set
+                                </p>
                               )}
                             </div>
                           </div>
-                          <span className="shrink-0 ml-2 px-2.5 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full">Approved</span>
+                          <div className="ml-2 flex shrink-0 flex-wrap justify-end gap-1.5">
+                            <span className="rounded-full bg-green-50 px-2.5 py-1 text-[10px] font-bold text-green-700">
+                              {req.status.replace("_", " ")}
+                            </span>
+                            {req.status === "APPROVED" && (
+                              <button
+                                onClick={() => onLifecycle(req.id, "start")}
+                                className="rounded-lg bg-blue-600 px-2.5 py-1 text-[10px] font-bold text-white"
+                              >
+                                Start use
+                              </button>
+                            )}
+                            {req.status === "IN_USE" && (
+                              <>
+                                <button
+                                  onClick={() => onLifecycle(req.id, "return")}
+                                  className="rounded-lg bg-green-600 px-2.5 py-1 text-[10px] font-bold text-white"
+                                >
+                                  Returned
+                                </button>
+                                <button
+                                  onClick={() => onLifecycle(req.id, "overdue")}
+                                  className="rounded-lg border border-red-200 px-2.5 py-1 text-[10px] font-bold text-red-600"
+                                >
+                                  Overdue
+                                </button>
+                              </>
+                            )}
+                            {req.status === "OVERDUE" && (
+                              <button
+                                onClick={() => onLifecycle(req.id, "return")}
+                                className="rounded-lg bg-green-600 px-2.5 py-1 text-[10px] font-bold text-white"
+                              >
+                                Returned
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -419,7 +535,11 @@ function MachineDetailModal({
                       <p className="text-xs font-bold text-red-600 uppercase tracking-wider">
                         Rejected ({rejected.length})
                       </p>
-                      {rejectedExpanded ? <ChevronUp size={16} className="text-red-400" /> : <ChevronDown size={16} className="text-red-400" />}
+                      {rejectedExpanded ? (
+                        <ChevronUp size={16} className="text-red-400" />
+                      ) : (
+                        <ChevronDown size={16} className="text-red-400" />
+                      )}
                     </button>
                     {rejectedExpanded && (
                       <div className="mt-3 space-y-2.5">
@@ -434,15 +554,25 @@ function MachineDetailModal({
                                 {req.member.name.charAt(0)}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <span className="text-sm font-medium text-[#173a2b] block truncate">{req.member.name}</span>
+                                <span className="text-sm font-medium text-[#173a2b] block truncate">
+                                  {req.member.name}
+                                </span>
                                 {req.startDate && req.endDate ? (
                                   <p className="text-xs text-[#718176]">
-                                    {new Date(req.startDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                                    {new Date(req.startDate).toLocaleDateString(
+                                      "en-PH",
+                                      { month: "short", day: "numeric" },
+                                    )}
                                     {" – "}
-                                    {new Date(req.endDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                                    {new Date(req.endDate).toLocaleDateString(
+                                      "en-PH",
+                                      { month: "short", day: "numeric" },
+                                    )}
                                   </p>
                                 ) : (
-                                  <p className="text-xs text-gray-400 italic">No dates set</p>
+                                  <p className="text-xs text-gray-400 italic">
+                                    No dates set
+                                  </p>
                                 )}
                               </div>
                             </div>
@@ -489,9 +619,15 @@ function RequestDetailModal({
 }: {
   request: MachineRequestInfo;
   onClose: () => void;
-  onDecide: (requestId: string, action: "approve" | "reject", message?: string) => void;
+  onDecide: (
+    requestId: string,
+    action: "approve" | "reject",
+    message?: string,
+  ) => void;
 }) {
-  const [step, setStep] = useState<"idle" | "confirm-approve" | "reject-message">("idle");
+  const [step, setStep] = useState<
+    "idle" | "confirm-approve" | "reject-message"
+  >("idle");
   const [rejectionMessage, setRejectionMessage] = useState("");
   const member = request.member;
 
@@ -519,9 +655,17 @@ function RequestDetailModal({
             <Calendar size={14} />
             {request.startDate && request.endDate ? (
               <span>
-                {new Date(request.startDate).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })}
+                {new Date(request.startDate).toLocaleDateString("en-PH", {
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}
                 {" – "}
-                {new Date(request.endDate).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })}
+                {new Date(request.endDate).toLocaleDateString("en-PH", {
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}
               </span>
             ) : (
               <span className="italic">No dates set</span>
@@ -532,7 +676,9 @@ function RequestDetailModal({
         {/* Member Info */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           <div className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] p-4 space-y-3">
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Member Information</p>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+              Member Information
+            </p>
             <div className="space-y-2.5 text-sm">
               <div className="flex items-center gap-2.5 text-[#173a2b]">
                 <Users size={14} className="text-gray-400 shrink-0" />
@@ -555,16 +701,23 @@ function RequestDetailModal({
 
           {member.farmSize && (
             <div className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] p-4 space-y-3">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Farm Details</p>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                Farm Details
+              </p>
               <div className="space-y-2.5 text-sm">
                 <div className="flex items-center gap-2.5 text-[#173a2b]">
                   <Wheat size={14} className="text-gray-400 shrink-0" />
-                  <span>{member.farmSize} hectares — {member.cropType}</span>
+                  <span>
+                    {member.farmSize} hectares — {member.cropType}
+                  </span>
                 </div>
                 {member.yearsFarming != null && (
                   <div className="flex items-center gap-2.5 text-[#173a2b]">
                     <Calendar size={14} className="text-gray-400 shrink-0" />
-                    <span>{member.yearsFarming} year{member.yearsFarming !== 1 ? "s" : ""} of farming</span>
+                    <span>
+                      {member.yearsFarming} year
+                      {member.yearsFarming !== 1 ? "s" : ""} of farming
+                    </span>
                   </div>
                 )}
               </div>
@@ -695,9 +848,17 @@ function RejectionDetailModal({
             <Calendar size={14} />
             {request.startDate && request.endDate ? (
               <span>
-                {new Date(request.startDate).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })}
+                {new Date(request.startDate).toLocaleDateString("en-PH", {
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}
                 {" – "}
-                {new Date(request.endDate).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })}
+                {new Date(request.endDate).toLocaleDateString("en-PH", {
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })}
               </span>
             ) : (
               <span className="italic">No dates set</span>
@@ -708,7 +869,9 @@ function RejectionDetailModal({
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           <div className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] p-4 space-y-3">
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Member Information</p>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+              Member Information
+            </p>
             <div className="space-y-2.5 text-sm">
               <div className="flex items-center gap-2.5 text-[#173a2b]">
                 <Users size={14} className="text-gray-400 shrink-0" />
@@ -731,16 +894,23 @@ function RejectionDetailModal({
 
           {member.farmSize && (
             <div className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] p-4 space-y-3">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Farm Details</p>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                Farm Details
+              </p>
               <div className="space-y-2.5 text-sm">
                 <div className="flex items-center gap-2.5 text-[#173a2b]">
                   <Wheat size={14} className="text-gray-400 shrink-0" />
-                  <span>{member.farmSize} hectares — {member.cropType}</span>
+                  <span>
+                    {member.farmSize} hectares — {member.cropType}
+                  </span>
                 </div>
                 {member.yearsFarming != null && (
                   <div className="flex items-center gap-2.5 text-[#173a2b]">
                     <Calendar size={14} className="text-gray-400 shrink-0" />
-                    <span>{member.yearsFarming} year{member.yearsFarming !== 1 ? "s" : ""} of farming</span>
+                    <span>
+                      {member.yearsFarming} year
+                      {member.yearsFarming !== 1 ? "s" : ""} of farming
+                    </span>
                   </div>
                 )}
               </div>
@@ -749,8 +919,12 @@ function RejectionDetailModal({
 
           {request.rejectionReason && (
             <div className="rounded-xl bg-red-50 border border-red-200 p-4 space-y-2">
-              <p className="text-xs font-bold text-red-600 uppercase tracking-wider">Rejection Reason</p>
-              <p className="text-sm text-red-800 leading-relaxed">{request.rejectionReason}</p>
+              <p className="text-xs font-bold text-red-600 uppercase tracking-wider">
+                Rejection Reason
+              </p>
+              <p className="text-sm text-red-800 leading-relaxed">
+                {request.rejectionReason}
+              </p>
             </div>
           )}
         </div>
@@ -781,7 +955,9 @@ function MachineFormModal({
   const [name, setName] = useState(machine?.name || "");
   const [description, setDescription] = useState(machine?.description || "");
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(machine?.imageUrl || null);
+  const [imagePreview, setImagePreview] = useState<string | null>(
+    machine?.imageUrl || null,
+  );
   const [removeImage, setRemoveImage] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -852,7 +1028,9 @@ function MachineFormModal({
               {isEditing ? "Edit Machine" : "Add Machine"}
             </h3>
             <p className="text-xs text-blue-700 font-medium uppercase tracking-wider">
-              {isEditing ? "Update machine information" : "Register new equipment"}
+              {isEditing
+                ? "Update machine information"
+                : "Register new equipment"}
             </p>
           </div>
           <button
@@ -863,7 +1041,10 @@ function MachineFormModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
+        <form
+          onSubmit={handleSubmit}
+          className="flex-1 overflow-y-auto p-6 space-y-5"
+        >
           {error && (
             <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 font-medium">
               {error}
@@ -878,7 +1059,11 @@ function MachineFormModal({
             {imagePreview ? (
               <div className="relative rounded-2xl overflow-hidden border border-gray-200">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imagePreview} alt="Preview" className="w-full h-48 object-cover" />
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="w-full h-48 object-cover"
+                />
                 <button
                   type="button"
                   onClick={handleRemoveImage}
@@ -894,7 +1079,9 @@ function MachineFormModal({
                 className="w-full h-32 rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-500 transition"
               >
                 <ImagePlus size={28} />
-                <span className="text-xs font-medium">Click to upload image</span>
+                <span className="text-xs font-medium">
+                  Click to upload image
+                </span>
               </button>
             )}
             <input
@@ -948,7 +1135,11 @@ function MachineFormModal({
             disabled={saving}
             className="flex-1 py-3 bg-[#174b36] hover:bg-[#1a5c42] text-white rounded-2xl font-bold transition disabled:opacity-50 disabled:cursor-wait"
           >
-            {saving ? "Saving..." : isEditing ? "Update Machine" : "Add Machine"}
+            {saving
+              ? "Saving..."
+              : isEditing
+                ? "Update Machine"
+                : "Add Machine"}
           </button>
         </div>
       </div>
@@ -966,7 +1157,10 @@ function ApplicationDetailModal({
   onAction: () => void;
 }) {
   const [acting, setActing] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<"approve" | "reject" | null>(null);
+  const [confirmAction, setConfirmAction] = useState<
+    "approve" | "reject" | null
+  >(null);
+  const [rejectionReason, setRejectionReason] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const isPending = application.status === "PENDING";
@@ -977,7 +1171,13 @@ function ApplicationDetailModal({
     try {
       const res = await fetch(
         `/api/secretary/applications/${application.id}/${action}`,
-        { method: "POST" },
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            action === "reject" ? { reason: rejectionReason.trim() } : {},
+          ),
+        },
       );
       const data = await res.json();
       if (res.ok) {
@@ -1000,7 +1200,9 @@ function ApplicationDetailModal({
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
           <div>
-            <h3 className="text-xl font-bold text-gray-900">{application.fullName}</h3>
+            <h3 className="text-xl font-bold text-gray-900">
+              {application.fullName}
+            </h3>
             <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">
               Membership Application
             </p>
@@ -1050,9 +1252,15 @@ function ApplicationDetailModal({
               Farming Information
             </p>
             <div className="grid grid-cols-3 gap-3">
-              <DetailField label="Farm Size" value={`${application.farmSize} ha`} />
+              <DetailField
+                label="Farm Size"
+                value={`${application.farmSize} ha`}
+              />
               <DetailField label="Crop Type" value={application.cropType} />
-              <DetailField label="Years Farming" value={`${application.yearsFarming} years`} />
+              <DetailField
+                label="Years Farming"
+                value={`${application.yearsFarming} years`}
+              />
             </div>
           </div>
 
@@ -1072,7 +1280,9 @@ function ApplicationDetailModal({
                   <FileText size={18} className="text-green-600" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[#173a2b] truncate">Valid ID</p>
+                  <p className="text-sm font-semibold text-[#173a2b] truncate">
+                    Valid ID
+                  </p>
                   <p className="text-[11px] text-[#718176]">Click to view</p>
                 </div>
               </a>
@@ -1086,7 +1296,9 @@ function ApplicationDetailModal({
                   <FileText size={18} className="text-green-600" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[#173a2b] truncate">Proof of Farm</p>
+                  <p className="text-sm font-semibold text-[#173a2b] truncate">
+                    Proof of Farm
+                  </p>
                   <p className="text-[11px] text-[#718176]">Click to view</p>
                 </div>
               </a>
@@ -1107,30 +1319,48 @@ function ApplicationDetailModal({
         {isPending && (
           <div className="p-6 border-t border-gray-100 bg-gray-50 flex gap-3">
             {confirmAction ? (
-              <>
-                <button
-                  onClick={() => setConfirmAction(null)}
-                  disabled={acting}
-                  className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleConfirm(confirmAction)}
-                  disabled={acting}
-                  className={`flex-1 py-3 text-white rounded-2xl font-bold transition disabled:opacity-50 ${
-                    confirmAction === "approve"
-                      ? "bg-green-600 hover:bg-green-700"
-                      : "bg-red-600 hover:bg-red-700"
-                  }`}
-                >
-                  {acting
-                    ? "Processing..."
-                    : confirmAction === "approve"
-                      ? "Confirm Approve"
-                      : "Confirm Reject"}
-                </button>
-              </>
+              <div className="flex-1 space-y-3">
+                {confirmAction === "reject" && (
+                  <textarea
+                    value={rejectionReason}
+                    onChange={(event) => setRejectionReason(event.target.value)}
+                    placeholder="Reason for rejection"
+                    rows={3}
+                    maxLength={500}
+                    className="w-full resize-none rounded-xl border border-red-200 bg-white px-3 py-2 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                  />
+                )}
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setConfirmAction(null);
+                      setRejectionReason("");
+                    }}
+                    disabled={acting}
+                    className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleConfirm(confirmAction)}
+                    disabled={
+                      acting ||
+                      (confirmAction === "reject" && !rejectionReason.trim())
+                    }
+                    className={`flex-1 py-3 text-white rounded-2xl font-bold transition disabled:opacity-50 ${
+                      confirmAction === "approve"
+                        ? "bg-green-600 hover:bg-green-700"
+                        : "bg-red-600 hover:bg-red-700"
+                    }`}
+                  >
+                    {acting
+                      ? "Processing..."
+                      : confirmAction === "approve"
+                        ? "Confirm Approve"
+                        : "Confirm Reject"}
+                  </button>
+                </div>
+              </div>
             ) : (
               <>
                 <button
@@ -1157,7 +1387,9 @@ function ApplicationDetailModal({
 function DetailField({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-3 py-2">
-      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{label}</p>
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+        {label}
+      </p>
       <p className="text-sm font-semibold text-[#173a2b] mt-0.5">{value}</p>
     </div>
   );
@@ -1177,7 +1409,12 @@ function ApplicationsSection({
   const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
 
   return (
-    <SectionCard section="applications" count={items.length} expanded={expanded} onToggle={onToggle}>
+    <SectionCard
+      section="applications"
+      count={items.length}
+      expanded={expanded}
+      onToggle={onToggle}
+    >
       {visible.length > 0 ? (
         visible.map((app) => (
           <button
@@ -1224,7 +1461,12 @@ function MembersSection({
   const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
 
   return (
-    <SectionCard section="members" count={items.length} expanded={expanded} onToggle={onToggle}>
+    <SectionCard
+      section="members"
+      count={items.length}
+      expanded={expanded}
+      onToggle={onToggle}
+    >
       {visible.length > 0 ? (
         <div className="space-y-2">
           {visible.map((m) => (
@@ -1276,7 +1518,12 @@ function LoansSection({
   const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
 
   return (
-    <SectionCard section="loans" count={items.length} expanded={expanded} onToggle={onToggle}>
+    <SectionCard
+      section="loans"
+      count={items.length}
+      expanded={expanded}
+      onToggle={onToggle}
+    >
       {visible.length > 0 ? (
         visible.map((loan) => (
           <div
@@ -1372,7 +1619,19 @@ function MachinesSection({
                   <p key={i} className="text-[11px] text-[#718176] truncate">
                     In use by {u.name}
                     {u.startDate && u.endDate && (
-                      <> · {new Date(u.startDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })} – {new Date(u.endDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}</>
+                      <>
+                        {" "}
+                        ·{" "}
+                        {new Date(u.startDate).toLocaleDateString("en-PH", {
+                          month: "short",
+                          day: "numeric",
+                        })}{" "}
+                        –{" "}
+                        {new Date(u.endDate).toLocaleDateString("en-PH", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </>
                     )}
                   </p>
                 ))
@@ -1410,7 +1669,12 @@ function SuppliesSection({
   const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
 
   return (
-    <SectionCard section="supplies" count={items.length} expanded={expanded} onToggle={onToggle}>
+    <SectionCard
+      section="supplies"
+      count={items.length}
+      expanded={expanded}
+      onToggle={onToggle}
+    >
       {visible.length > 0 ? (
         visible.map((supply) => (
           <div
@@ -1434,9 +1698,7 @@ function SuppliesSection({
                     : "bg-green-100 text-green-700"
               }`}
             >
-              {supply.stock === 0
-                ? "Out of stock"
-                : `${supply.stock} in stock`}
+              {supply.stock === 0 ? "Out of stock" : `${supply.stock} in stock`}
             </span>
           </div>
         ))
@@ -1467,8 +1729,11 @@ export default function SecretaryDashboard() {
   const [deleteConfirm, setDeleteConfirm] = useState<Machine | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [detailApp, setDetailApp] = useState<Application | null>(null);
-  const [viewRequest, setViewRequest] = useState<MachineRequestInfo | null>(null);
-  const [viewRejectedRequest, setViewRejectedRequest] = useState<MachineRequestInfo | null>(null);
+  const [viewRequest, setViewRequest] = useState<MachineRequestInfo | null>(
+    null,
+  );
+  const [viewRejectedRequest, setViewRejectedRequest] =
+    useState<MachineRequestInfo | null>(null);
 
   async function fetchData() {
     try {
@@ -1507,7 +1772,11 @@ export default function SecretaryDashboard() {
     setDeleteConfirm(machine);
   }
 
-  async function handleDecideRequest(requestId: string, action: "approve" | "reject", message?: string) {
+  async function handleDecideRequest(
+    requestId: string,
+    action: MachineRequestAction,
+    message?: string,
+  ) {
     try {
       const res = await fetch(`/api/machines/request/${requestId}`, {
         method: "PATCH",
@@ -1517,19 +1786,41 @@ export default function SecretaryDashboard() {
       const result = await res.json();
       if (res.ok) {
         await fetchData();
-        const newStatus = action === "approve" ? "APPROVED" : "REJECTED";
+        const newStatus = {
+          approve: "APPROVED",
+          reject: "REJECTED",
+          start: "IN_USE",
+          return: "RETURNED",
+          overdue: "OVERDUE",
+        }[action];
         setDetailMachine((prev) => {
           if (!prev) return null;
           return {
             ...prev,
             requests: prev.requests.map((r) =>
-              r.id === requestId ? { ...r, status: newStatus, rejectionReason: action === "reject" ? message ?? r.rejectionReason : r.rejectionReason } : r,
+              r.id === requestId
+                ? {
+                    ...r,
+                    status: newStatus,
+                    rejectionReason:
+                      action === "reject"
+                        ? (message ?? r.rejectionReason)
+                        : r.rejectionReason,
+                  }
+                : r,
             ),
           };
         });
         setViewRequest((prev) => {
           if (!prev || prev.id !== requestId) return prev;
-          return { ...prev, status: newStatus, rejectionReason: action === "reject" ? message ?? prev.rejectionReason : prev.rejectionReason };
+          return {
+            ...prev,
+            status: newStatus,
+            rejectionReason:
+              action === "reject"
+                ? (message ?? prev.rejectionReason)
+                : prev.rejectionReason,
+          };
         });
       } else {
         alert(result.error || `Failed to ${action} request`);
@@ -1731,6 +2022,7 @@ export default function SecretaryDashboard() {
           onDelete={handleDeleteFromDetail}
           onViewRequest={setViewRequest}
           onViewRejected={setViewRejectedRequest}
+          onLifecycle={handleDecideRequest}
         />
       )}
 

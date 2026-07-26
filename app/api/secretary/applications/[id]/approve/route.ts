@@ -1,66 +1,78 @@
 import { NextResponse } from "next/server";
+
+import { ApplicationStatus, Role } from "@/app/generated/prisma";
+import { notifyUser, writeAudit } from "@/lib/activity";
+import { apiErrorResponse, ApiError, requireUser } from "@/lib/api";
 import prisma from "@/lib/client";
-import { getSession } from "@/lib/session";
-import { Role, ApplicationStatus } from "@/app/generated/prisma";
+import { MEMBERSHIP_ROLES } from "@/lib/permissions";
 
 export async function POST(
-  req: Request,
+  _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getSession();
-
-  if (!session) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
-
-  if (session.userRole !== Role.SECRETARY) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const { id } = await params;
-
   try {
+    const actor = await requireUser(MEMBERSHIP_ROLES);
+    const { id } = await params;
     const application = await prisma.application.findUnique({
       where: { id },
-      include: { user: true },
+      select: {
+        id: true,
+        userId: true,
+        fullName: true,
+        status: true,
+      },
     });
 
     if (!application) {
-      return NextResponse.json(
-        { error: "Application not found" },
-        { status: 404 },
-      );
+      throw new ApiError(404, "Application not found");
     }
 
     if (application.status !== ApplicationStatus.PENDING) {
-      return NextResponse.json(
-        { error: "Application is already processed" },
-        { status: 400 },
-      );
+      throw new ApiError(409, "Application is already processed");
     }
 
-    await prisma.$transaction([
-      prisma.application.update({
+    const reviewedAt = new Date();
+    await prisma.$transaction(async (tx) => {
+      await tx.application.update({
         where: { id },
         data: {
           status: ApplicationStatus.APPROVED,
-          reviewedBy: session.userId,
+          reviewedBy: actor.userId,
+          reviewedAt,
+          rejectionReason: null,
         },
-      }),
-      prisma.user.update({
+      });
+      await tx.user.update({
         where: { id: application.userId },
         data: {
           role: Role.MEMBER,
+          active: true,
         },
-      }),
-    ]);
+      });
+      await notifyUser(tx, {
+        userId: application.userId,
+        title: "Membership approved",
+        message:
+          "Your cooperative membership application was approved. Member services are now available.",
+      });
+      await writeAudit(tx, {
+        userId: actor.userId,
+        action: "MEMBERSHIP_APPLICATION_APPROVED",
+        entity: "Application",
+        entityId: id,
+        metadata: {
+          applicantUserId: application.userId,
+          reviewedAt: reviewedAt.toISOString(),
+        },
+      });
+    });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      status: ApplicationStatus.APPROVED,
+      reviewedAt,
+    });
   } catch (error) {
-    console.error("Approve application error:", error);
-    return NextResponse.json(
-      { error: "Failed to approve application" },
-      { status: 500 },
-    );
+    return apiErrorResponse(error, "Failed to approve application");
   }
 }

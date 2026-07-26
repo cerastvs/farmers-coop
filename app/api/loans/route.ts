@@ -1,17 +1,26 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/client";
-import { getSession } from "@/lib/session";
+import {
+  apiErrorResponse,
+  ApiError,
+  readJsonBody,
+  requireUser,
+} from "@/lib/api";
+import { MEMBER_ROLES } from "@/lib/permissions";
+import { notifyUser, writeAudit } from "@/lib/activity";
+import { LoanStatus, Prisma, Role } from "@/app/generated/prisma";
+import { calculateLoanDueDate } from "@/lib/lifecycles";
+import { z } from "zod";
+
+const LoanRequestSchema = z.object({
+  amount: z.number().positive().max(5000).multipleOf(0.01),
+  termMonths: z.number().int().min(6).max(24),
+  purpose: z.string().trim().min(10).max(500),
+}).strict();
 
 export async function GET() {
-  const session = await getSession();
-
-  if (!session) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
-
-  const userId = session.userId;
-
   try {
+    const { userId } = await requireUser(MEMBER_ROLES);
     const loans = await prisma.loan.findMany({
       where: {
         userId,
@@ -57,6 +66,9 @@ export async function GET() {
           amount: Number(l.amount),
           remainingBalance: remainingBalance > 0 ? remainingBalance : 0,
           due: l.due,
+          termMonths: l.termMonths,
+          purpose: l.purpose,
+          rejectionReason: l.rejectionReason,
         };
       }),
       paymentHistory: allPayments.map((p) => ({
@@ -67,10 +79,91 @@ export async function GET() {
       })),
     });
   } catch (error) {
-    console.error("Fetch loans error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch loans" },
-      { status: 500 },
+    return apiErrorResponse(error, "Failed to fetch loans");
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const actor = await requireUser(MEMBER_ROLES);
+    const result = LoanRequestSchema.safeParse(await readJsonBody(req));
+
+    if (!result.success) {
+      throw new ApiError(400, result.error.issues[0].message);
+    }
+
+    const due = calculateLoanDueDate(new Date(), result.data.termMonths);
+
+    const loan = await prisma.$transaction(
+      async (tx) => {
+        const existing = await tx.loan.findFirst({
+          where: {
+            userId: actor.userId,
+            status: {
+              in: [LoanStatus.PENDING, LoanStatus.APPROVED, LoanStatus.ACTIVE],
+            },
+          },
+          select: { id: true },
+        });
+
+        if (existing) {
+          throw new ApiError(
+            409,
+            "You already have a pending or active loan account",
+          );
+        }
+
+        const created = await tx.loan.create({
+          data: {
+            userId: actor.userId,
+            amount: result.data.amount,
+            termMonths: result.data.termMonths,
+            purpose: result.data.purpose,
+            due,
+          },
+        });
+
+        await tx.loanStatusHistory.create({
+          data: { loanId: created.id, status: LoanStatus.PENDING },
+        });
+        await writeAudit(tx, {
+          userId: actor.userId,
+          action: "LOAN_REQUESTED",
+          entity: "Loan",
+          entityId: created.id,
+          metadata: {
+            amount: result.data.amount,
+            termMonths: result.data.termMonths,
+          },
+        });
+
+        const reviewers = await tx.user.findMany({
+          where: {
+            role: { in: [Role.TREASURER, Role.PRESIDENT] },
+            active: true,
+          },
+          select: { id: true },
+        });
+        await Promise.all(
+          reviewers.map((reviewer) =>
+            notifyUser(tx, {
+              userId: reviewer.id,
+              title: "New loan request",
+              message: `A ₱${result.data.amount.toLocaleString()} cash-loan request is ready for review.`,
+            }),
+          ),
+        );
+
+        return created;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
+
+    return NextResponse.json(
+      { message: "Loan request submitted", loanId: loan.id },
+      { status: 201 },
+    );
+  } catch (error) {
+    return apiErrorResponse(error, "Failed to submit loan request");
   }
 }

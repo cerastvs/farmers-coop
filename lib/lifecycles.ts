@@ -1,0 +1,65 @@
+import {
+  LoanStatus,
+  MachineStatus,
+  PaymentStatus,
+  TransactionStatus,
+} from "@/app/generated/prisma";
+import { ApiError } from "@/lib/errors";
+
+type TransitionMap<T extends string> = Record<T, readonly T[]>;
+
+export const loanTransitions: TransitionMap<LoanStatus> = {
+  PENDING: [LoanStatus.APPROVED, LoanStatus.REJECTED],
+  APPROVED: [LoanStatus.ACTIVE, LoanStatus.REJECTED],
+  REJECTED: [],
+  ACTIVE: [LoanStatus.PAID],
+  PAID: [],
+};
+
+export const paymentTransitions: TransitionMap<PaymentStatus> = {
+  PENDING: [PaymentStatus.VERIFIED, PaymentStatus.REJECTED],
+  VERIFIED: [],
+  REJECTED: [],
+};
+
+export const supplyTransitions: TransitionMap<TransactionStatus> = {
+  PENDING: [TransactionStatus.APPROVED, TransactionStatus.REJECTED],
+  APPROVED: [TransactionStatus.COMPLETED, TransactionStatus.REJECTED],
+  REJECTED: [],
+  COMPLETED: [],
+};
+
+export const machineTransitions: TransitionMap<MachineStatus> = {
+  QUEUED: [MachineStatus.APPROVED, MachineStatus.REJECTED],
+  APPROVED: [MachineStatus.IN_USE, MachineStatus.REJECTED],
+  IN_USE: [MachineStatus.RETURNED, MachineStatus.OVERDUE],
+  RETURNED: [],
+  OVERDUE: [MachineStatus.RETURNED],
+  REJECTED: [],
+};
+
+export function assertTransition<T extends string>(
+  transitions: TransitionMap<T>,
+  current: T,
+  next: T,
+  subject: string,
+) {
+  if (!transitions[current]?.includes(next)) {
+    throw new ApiError(
+      409,
+      `${subject} cannot move from ${current} to ${next}`,
+    );
+  }
+}
+
+export function calculateLoanDueDate(start: Date, termMonths: number) {
+  const due = new Date(start);
+  const originalDay = due.getDate();
+
+  due.setDate(1);
+  due.setMonth(due.getMonth() + termMonths + 1);
+  due.setDate(0);
+  due.setDate(Math.min(originalDay, due.getDate()));
+
+  return due;
+}

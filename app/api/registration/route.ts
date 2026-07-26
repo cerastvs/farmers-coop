@@ -1,7 +1,15 @@
-import prisma from "@/lib/client";
-import { getUserId } from "@/lib/session";
+import { Prisma, Role } from "@/app/generated/prisma";
 import { NextRequest } from "next/server";
 import { imgbbUpload } from "sdk-imagebb";
+
+import {
+  notifyUser,
+  writeActivityLog,
+  writeAudit,
+} from "@/lib/activity";
+import { apiErrorResponse, ApiError, requireUser } from "@/lib/api";
+import prisma from "@/lib/client";
+import { MEMBERSHIP_ROLES } from "@/lib/permissions";
 import { ApplicationSchema } from "@/lib/validators/registration";
 
 const uploadImage = async (file: File) => {
@@ -16,15 +24,14 @@ const uploadImage = async (file: File) => {
     console.log("Delete URL:", response.data.delete_url);
 
     return response.data.display_url;
-  } catch (error) {
+  } catch {
     throw new Error("Image upload failed");
   }
 };
 export async function POST(req: NextRequest) {
   try {
+    const actor = await requireUser([Role.APPLICANT]);
     const formData = await req.formData();
-
-    console.log(formData);
 
     const dataObj = {
       fullName: formData.get("fullName"),
@@ -42,7 +49,15 @@ export async function POST(req: NextRequest) {
     const result = ApplicationSchema.safeParse(dataObj);
 
     if (!result.success) {
-      return Response.json({ error: result.error.issues[0].message }, { status: 400 });
+      throw new ApiError(400, result.error.issues[0].message);
+    }
+
+    const existingApplication = await prisma.application.findFirst({
+      where: { userId: actor.userId },
+      select: { id: true },
+    });
+    if (existingApplication) {
+      throw new ApiError(409, "A membership application already exists");
     }
 
     const {
@@ -61,11 +76,10 @@ export async function POST(req: NextRequest) {
     const farmImgUrl = await uploadImage(proofOfFarm as File);
     const validIdImgUrl = await uploadImage(validId as File);
 
-    const userId = await getUserId();
-    await prisma.$transaction([
-      prisma.application.create({
+    const application = await prisma.$transaction(async (tx) => {
+      const created = await tx.application.create({
         data: {
-          userId: userId,
+          userId: actor.userId,
           fullName: fullname,
           contact,
           address,
@@ -77,31 +91,83 @@ export async function POST(req: NextRequest) {
           proofOfFarmUrl: farmImgUrl!,
           validIdUrl: validIdImgUrl!,
         },
-      }),
-      prisma.user.update({
-        where: { id: userId },
+      });
+      await tx.user.update({
+        where: { id: actor.userId },
         data: { name: fullname },
-      }),
-    ]);
+      });
+      await writeAudit(tx, {
+        userId: actor.userId,
+        action: "MEMBERSHIP_APPLICATION_SUBMITTED",
+        entity: "Application",
+        entityId: created.id,
+      });
+      await notifyUser(tx, {
+        userId: actor.userId,
+        title: "Application submitted",
+        message:
+          "Your membership application was received and is awaiting review.",
+      });
 
-    return Response.json({ success: true });
+      const reviewers = await tx.user.findMany({
+        where: {
+          role: { in: [...MEMBERSHIP_ROLES] },
+          active: true,
+        },
+        select: { id: true },
+      });
+      await Promise.all(
+        reviewers.map((reviewer) =>
+          notifyUser(tx, {
+            userId: reviewer.id,
+            title: "New membership application",
+            message: `${fullname}'s membership application is ready for review.`,
+          }),
+        ),
+      );
+
+      return created;
+    });
+
+    await writeActivityLog({
+      userId: actor.userId,
+      action: "MEMBERSHIP_APPLICATION_SUBMITTED",
+      success: true,
+      info: `Membership application ${application.id} submitted`,
+    });
+
+    return Response.json(
+      { success: true, applicationId: application.id },
+      { status: 201 },
+    );
   } catch (error) {
-    console.error(error);
-    return Response.json({ error: "Something went wrong" }, { status: 500 });
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return apiErrorResponse(
+        new ApiError(409, "A membership application already exists"),
+        "Failed to submit membership application",
+      );
+    }
+    return apiErrorResponse(
+      error,
+      "Failed to submit membership application",
+    );
   }
 }
 
 export async function PATCH(req: NextRequest) {
   try {
+    const actor = await requireUser([Role.APPLICANT, Role.MEMBER]);
     const formData = await req.formData();
-    const userId = await getUserId();
 
     const existingApplication = await prisma.application.findFirst({
-      where: { userId },
+      where: { userId: actor.userId },
     });
 
     if (!existingApplication) {
-      return Response.json({ error: "Application not found" }, { status: 404 });
+      throw new ApiError(404, "Application not found");
     }
 
     const dataObj = {
@@ -118,16 +184,20 @@ export async function PATCH(req: NextRequest) {
     };
 
     if ((dataObj.proofOfFarm as File)?.size === 0) {
-      dataObj.proofOfFarm = new File(["dummy"], "dummy.jpg", { type: "image/jpeg" });
+      dataObj.proofOfFarm = new File(["dummy"], "dummy.jpg", {
+        type: "image/jpeg",
+      });
     }
     if ((dataObj.validId as File)?.size === 0) {
-      dataObj.validId = new File(["dummy"], "dummy.jpg", { type: "image/jpeg" });
+      dataObj.validId = new File(["dummy"], "dummy.jpg", {
+        type: "image/jpeg",
+      });
     }
 
     const result = ApplicationSchema.safeParse(dataObj);
 
     if (!result.success) {
-      return Response.json({ error: result.error.issues[0].message }, { status: 400 });
+      throw new ApiError(400, result.error.issues[0].message);
     }
 
     const {
@@ -155,8 +225,8 @@ export async function PATCH(req: NextRequest) {
       validIdImgUrl = await uploadImage(validId);
     }
 
-    await prisma.$transaction([
-      prisma.application.update({
+    await prisma.$transaction(async (tx) => {
+      await tx.application.update({
         where: { id: existingApplication.id },
         data: {
           fullName: fullname,
@@ -170,29 +240,43 @@ export async function PATCH(req: NextRequest) {
           proofOfFarmUrl: farmImgUrl,
           validIdUrl: validIdImgUrl,
         },
-      }),
-      prisma.user.update({
-        where: { id: userId },
+      });
+      await tx.user.update({
+        where: { id: actor.userId },
         data: { name: fullname },
-      }),
-    ]);
+      });
+      await writeAudit(tx, {
+        userId: actor.userId,
+        action: "MEMBERSHIP_PROFILE_UPDATED",
+        entity: "Application",
+        entityId: existingApplication.id,
+      });
+      await notifyUser(tx, {
+        userId: actor.userId,
+        title: "Membership profile updated",
+        message: "Your membership profile changes were saved.",
+      });
+    });
 
     return Response.json({ success: true });
   } catch (error) {
-    console.error("PATCH error:", error);
-    return Response.json({ error: "Something went wrong" }, { status: 500 });
+    return apiErrorResponse(error, "Failed to update membership profile");
   }
 }
 
 export async function GET() {
-  const user = await getUserId();
-  const application = await prisma.application.findFirst({
-    where: { userId: user },
-  });
+  try {
+    const actor = await requireUser([Role.APPLICANT, Role.MEMBER]);
+    const application = await prisma.application.findFirst({
+      where: { userId: actor.userId },
+    });
 
-  if (!application) {
-    return Response.json(null, { status: 404 });
+    if (!application) {
+      return Response.json(null, { status: 404 });
+    }
+
+    return Response.json(application);
+  } catch (error) {
+    return apiErrorResponse(error, "Failed to fetch membership application");
   }
-
-  return Response.json(application);
 }

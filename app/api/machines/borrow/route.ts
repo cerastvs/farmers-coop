@@ -1,20 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/client";
-import { getSession } from "@/lib/session";
-import { MachineStatus } from "@/app/generated/prisma";
+import { apiErrorResponse, requireUser } from "@/lib/api";
+import { MEMBER_ROLES } from "@/lib/permissions";
+import { MachineStatus, Role } from "@/app/generated/prisma";
+import { notifyUser, writeAudit } from "@/lib/activity";
 
 const BLOCKING_STATUSES = [MachineStatus.APPROVED, MachineStatus.IN_USE];
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-
-  if (!session) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
-
-  const userId = session.userId;
-
   try {
+    const { userId } = await requireUser(MEMBER_ROLES);
     const { machineId, startDate, endDate } = await req.json();
 
     if (!machineId) {
@@ -86,14 +81,41 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const borrowRequest = await prisma.machineRequest.create({
-      data: {
+    const borrowRequest = await prisma.$transaction(async (tx) => {
+      const created = await tx.machineRequest.create({
+        data: {
+          userId,
+          machineId,
+          status: MachineStatus.QUEUED,
+          startDate: start,
+          endDate: end,
+        },
+      });
+      await writeAudit(tx, {
         userId,
-        machineId,
-        status: MachineStatus.QUEUED,
-        startDate: start,
-        endDate: end,
-      },
+        action: "MACHINE_REQUESTED",
+        entity: "MachineRequest",
+        entityId: created.id,
+        metadata: {
+          machineId,
+          startDate,
+          endDate,
+        },
+      });
+      const reviewers = await tx.user.findMany({
+        where: { role: Role.SECRETARY, active: true },
+        select: { id: true },
+      });
+      await Promise.all(
+        reviewers.map((reviewer) =>
+          notifyUser(tx, {
+            userId: reviewer.id,
+            title: "New machine request",
+            message: `A request for ${machine.name} is ready for review.`,
+          }),
+        ),
+      );
+      return created;
     });
 
     return NextResponse.json({
@@ -101,10 +123,6 @@ export async function POST(req: NextRequest) {
       requestId: borrowRequest.id,
     });
   } catch (error) {
-    console.error("Borrow machine error:", error);
-    return NextResponse.json(
-      { error: "Failed to submit borrow request" },
-      { status: 500 },
-    );
+    return apiErrorResponse(error, "Failed to submit borrow request");
   }
 }

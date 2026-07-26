@@ -32,7 +32,8 @@ export const supplyTransitions: TransitionMap<TransactionStatus> = {
 export const machineTransitions: TransitionMap<MachineStatus> = {
   QUEUED: [MachineStatus.APPROVED, MachineStatus.REJECTED],
   APPROVED: [MachineStatus.IN_USE, MachineStatus.REJECTED],
-  IN_USE: [MachineStatus.RETURNED, MachineStatus.OVERDUE],
+  IN_USE: [MachineStatus.RETURN_PENDING, MachineStatus.RETURNED, MachineStatus.OVERDUE],
+  RETURN_PENDING: [MachineStatus.RETURNED, MachineStatus.IN_USE],
   RETURNED: [],
   OVERDUE: [MachineStatus.RETURNED],
   REJECTED: [],

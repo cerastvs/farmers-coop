@@ -79,6 +79,8 @@ interface MachineRequestInfo {
   requestDate: string;
   startDate: string | null;
   endDate: string | null;
+  returnedAt: string | null;
+  startedAt: string | null;
   member: {
     id: string;
     name: string;
@@ -139,7 +141,9 @@ type MachineRequestAction =
   | "reject"
   | "start"
   | "return"
-  | "overdue";
+  | "overdue"
+  | "remind"
+  | "rejectReturn";
 
 const SECTION_META: Record<
   Section,
@@ -275,8 +279,20 @@ function MachineDetailModal({
   ) => void;
 }) {
   const [rejectedExpanded, setRejectedExpanded] = useState(false);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [queueExpanded, setQueueExpanded] = useState(false);
+  const [expiredExpanded, setExpiredExpanded] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{
+    requestId: string;
+    action: MachineRequestAction;
+    title: string;
+    message: string;
+    confirmLabel: string;
+  } | null>(null);
+  const [machineActionBusy, setMachineActionBusy] = useState(false);
 
   const pending = machine.requests?.filter((r) => r.status === "QUEUED") ?? [];
+  const returnPending = machine.requests?.filter((r) => r.status === "RETURN_PENDING") ?? [];
   const allApproved =
     machine.requests?.filter(
       (r) => r.status === "APPROVED" || r.status === "IN_USE",
@@ -291,7 +307,15 @@ function MachineDetailModal({
     const e = new Date(r.endDate);
     const startISO = `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, "0")}-${String(s.getDate()).padStart(2, "0")}`;
     const endISO = `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, "0")}-${String(e.getDate()).padStart(2, "0")}`;
-    return todayISO >= startISO && todayISO <= endISO;
+    return r.status === "IN_USE" && todayISO >= startISO && todayISO <= endISO;
+  });
+  const reservedToday = allApproved.filter((r) => {
+    if (!r.startDate || !r.endDate) return false;
+    const s = new Date(r.startDate);
+    const e = new Date(r.endDate);
+    const startISO = `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, "0")}-${String(s.getDate()).padStart(2, "0")}`;
+    const endISO = `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, "0")}-${String(e.getDate()).padStart(2, "0")}`;
+    return r.status === "APPROVED" && todayISO >= startISO && todayISO <= endISO;
   });
   const upcoming = allApproved.filter((r) => {
     if (!r.startDate || !r.endDate) return true;
@@ -301,7 +325,27 @@ function MachineDetailModal({
   });
   const rejected =
     machine.requests?.filter((r) => r.status === "REJECTED") ?? [];
+  const history =
+    machine.requests
+      ?.filter((r) => r.status === "RETURNED" || r.status === "OVERDUE")
+      .sort((a, b) => {
+        const dateA = a.returnedAt ?? a.endDate ?? a.requestDate;
+        const dateB = b.returnedAt ?? b.endDate ?? b.requestDate;
+        return new Date(dateB).getTime() - new Date(dateA).getTime();
+      }) ?? [];
+  const sortedPending = [...pending].sort((a, b) => {
+    if (!a.startDate) return 1;
+    if (!b.startDate) return -1;
+    return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+  });
+  const expired = allApproved.filter((r) => {
+    if (!r.endDate) return false;
+    const e = new Date(r.endDate);
+    const endISO = `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, "0")}-${String(e.getDate()).padStart(2, "0")}`;
+    return todayISO > endISO;
+  });
   return (
+    <>
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
         {/* Header image */}
@@ -350,13 +394,23 @@ function MachineDetailModal({
           {(() => {
             return (
               <>
-                {pending.length > 0 && (
+                {sortedPending.length > 0 && (
                   <div className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] p-4">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
-                      Pending Requests ({pending.length})
-                    </p>
-                    <div className="space-y-2.5">
-                      {pending.map((req) => (
+                    <button
+                      onClick={() => setQueueExpanded(!queueExpanded)}
+                      className="w-full flex items-center justify-between"
+                    >
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                        Queue ({sortedPending.length})
+                      </p>
+                      {queueExpanded ? (
+                        <ChevronUp size={16} className="text-gray-400" />
+                      ) : (
+                        <ChevronDown size={16} className="text-gray-400" />
+                      )}
+                    </button>
+                    <div className="mt-3 space-y-2.5">
+                      {(queueExpanded ? sortedPending : sortedPending.slice(0, 3)).map((req) => (
                         <button
                           key={req.id}
                           onClick={() => onViewRequest(req)}
@@ -393,6 +447,88 @@ function MachineDetailModal({
                             Check Request
                           </span>
                         </button>
+                      ))}
+                    </div>
+                    {!queueExpanded && sortedPending.length > 3 && (
+                      <button
+                        onClick={() => setQueueExpanded(true)}
+                        className="mt-2 text-xs text-green-600 font-semibold hover:underline"
+                      >
+                        Show all {sortedPending.length}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {returnPending.length > 0 && (
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 p-4">
+                    <p className="text-xs font-bold text-amber-600 uppercase tracking-wider mb-3">
+                      Return Requests ({returnPending.length})
+                    </p>
+                    <div className="space-y-2.5">
+                      {returnPending.map((req) => (
+                        <div
+                          key={req.id}
+                          className="flex items-center justify-between rounded-lg bg-white border border-amber-200 px-3 py-2.5"
+                        >
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <div className="h-7 w-7 rounded-full bg-amber-100 flex items-center justify-center text-[11px] font-bold text-amber-700 shrink-0">
+                              {req.member.name.charAt(0)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-sm font-medium text-[#173a2b] block truncate">
+                                {req.member.name}
+                              </span>
+                              {req.startDate && req.endDate ? (
+                                <p className="text-xs text-[#718176]">
+                                  {new Date(req.startDate).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
+                                  {" – "}
+                                  {new Date(req.endDate).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
+                                </p>
+                              ) : (
+                                <p className="text-xs text-gray-400 italic">
+                                  No dates set
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 gap-1.5 ml-2">
+                            <button
+                              onClick={() =>
+                                setConfirmAction({
+                                  requestId: req.id,
+                                  action: "return",
+                                  title: "Confirm Return",
+                                  message: `Confirm that ${req.member.name} has returned the machine?`,
+                                  confirmLabel: "Yes, Confirm Return",
+                                })
+                              }
+                              className="rounded-lg bg-green-600 px-2.5 py-1 text-[10px] font-bold text-white"
+                            >
+                              Confirm Return
+                            </button>
+                            <button
+                              onClick={() =>
+                                setConfirmAction({
+                                  requestId: req.id,
+                                  action: "rejectReturn",
+                                  title: "Reject Return",
+                                  message: `Reject ${req.member.name}'s return request? They will be asked to continue using the machine until the scheduled end date.`,
+                                  confirmLabel: "Yes, Reject",
+                                })
+                              }
+                              className="rounded-lg border border-red-200 px-2.5 py-1 text-[10px] font-bold text-red-600"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -436,9 +572,80 @@ function MachineDetailModal({
                               )}
                             </div>
                           </div>
-                          <span className="shrink-0 ml-2 px-2.5 py-1 bg-orange-100 text-orange-700 text-[10px] font-bold rounded-full">
-                            In Use
-                          </span>
+                          <div className="shrink-0 ml-2 flex gap-1.5">
+                            <span className="px-2.5 py-1 bg-orange-100 text-orange-700 text-[10px] font-bold rounded-full">
+                              In Use
+                            </span>
+                            <button
+                              onClick={() =>
+                                setConfirmAction({
+                                  requestId: req.id,
+                                  action: "return",
+                                  title: "Mark as Returned",
+                                  message: "Are you sure you want to mark this request as returned?",
+                                  confirmLabel: "Yes, Mark Returned",
+                                })
+                              }
+                              className="rounded-lg bg-green-600 px-2.5 py-1 text-[10px] font-bold text-white"
+                            >
+                              Returned
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {reservedToday.length > 0 && (
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 p-4">
+                    <p className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-3">
+                      Reserved — Not Yet Confirmed ({reservedToday.length})
+                    </p>
+                    <div className="space-y-2.5">
+                      {reservedToday.map((req) => (
+                        <div
+                          key={req.id}
+                          className="flex items-center justify-between rounded-lg bg-white border border-amber-100 px-3 py-2.5"
+                        >
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <div className="h-7 w-7 rounded-full bg-amber-100 flex items-center justify-center text-[11px] font-bold text-amber-700 shrink-0">
+                              {req.member.name.charAt(0)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-sm font-medium text-[#173a2b] block truncate">
+                                {req.member.name}
+                              </span>
+                              {req.startDate && req.endDate ? (
+                                <p className="text-xs text-[#718176]">
+                                  {new Date(req.startDate).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
+                                  {" – "}
+                                  {new Date(req.endDate).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
+                                </p>
+                              ) : (
+                                <p className="text-xs text-gray-400 italic">
+                                  No dates set
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="ml-2 flex shrink-0 gap-1.5">
+                            <span className="px-2.5 py-1 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full">
+                              Reserved
+                            </span>
+                            <button
+                              onClick={() => onLifecycle(req.id, "start")}
+                              className="rounded-lg bg-blue-600 px-2.5 py-1 text-[10px] font-bold text-white"
+                            >
+                              Start use
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -485,7 +692,7 @@ function MachineDetailModal({
                           </div>
                           <div className="ml-2 flex shrink-0 flex-wrap justify-end gap-1.5">
                             <span className="rounded-full bg-green-50 px-2.5 py-1 text-[10px] font-bold text-green-700">
-                              {req.status.replace("_", " ")}
+                              {req.status === "APPROVED" ? "Reserved" : req.status.replace("_", " ")}
                             </span>
                             {req.status === "APPROVED" && (
                               <button
@@ -498,26 +705,75 @@ function MachineDetailModal({
                             {req.status === "IN_USE" && (
                               <>
                                 <button
-                                  onClick={() => onLifecycle(req.id, "return")}
+                                  onClick={() =>
+                                    setConfirmAction({
+                                      requestId: req.id,
+                                      action: "return",
+                                      title: "Mark as Returned",
+                                      message:
+                                        "Are you sure you want to mark this request as returned?",
+                                      confirmLabel: "Yes, Mark Returned",
+                                    })
+                                  }
+                                  className="rounded-lg bg-green-600 px-2.5 py-1 text-[10px] font-bold text-white"
+                                >
+                                  Returned
+                                </button>
+                                {req.endDate && todayISO > (() => {
+                                  const e = new Date(req.endDate);
+                                  return `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, "0")}-${String(e.getDate()).padStart(2, "0")}`;
+                                })() && (
+                                  <button
+                                    onClick={() =>
+                                      setConfirmAction({
+                                        requestId: req.id,
+                                        action: "overdue",
+                                        title: "Remind Overdue",
+                                        message:
+                                          "Are you sure you want to notify the borrower that this request is overdue?",
+                                        confirmLabel: "Yes, Send Reminder",
+                                      })
+                                    }
+                                    className="rounded-lg border border-red-200 px-2.5 py-1 text-[10px] font-bold text-red-600"
+                                  >
+                                    Remind overdue
+                                  </button>
+                                )}
+                              </>
+                            )}
+                            {req.status === "OVERDUE" && (
+                              <>
+                                <button
+                                  onClick={() =>
+                                    setConfirmAction({
+                                      requestId: req.id,
+                                      action: "return",
+                                      title: "Mark as Returned",
+                                      message:
+                                        "Are you sure you want to mark this request as returned?",
+                                      confirmLabel: "Yes, Mark Returned",
+                                    })
+                                  }
                                   className="rounded-lg bg-green-600 px-2.5 py-1 text-[10px] font-bold text-white"
                                 >
                                   Returned
                                 </button>
                                 <button
-                                  onClick={() => onLifecycle(req.id, "overdue")}
+                                  onClick={() =>
+                                    setConfirmAction({
+                                      requestId: req.id,
+                                      action: "remind",
+                                      title: "Resend Overdue Reminder",
+                                      message:
+                                        "Are you sure you want to resend an overdue reminder to the borrower?",
+                                      confirmLabel: "Yes, Send Reminder",
+                                    })
+                                  }
                                   className="rounded-lg border border-red-200 px-2.5 py-1 text-[10px] font-bold text-red-600"
                                 >
-                                  Overdue
+                                  Remind
                                 </button>
                               </>
-                            )}
-                            {req.status === "OVERDUE" && (
-                              <button
-                                onClick={() => onLifecycle(req.id, "return")}
-                                className="rounded-lg bg-green-600 px-2.5 py-1 text-[10px] font-bold text-white"
-                              >
-                                Returned
-                              </button>
                             )}
                           </div>
                         </div>
@@ -553,28 +809,28 @@ function MachineDetailModal({
                               <div className="h-7 w-7 rounded-full bg-red-100 flex items-center justify-center text-[11px] font-bold text-red-700 shrink-0">
                                 {req.member.name.charAt(0)}
                               </div>
-                              <div className="min-w-0 flex-1">
-                                <span className="text-sm font-medium text-[#173a2b] block truncate">
-                                  {req.member.name}
-                                </span>
-                                {req.startDate && req.endDate ? (
-                                  <p className="text-xs text-[#718176]">
-                                    {new Date(req.startDate).toLocaleDateString(
-                                      "en-PH",
-                                      { month: "short", day: "numeric" },
-                                    )}
-                                    {" – "}
-                                    {new Date(req.endDate).toLocaleDateString(
-                                      "en-PH",
-                                      { month: "short", day: "numeric" },
-                                    )}
-                                  </p>
-                                ) : (
-                                  <p className="text-xs text-gray-400 italic">
-                                    No dates set
-                                  </p>
-                                )}
-                              </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-sm font-medium text-[#173a2b] block truncate">
+                                {req.member.name}
+                              </span>
+                              {req.startDate && req.endDate ? (
+                                <p className="text-xs text-[#718176]">
+                                  {new Date(req.startDate).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
+                                  {" – "}
+                                  {new Date(req.endDate).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
+                                </p>
+                              ) : (
+                                <p className="text-xs text-gray-400 italic">
+                                  No dates set
+                                </p>
+                              )}
+                            </div>
                             </div>
                             <span className="shrink-0 ml-2 px-3 py-1.5 bg-red-100 text-red-700 text-xs font-bold rounded-lg">
                               View
@@ -582,6 +838,169 @@ function MachineDetailModal({
                           </button>
                         ))}
                       </div>
+                    )}
+                  </div>
+                )}
+
+                {expired.length > 0 && (
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 p-4">
+                    <button
+                      onClick={() => setExpiredExpanded(!expiredExpanded)}
+                      className="w-full flex items-center justify-between"
+                    >
+                      <p className="text-xs font-bold text-amber-600 uppercase tracking-wider">
+                        Needs Attention ({expired.length})
+                      </p>
+                      {expiredExpanded ? (
+                        <ChevronUp size={16} className="text-amber-400" />
+                      ) : (
+                        <ChevronDown size={16} className="text-amber-400" />
+                      )}
+                    </button>
+                    <div className="mt-3 space-y-2.5">
+                      {(expiredExpanded ? expired : expired.slice(0, 3)).map((req) => (
+                        <button
+                          key={req.id}
+                          onClick={() => onViewRequest(req)}
+                          className="w-full flex items-center justify-between rounded-lg bg-white border border-amber-200 px-3 py-2.5 text-left transition hover:border-amber-300 hover:bg-amber-50/50 active:scale-[0.99]"
+                        >
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <div className="h-7 w-7 rounded-full bg-amber-100 flex items-center justify-center text-[11px] font-bold text-amber-700 shrink-0">
+                              {req.member.name.charAt(0)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-sm font-medium text-[#173a2b] block truncate">
+                                {req.member.name}
+                              </span>
+                              {req.startDate && req.endDate ? (
+                                <p className="text-xs text-[#718176]">
+                                  {new Date(req.startDate).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
+                                  {" – "}
+                                  {new Date(req.endDate).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
+                                </p>
+                              ) : (
+                                <p className="text-xs text-gray-400 italic">
+                                  No dates set
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <span className="shrink-0 ml-2 px-3 py-1.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-lg">
+                            Check Request
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    {!expiredExpanded && expired.length > 3 && (
+                      <button
+                        onClick={() => setExpiredExpanded(true)}
+                        className="mt-2 text-xs text-amber-600 font-semibold hover:underline"
+                      >
+                        Show all {expired.length}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {history.length > 0 && (
+                  <div className="rounded-xl bg-gray-50 border border-gray-200 p-4">
+                    <button
+                      onClick={() => setHistoryExpanded(!historyExpanded)}
+                      className="w-full flex items-center justify-between"
+                    >
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                        Borrowing History ({history.length})
+                      </p>
+                      {historyExpanded ? (
+                        <ChevronUp size={16} className="text-gray-400" />
+                      ) : (
+                        <ChevronDown size={16} className="text-gray-400" />
+                      )}
+                    </button>
+                    <div className="mt-3 space-y-2.5">
+                      {(historyExpanded ? history : history.slice(0, 3)).map((req) => (
+                        <div
+                          key={req.id}
+                          className="flex items-center justify-between rounded-lg bg-white border border-gray-200 px-3 py-2.5"
+                        >
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <div className="h-7 w-7 rounded-full bg-gray-200 flex items-center justify-center text-[11px] font-bold text-gray-600 shrink-0">
+                              {req.member.name.charAt(0)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-sm font-medium text-[#173a2b] block truncate">
+                                {req.member.name}
+                              </span>
+                              {req.startedAt && req.returnedAt ? (
+                                <p className="text-xs text-[#718176]">
+                                  Used{" "}
+                                  {new Date(req.startedAt).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
+                                  {" – "}
+                                  {new Date(req.returnedAt).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
+                                </p>
+                              ) : req.returnedAt && req.startDate ? (
+                                <p className="text-xs text-[#718176]">
+                                  Used{" "}
+                                  {new Date(req.startDate).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
+                                  {" – "}
+                                  {new Date(req.returnedAt).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
+                                </p>
+                              ) : req.startDate && req.endDate ? (
+                                <p className="text-xs text-[#718176]">
+                                  {new Date(req.startDate).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
+                                  {" – "}
+                                  {new Date(req.endDate).toLocaleDateString(
+                                    "en-PH",
+                                    { month: "short", day: "numeric" },
+                                  )}
+                                </p>
+                              ) : (
+                                <p className="text-xs text-gray-400 italic">
+                                  No dates set
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <span
+                            className={`shrink-0 ml-2 px-2.5 py-1 text-[10px] font-bold rounded-full ${
+                              req.status === "RETURNED"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-red-100 text-red-700"
+                            }`}
+                          >
+                            {req.status === "RETURNED" ? "Returned" : "Overdue"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    {!historyExpanded && history.length > 3 && (
+                      <button
+                        onClick={() => setHistoryExpanded(true)}
+                        className="mt-2 text-xs text-green-600 font-semibold hover:underline"
+                      >
+                        Show all {history.length}
+                      </button>
                     )}
                   </div>
                 )}
@@ -609,6 +1028,50 @@ function MachineDetailModal({
         </div>
       </div>
     </div>
+
+    {confirmAction && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
+          <div className="text-center">
+            <h3 className="text-lg font-bold text-gray-900 mb-1">
+              {confirmAction.title}
+            </h3>
+            <p className="text-sm text-gray-500 mb-6">
+              {confirmAction.message}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmAction(null)}
+                disabled={machineActionBusy}
+                className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  setMachineActionBusy(true);
+                  try {
+                    await onLifecycle(confirmAction.requestId, confirmAction.action);
+                  } finally {
+                    setMachineActionBusy(false);
+                    setConfirmAction(null);
+                  }
+                }}
+                disabled={machineActionBusy}
+                className={`flex-1 py-3 text-white rounded-2xl font-bold transition disabled:opacity-50 ${
+                  confirmAction.action === "return"
+                    ? "bg-green-600 hover:bg-green-700"
+                    : "bg-red-600 hover:bg-red-700"
+                }`}
+              >
+                {machineActionBusy ? "Processing..." : confirmAction.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
@@ -621,7 +1084,7 @@ function RequestDetailModal({
   onClose: () => void;
   onDecide: (
     requestId: string,
-    action: "approve" | "reject",
+    action: MachineRequestAction,
     message?: string,
   ) => void;
 }) {
@@ -805,6 +1268,95 @@ function RequestDetailModal({
                 >
                   <CheckCircle size={16} />
                   Approve
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {(request.status === "APPROVED" || request.status === "IN_USE" || request.status === "OVERDUE" || request.status === "RETURN_PENDING") && (
+          <div className="p-6 border-t border-gray-100 bg-gray-50">
+            {request.status === "APPROVED" && (
+              <button
+                onClick={() => {
+                  onDecide(request.id, "start");
+                  onClose();
+                }}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold transition flex items-center justify-center gap-2"
+              >
+                Start use
+              </button>
+            )}
+            {request.status === "IN_USE" && (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    onDecide(request.id, "return");
+                    onClose();
+                  }}
+                  className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold transition"
+                >
+                  Returned
+                </button>
+                {request.endDate && (() => {
+                  const e = new Date(request.endDate);
+                  const endISO = `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, "0")}-${String(e.getDate()).padStart(2, "0")}`;
+                  const nowISO = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(new Date().getDate()).padStart(2, "0")}`;
+                  return nowISO > endISO ? (
+                    <button
+                      onClick={() => {
+                        onDecide(request.id, "overdue");
+                        onClose();
+                      }}
+                      className="flex-1 py-3 bg-white border-2 border-red-200 text-red-600 hover:bg-red-50 rounded-2xl font-bold transition"
+                    >
+                      Remind overdue
+                    </button>
+                  ) : null;
+                })()}
+              </div>
+            )}
+            {request.status === "RETURN_PENDING" && (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    onDecide(request.id, "return");
+                    onClose();
+                  }}
+                  className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold transition"
+                >
+                  Confirm Return
+                </button>
+                <button
+                  onClick={() => {
+                    onDecide(request.id, "rejectReturn");
+                    onClose();
+                  }}
+                  className="flex-1 py-3 bg-white border-2 border-red-200 text-red-600 hover:bg-red-50 rounded-2xl font-bold transition"
+                >
+                  Reject
+                </button>
+              </div>
+            )}
+            {request.status === "OVERDUE" && (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    onDecide(request.id, "return");
+                    onClose();
+                  }}
+                  className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold transition"
+                >
+                  Returned
+                </button>
+                <button
+                  onClick={() => {
+                    onDecide(request.id, "remind");
+                    onClose();
+                  }}
+                  className="flex-1 py-3 bg-white border-2 border-red-200 text-red-600 hover:bg-red-50 rounded-2xl font-bold transition"
+                >
+                  Remind
                 </button>
               </div>
             )}
@@ -1792,36 +2344,40 @@ export default function SecretaryDashboard() {
           start: "IN_USE",
           return: "RETURNED",
           overdue: "OVERDUE",
+          remind: undefined,
+          rejectReturn: "IN_USE",
         }[action];
-        setDetailMachine((prev) => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            requests: prev.requests.map((r) =>
-              r.id === requestId
-                ? {
-                    ...r,
-                    status: newStatus,
-                    rejectionReason:
-                      action === "reject"
-                        ? (message ?? r.rejectionReason)
-                        : r.rejectionReason,
-                  }
-                : r,
-            ),
-          };
-        });
-        setViewRequest((prev) => {
-          if (!prev || prev.id !== requestId) return prev;
-          return {
-            ...prev,
-            status: newStatus,
-            rejectionReason:
-              action === "reject"
-                ? (message ?? prev.rejectionReason)
-                : prev.rejectionReason,
-          };
-        });
+        if (newStatus) {
+          setDetailMachine((prev) => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              requests: prev.requests.map((r) =>
+                r.id === requestId
+                  ? {
+                      ...r,
+                      status: newStatus,
+                      rejectionReason:
+                        action === "reject"
+                          ? (message ?? r.rejectionReason)
+                          : r.rejectionReason,
+                    }
+                  : r,
+              ),
+            };
+          });
+          setViewRequest((prev) => {
+            if (!prev || prev.id !== requestId) return prev;
+            return {
+              ...prev,
+              status: newStatus,
+              rejectionReason:
+                action === "reject"
+                  ? (message ?? prev.rejectionReason)
+                  : prev.rejectionReason,
+            };
+          });
+        }
       } else {
         alert(result.error || `Failed to ${action} request`);
       }

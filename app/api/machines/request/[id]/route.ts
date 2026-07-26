@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 const ReviewSchema = z.object({
-  action: z.enum(["approve", "reject", "start", "return", "overdue"]),
+  action: z.enum(["approve", "reject", "start", "return", "overdue", "remind", "rejectReturn"]),
   message: z.string().trim().max(500).optional(),
 });
 
@@ -24,6 +24,8 @@ const ACTION_STATUS = {
   start: MachineStatus.IN_USE,
   return: MachineStatus.RETURNED,
   overdue: MachineStatus.OVERDUE,
+  remind: MachineStatus.OVERDUE,
+  rejectReturn: MachineStatus.IN_USE,
 } as const;
 
 const BLOCKING_STATUSES = [
@@ -61,6 +63,16 @@ const OUTCOME_COPY: Record<
     message: (machineName) =>
       `Your booking for "${machineName}" has been marked overdue. Please return it as soon as possible.`,
   },
+  remind: {
+    title: "Machine booking overdue — reminder",
+    message: (machineName) =>
+      `Reminder: Your booking for "${machineName}" is still overdue. Please return it as soon as possible.`,
+  },
+  rejectReturn: {
+    title: "Return request rejected",
+    message: (machineName) =>
+      `Your return request for "${machineName}" was rejected. Please continue using the machine until the scheduled end date.`,
+  },
 };
 
 export async function PATCH(
@@ -87,6 +99,26 @@ export async function PATCH(
           include: { machine: { select: { name: true } } },
         });
         if (!request) throw new ApiError(404, "Request not found");
+
+        if (result.data.action === "remind") {
+          if (request.status !== MachineStatus.OVERDUE) {
+            throw new ApiError(409, "Can only remind overdue requests");
+          }
+
+          await notifyUser(tx, {
+            userId: request.userId,
+            title: "Machine booking overdue — reminder",
+            message: `Reminder: Your booking for "${request.machine.name}" is still overdue. Please return it as soon as possible.`,
+          });
+          await writeAudit(tx, {
+            userId: actor.userId,
+            action: "MACHINE_REQUEST_REMIND",
+            entity: "MachineRequest",
+            entityId: id,
+          });
+
+          return request;
+        }
 
         assertTransition(
           machineTransitions,
@@ -129,6 +161,8 @@ export async function PATCH(
               nextStatus === MachineStatus.REJECTED
                 ? result.data.message
                 : null,
+            startedAt:
+              nextStatus === MachineStatus.IN_USE ? new Date() : undefined,
             returnedAt:
               nextStatus === MachineStatus.RETURNED ? new Date() : undefined,
           },

@@ -9,6 +9,7 @@ const ACTIVE_STATUSES = [
   MachineStatus.QUEUED,
   MachineStatus.APPROVED,
   MachineStatus.IN_USE,
+  MachineStatus.RETURN_PENDING,
   MachineStatus.OVERDUE,
 ];
 

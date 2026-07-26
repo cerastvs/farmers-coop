@@ -37,6 +37,7 @@ enum MachineStatus {
   QUEUED
   APPROVED
   IN_USE
+  RETURN_PENDING
   RETURNED
   OVERDUE
   REJECTED
@@ -205,10 +206,11 @@ model MachineRequest {
   status          MachineStatus @default(QUEUED)
   rejectionReason String?
 
-  requestDate DateTime  @default(now())
-  startDate   DateTime?
-  endDate     DateTime?
-  returnedAt  DateTime?
+  requestDate  DateTime  @default(now())
+  startDate    DateTime?
+  endDate      DateTime?
+  startedAt    DateTime?
+  returnedAt   DateTime?
 }
 
 model SupplyTransaction {

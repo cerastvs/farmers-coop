@@ -212,7 +212,7 @@ function BookingCalendar({
         </div>
         <div className="flex items-center gap-1">
           <span className="h-2.5 w-2.5 rounded-full bg-green-300" />
-          <span className="text-[10px] text-gray-500">Your approved</span>
+          <span className="text-[10px] text-gray-500">Your reserved</span>
         </div>
         <div className="flex items-center gap-1">
           <span className="h-2.5 w-2.5 rounded-full bg-[#174b36]" />
@@ -236,6 +236,9 @@ export default function RentMachinePage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [starting, setStarting] = useState<string | null>(null);
+  const [returning, setReturning] = useState<string | null>(null);
+  const [returnConfirm, setReturnConfirm] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMachines();
@@ -326,6 +329,69 @@ export default function RentMachinePage() {
       setMessage({ type: "error", text: "Failed to cancel request" });
     } finally {
       setCancelling(null);
+    }
+  }
+
+  async function handleStart(requestId: string) {
+    setStarting(requestId);
+    setMessage(null);
+
+    try {
+      const res = await fetch(`/api/machines/request/${requestId}/start`, {
+        method: "POST",
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setMessage({ type: "success", text: data.message });
+        setMachines((prev) =>
+          prev.map((m) => ({
+            ...m,
+            myRequests: m.myRequests.map((r) =>
+              r.id === requestId ? { ...r, status: "IN_USE" as const } : r,
+            ),
+          })),
+        );
+      } else {
+        setMessage({ type: "error", text: data.error });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to confirm pickup" });
+    } finally {
+      setStarting(null);
+    }
+  }
+
+  async function handleReturn(requestId: string) {
+    setReturning(requestId);
+    setMessage(null);
+
+    try {
+      const res = await fetch(`/api/machines/request/${requestId}/return`, {
+        method: "POST",
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setMessage({ type: "success", text: data.message });
+
+        setMachines((prev) =>
+          prev.map((m) => ({
+            ...m,
+            myRequests: m.myRequests.map((r) =>
+              r.id === requestId ? { ...r, status: "RETURN_PENDING" as const } : r,
+            ),
+          })),
+        );
+      } else {
+        setMessage({ type: "error", text: data.error });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to request return" });
+    } finally {
+      setReturning(null);
     }
   }
 
@@ -509,97 +575,124 @@ export default function RentMachinePage() {
                                 : "Submit Request"}
                           </button>
                         </div>
+                      </div>
+                    )}
 
-                        {(machine.myRequests ?? []).length > 0 && (
-                          <div>
-                            <p className="text-xs font-semibold text-[#173a2b] mb-2">
-                              My Requests
-                            </p>
-                            <div className="space-y-2">
-                              {machine.myRequests.map((req) => (
-                                <div
-                                  key={req.id}
-                                  className="flex items-center justify-between rounded-xl bg-white border border-[#eef2e8] px-4 py-3"
-                                >
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <span
-                                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                                          req.status === "QUEUED"
-                                            ? "bg-yellow-100 text-yellow-700"
-                                            : req.status === "APPROVED"
-                                              ? "bg-green-100 text-green-700"
-                                              : req.status === "IN_USE"
-                                                ? "bg-blue-100 text-blue-700"
-                                                : "bg-gray-100 text-gray-500"
-                                        }`}
-                                      >
-                                        {req.status.charAt(0) + req.status.slice(1).toLowerCase()}
-                                      </span>
-                                      {req.startDate && req.endDate && (
-                                        <span className="text-xs text-[#718176]">
-                                          {formatShortDate(req.startDate)} – {formatShortDate(req.endDate)}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  {req.status === "QUEUED" && (
-                                    <button
-                                      onClick={() => handleCancel(req.id)}
-                                      disabled={cancelling === req.id}
-                                      className="shrink-0 ml-3 rounded-lg px-3 py-1.5 text-xs font-bold text-red-600 border border-red-200 hover:bg-red-50 transition-colors disabled:opacity-50"
-                                    >
-                                      {cancelling === req.id ? "Cancelling..." : "Cancel"}
-                                    </button>
+                    {(machine.myRequests ?? []).length > 0 && (
+                      <div className="border-t border-[#e2e7dc] px-5 py-4 space-y-2">
+                        <p className="text-xs font-semibold text-[#173a2b] mb-2">
+                          My Requests
+                        </p>
+                        <div className="space-y-2">
+                          {machine.myRequests.map((req) => (
+                            <div
+                              key={req.id}
+                              className="flex items-center justify-between rounded-xl bg-white border border-[#eef2e8] px-4 py-3"
+                            >
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                      req.status === "QUEUED"
+                                        ? "bg-yellow-100 text-yellow-700"
+                                        : req.status === "APPROVED"
+                                          ? "bg-blue-100 text-blue-700"
+                                          : req.status === "IN_USE"
+                                            ? "bg-green-100 text-green-700"
+                                            : req.status === "RETURN_PENDING"
+                                              ? "bg-amber-100 text-amber-700"
+                                              : "bg-gray-100 text-gray-500"
+                                    }`}
+                                  >
+                                    {req.status === "APPROVED"
+                                      ? "Reserved"
+                                      : req.status.charAt(0) + req.status.slice(1).toLowerCase()}
+                                  </span>
+                                  {req.startDate && req.endDate && (
+                                    <span className="text-xs text-[#718176]">
+                                      {formatShortDate(req.startDate)} – {formatShortDate(req.endDate)}
+                                    </span>
                                   )}
                                 </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {(machine.otherRequests ?? []).length > 0 && (
-                          <div>
-                            <p className="text-xs font-semibold text-[#173a2b] mb-2">
-                              Other Members&apos; Requests
-                            </p>
-                            <div className="space-y-2">
-                              {machine.otherRequests.map((req) => (
-                                <div
-                                  key={req.id}
-                                  className="flex items-center justify-between rounded-xl bg-white border border-[#eef2e8] px-4 py-3"
+                              </div>
+                              {req.status === "QUEUED" && (
+                                <button
+                                  onClick={() => handleCancel(req.id)}
+                                  disabled={cancelling === req.id}
+                                  className="shrink-0 ml-3 rounded-lg px-3 py-1.5 text-xs font-bold text-red-600 border border-red-200 hover:bg-red-50 transition-colors disabled:opacity-50"
                                 >
-                                  <div className="flex items-center gap-2.5 min-w-0">
-                                    <div className="h-7 w-7 rounded-full bg-blue-100 flex items-center justify-center shrink-0 text-[10px] font-bold text-blue-700">
-                                      {req.borrower.charAt(0)}
-                                    </div>
-                                    <div className="min-w-0">
-                                      <p className="text-sm font-semibold text-[#173a2b] truncate">
-                                        {req.borrower}
-                                      </p>
-                                      <div className="flex items-center gap-2 mt-0.5">
-                                        <span
-                                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                                            req.status === "QUEUED"
-                                              ? "bg-orange-100 text-orange-700"
-                                              : req.status === "APPROVED"
-                                                ? "bg-red-100 text-red-700"
-                                                : "bg-blue-100 text-blue-700"
-                                          }`}
-                                        >
-                                          {req.status.charAt(0) + req.status.slice(1).toLowerCase()}
-                                        </span>
-                                        <span className="text-[11px] text-[#718176]">
-                                          {formatShortDate(req.startDate)} – {formatShortDate(req.endDate)}
-                                        </span>
-                                      </div>
-                                    </div>
+                                  {cancelling === req.id ? "Cancelling..." : "Cancel"}
+                                </button>
+                              )}
+                              {req.status === "APPROVED" && (
+                                <button
+                                  onClick={() => handleStart(req.id)}
+                                  disabled={starting === req.id}
+                                  className="shrink-0 ml-3 rounded-lg px-3 py-1.5 text-xs font-bold text-green-700 border border-green-200 hover:bg-green-50 transition-colors disabled:opacity-50"
+                                >
+                                  {starting === req.id ? "Starting..." : "Confirm pickup"}
+                                </button>
+                              )}
+                              {req.status === "IN_USE" && (
+                                <button
+                                  onClick={() => setReturnConfirm(req.id)}
+                                  disabled={returning === req.id}
+                                  className="shrink-0 ml-3 rounded-lg px-3 py-1.5 text-xs font-bold text-amber-600 border border-amber-200 hover:bg-amber-50 transition-colors disabled:opacity-50"
+                                >
+                                  Return
+                                </button>
+                              )}
+                              {req.status === "RETURN_PENDING" && (
+                                <span className="shrink-0 ml-3 rounded-lg px-3 py-1.5 text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200">
+                                  Awaiting confirmation
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {(machine.otherRequests ?? []).length > 0 && (
+                      <div className="border-t border-[#e2e7dc] px-5 py-4 space-y-2">
+                        <p className="text-xs font-semibold text-[#173a2b] mb-2">
+                          Other Members&apos; Requests
+                        </p>
+                        <div className="space-y-2">
+                          {machine.otherRequests.map((req) => (
+                            <div
+                              key={req.id}
+                              className="flex items-center justify-between rounded-xl bg-white border border-[#eef2e8] px-4 py-3"
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="h-7 w-7 rounded-full bg-blue-100 flex items-center justify-center shrink-0 text-[10px] font-bold text-blue-700">
+                                  {req.borrower.charAt(0)}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-[#173a2b] truncate">
+                                    {req.borrower}
+                                  </p>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <span
+                                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                        req.status === "QUEUED"
+                                          ? "bg-orange-100 text-orange-700"
+                                          : req.status === "APPROVED"
+                                            ? "bg-red-100 text-red-700"
+                                            : "bg-blue-100 text-blue-700"
+                                      }`}
+                                    >
+                                      {req.status.charAt(0) + req.status.slice(1).toLowerCase()}
+                                    </span>
+                                    <span className="text-[11px] text-[#718176]">
+                                      {formatShortDate(req.startDate)} – {formatShortDate(req.endDate)}
+                                    </span>
                                   </div>
                                 </div>
-                              ))}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -615,6 +708,43 @@ export default function RentMachinePage() {
 
         <div className="h-4" />
       </main>
+
+      {returnConfirm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
+            <div className="text-center">
+              <div className="mx-auto h-12 w-12 rounded-full bg-amber-100 flex items-center justify-center mb-4">
+                <Tractor size={20} className="text-amber-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">
+                Return Machine
+              </h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Are you sure you want to return this machine early? The secretary will be notified to confirm.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setReturnConfirm(null)}
+                  disabled={returning !== null}
+                  className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    await handleReturn(returnConfirm);
+                    setReturnConfirm(null);
+                  }}
+                  disabled={returning !== null}
+                  className="flex-1 py-3 bg-amber-500 text-white hover:bg-amber-600 rounded-2xl font-bold transition disabled:opacity-50"
+                >
+                  {returning !== null ? "Returning..." : "Yes, Return"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

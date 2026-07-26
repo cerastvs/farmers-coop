@@ -12,7 +12,10 @@ const ACTIVE_MACHINE_STATUSES = [
   MachineStatus.QUEUED,
   MachineStatus.APPROVED,
   MachineStatus.IN_USE,
+  MachineStatus.RETURN_PENDING,
+  MachineStatus.OVERDUE,
   MachineStatus.REJECTED,
+  MachineStatus.RETURNED,
 ];
 
 function toISODate(d: Date): string {
@@ -24,11 +27,7 @@ function isCurrentlyInUse(request: {
   startDate: Date | null;
   endDate: Date | null;
 }): boolean {
-  if (
-    request.status !== MachineStatus.APPROVED &&
-    request.status !== MachineStatus.IN_USE
-  )
-    return false;
+  if (request.status !== MachineStatus.IN_USE) return false;
   if (!request.startDate || !request.endDate) return false;
   const today = toISODate(new Date());
   const start = toISODate(request.startDate);
@@ -89,6 +88,8 @@ export async function GET() {
               requestDate: true,
               startDate: true,
               endDate: true,
+              startedAt: true,
+              returnedAt: true,
               user: {
                 select: {
                   id: true,
@@ -187,6 +188,8 @@ export async function GET() {
           requestDate: r.requestDate.toISOString(),
           startDate: r.startDate?.toISOString() ?? null,
           endDate: r.endDate?.toISOString() ?? null,
+          returnedAt: r.returnedAt?.toISOString() ?? null,
+          startedAt: r.startedAt?.toISOString() ?? null,
           member: {
             id: r.user.id,
             name: r.user.name || "Unknown",

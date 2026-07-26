@@ -74,17 +74,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const userAlreadyHasRequest = machine.requests.some(
-      (r) => r.userId === userId,
-    );
-
-    if (userAlreadyHasRequest) {
-      return NextResponse.json(
-        { error: "You already have an active request for this machine" },
-        { status: 409 },
-      );
-    }
-
     const hasOverlap = machine.requests.some((r) => {
       if (!r.startDate || !r.endDate) return false;
       return start <= r.endDate && end >= r.startDate;

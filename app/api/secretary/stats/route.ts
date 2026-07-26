@@ -15,6 +15,27 @@ const ACTIVE_MACHINE_STATUSES = [
   MachineStatus.REJECTED,
 ];
 
+function toISODate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function isCurrentlyInUse(request: {
+  status: MachineStatus;
+  startDate: Date | null;
+  endDate: Date | null;
+}): boolean {
+  if (
+    request.status !== MachineStatus.APPROVED &&
+    request.status !== MachineStatus.IN_USE
+  )
+    return false;
+  if (!request.startDate || !request.endDate) return false;
+  const today = toISODate(new Date());
+  const start = toISODate(request.startDate);
+  const end = toISODate(request.endDate);
+  return today >= start && today <= end;
+}
+
 export async function GET() {
   const session = await getSession();
 
@@ -102,8 +123,8 @@ export async function GET() {
     const activeLoansCount = loans.filter(
       (l) => l.status === LoanStatus.ACTIVE,
     ).length;
-    const totalBorrowedMachines = machines.filter(
-      (m) => m.requests.length > 0,
+    const totalBorrowedMachines = machines.filter((m) =>
+      m.requests.some(isCurrentlyInUse),
     ).length;
 
     return NextResponse.json({
@@ -145,14 +166,21 @@ export async function GET() {
         status: l.status,
         due: l.due,
       })),
-      machines: machines.map((m) => ({
-        id: m.id,
-        name: m.name,
-        description: m.description,
-        imageUrl: m.imageUrl,
-        isBorrowed: m.requests.length > 0,
-        borrowedBy: m.requests.map((r) => r.user.name || "Unknown"),
-        requests: m.requests.map((r) => ({
+      machines: machines.map((m) => {
+        const currentUsers = m.requests.filter(isCurrentlyInUse);
+        return {
+          id: m.id,
+          name: m.name,
+          description: m.description,
+          imageUrl: m.imageUrl,
+          isBorrowed: currentUsers.length > 0,
+          borrowedBy: currentUsers.map((r) => r.user.name || "Unknown"),
+          currentUsage: currentUsers.map((r) => ({
+            name: r.user.name || "Unknown",
+            startDate: r.startDate?.toISOString() ?? null,
+            endDate: r.endDate?.toISOString() ?? null,
+          })),
+          requests: m.requests.map((r) => ({
           id: r.id,
           status: r.status,
           rejectionReason: r.rejectionReason,
@@ -170,7 +198,8 @@ export async function GET() {
             yearsFarming: r.user.applications[0]?.yearsFarming ?? null,
           },
         })),
-      })),
+        };
+      }),
       supplies: supplies.map((s) => ({
         id: s.id,
         name: s.productName,

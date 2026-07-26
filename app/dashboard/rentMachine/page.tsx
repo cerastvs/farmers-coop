@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { DashboardHeader } from "../components/DashboardHeader";
 import { IconChevronLeft } from "@/components/icons";
@@ -106,12 +106,23 @@ function BookingCalendar({
     }
   }
 
-  function getDayStatus(day: number): "my-approved" | "approved" | "pending" | "selected" | null {
+  function getDayStatus(day: number): "selected-conflict" | "my-approved" | "approved" | "pending" | "selected" | null {
     const dateStr = toISODate(new Date(viewYear, viewMonth, day));
 
-    if (startDate && endDate && dateStr >= startDate && dateStr <= endDate) {
-      return "selected";
+    const inSelectedRange = startDate && endDate && dateStr >= startDate && dateStr <= endDate;
+    let overlapsBooked = false;
+
+    for (const bd of bookedDates) {
+      const bdStart = bd.startDate.split("T")[0];
+      const bdEnd = bd.endDate.split("T")[0];
+      if (dateStr >= bdStart && dateStr <= bdEnd) {
+        overlapsBooked = true;
+        break;
+      }
     }
+
+    if (inSelectedRange && overlapsBooked) return "selected-conflict";
+    if (inSelectedRange) return "selected";
 
     for (const bd of bookedDates) {
       const bdStart = bd.startDate.split("T")[0];
@@ -135,6 +146,7 @@ function BookingCalendar({
   }
 
   const DAY_STYLE: Record<string, string> = {
+    "selected-conflict": "conflict-blink",
     "my-approved": "bg-green-100 text-green-700 font-bold",
     approved: "bg-red-100 text-red-700 font-bold",
     pending: "bg-orange-100 text-orange-700 font-bold",
@@ -327,6 +339,16 @@ export default function RentMachinePage() {
 
   return (
     <div className="min-h-screen bg-[#f7f7f2] flex flex-col">
+      <style>{`
+        @keyframes conflict-blink {
+          0%, 100% { background-color: #dc2626; color: #fff; }
+          50% { background-color: #fca5a5; color: #173a2b; }
+        }
+        .conflict-blink {
+          animation: conflict-blink 0.7s ease-in-out infinite;
+          font-weight: 800;
+        }
+      `}</style>
       <DashboardHeader />
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6 space-y-6">
@@ -364,6 +386,13 @@ export default function RentMachinePage() {
             {machines.length > 0 ? (
               machines.map((machine) => {
                 const isFormOpen = formMachineId === machine.id;
+                const hasDateConflict = isFormOpen && startDate && endDate
+                  ? machine.bookedDates.some((bd) => {
+                      const bdStart = bd.startDate.split("T")[0];
+                      const bdEnd = bd.endDate.split("T")[0];
+                      return startDate <= bdEnd && endDate >= bdStart;
+                    })
+                  : false;
 
                 return (
                   <div
@@ -464,14 +493,20 @@ export default function RentMachinePage() {
                           </button>
                           <button
                             onClick={() => handleBorrow(machine.id)}
-                            disabled={borrowing === machine.id || !startDate || !endDate}
+                            disabled={borrowing === machine.id || !startDate || !endDate || hasDateConflict}
                             className={`rounded-xl px-5 py-2 text-sm font-bold transition-colors ${
                               borrowing === machine.id || !startDate || !endDate
                                 ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                                : "bg-[#174b36] text-white hover:bg-[#1a5c42]"
+                                : hasDateConflict
+                                  ? "bg-red-100 text-red-600 border border-red-300 cursor-not-allowed"
+                                  : "bg-[#174b36] text-white hover:bg-[#1a5c42]"
                             }`}
                           >
-                            {borrowing === machine.id ? "Requesting..." : "Submit Request"}
+                            {borrowing === machine.id
+                              ? "Requesting..."
+                              : hasDateConflict
+                                ? "Dates conflict with existing booking"
+                                : "Submit Request"}
                           </button>
                         </div>
 

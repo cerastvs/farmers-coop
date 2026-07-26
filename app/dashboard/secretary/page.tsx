@@ -65,6 +65,11 @@ interface Machine {
   imageUrl: string | null;
   isBorrowed: boolean;
   borrowedBy: string[];
+  currentUsage: {
+    name: string;
+    startDate: string | null;
+    endDate: string | null;
+  }[];
   requests: MachineRequestInfo[];
 }
 
@@ -228,7 +233,25 @@ function MachineDetailModal({
   const [rejectedExpanded, setRejectedExpanded] = useState(false);
 
   const pending = machine.requests?.filter((r) => r.status === "QUEUED") ?? [];
-  const approved = machine.requests?.filter((r) => r.status === "APPROVED" || r.status === "IN_USE") ?? [];
+  const allApproved = machine.requests?.filter((r) => r.status === "APPROVED" || r.status === "IN_USE") ?? [];
+  const todayISO = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+  const currentlyInUse = allApproved.filter((r) => {
+    if (!r.startDate || !r.endDate) return false;
+    const s = new Date(r.startDate);
+    const e = new Date(r.endDate);
+    const startISO = `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, "0")}-${String(s.getDate()).padStart(2, "0")}`;
+    const endISO = `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, "0")}-${String(e.getDate()).padStart(2, "0")}`;
+    return todayISO >= startISO && todayISO <= endISO;
+  });
+  const upcoming = allApproved.filter((r) => {
+    if (!r.startDate || !r.endDate) return true;
+    const s = new Date(r.startDate);
+    const startISO = `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, "0")}-${String(s.getDate()).padStart(2, "0")}`;
+    return todayISO < startISO;
+  });
   const rejected = machine.requests?.filter((r) => r.status === "REJECTED") ?? [];
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -272,7 +295,7 @@ function MachineDetailModal({
                   : "bg-green-100 text-green-700"
               }`}
             >
-              {machine.isBorrowed ? "Currently Borrowed" : "Available"}
+              {machine.isBorrowed ? "Currently In Use" : "Available"}
             </span>
           </div>
 
@@ -317,13 +340,48 @@ function MachineDetailModal({
                   </div>
                 )}
 
-                {approved.length > 0 && (
-                  <div className="rounded-xl bg-[#f0f7ff] border border-[#dbeafe] p-4">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
-                      Approved ({approved.length})
+                {currentlyInUse.length > 0 && (
+                  <div className="rounded-xl bg-[#fff7ed] border border-[#fed7aa] p-4">
+                    <p className="text-xs font-bold text-orange-600 uppercase tracking-wider mb-3">
+                      Currently In Use ({currentlyInUse.length})
                     </p>
                     <div className="space-y-2.5">
-                      {approved.map((req) => (
+                      {currentlyInUse.map((req) => (
+                        <div
+                          key={req.id}
+                          className="flex items-center justify-between rounded-lg bg-white border border-orange-100 px-3 py-2.5"
+                        >
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <div className="h-7 w-7 rounded-full bg-orange-100 flex items-center justify-center text-[11px] font-bold text-orange-700 shrink-0">
+                              {req.member.name.charAt(0)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-sm font-medium text-[#173a2b] block truncate">{req.member.name}</span>
+                              {req.startDate && req.endDate ? (
+                                <p className="text-xs text-[#718176]">
+                                  {new Date(req.startDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                                  {" – "}
+                                  {new Date(req.endDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                                </p>
+                              ) : (
+                                <p className="text-xs text-gray-400 italic">No dates set</p>
+                              )}
+                            </div>
+                          </div>
+                          <span className="shrink-0 ml-2 px-2.5 py-1 bg-orange-100 text-orange-700 text-[10px] font-bold rounded-full">In Use</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {upcoming.length > 0 && (
+                  <div className="rounded-xl bg-[#f0f7ff] border border-[#dbeafe] p-4">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                      Upcoming ({upcoming.length})
+                    </p>
+                    <div className="space-y-2.5">
+                      {upcoming.map((req) => (
                         <div
                           key={req.id}
                           className="flex items-center justify-between rounded-lg bg-white border border-[#eef2e8] px-3 py-2.5"
@@ -1309,11 +1367,18 @@ function MachinesSection({
               <p className="text-sm font-semibold text-[#173a2b] truncate">
                 {machine.name}
               </p>
-              <p className="text-[11px] text-[#718176] truncate">
-                {machine.isBorrowed
-                  ? `Borrowed by ${machine.borrowedBy.join(", ")}`
-                  : "Available"}
-              </p>
+              {machine.currentUsage && machine.currentUsage.length > 0 ? (
+                machine.currentUsage.map((u, i) => (
+                  <p key={i} className="text-[11px] text-[#718176] truncate">
+                    In use by {u.name}
+                    {u.startDate && u.endDate && (
+                      <> · {new Date(u.startDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })} – {new Date(u.endDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}</>
+                    )}
+                  </p>
+                ))
+              ) : (
+                <p className="text-[11px] text-[#718176] truncate">Available</p>
+              )}
             </div>
             <span
               className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
@@ -1322,7 +1387,7 @@ function MachinesSection({
                   : "bg-green-100 text-green-700"
               }`}
             >
-              {machine.isBorrowed ? "Borrowed" : "Available"}
+              {machine.isBorrowed ? "In Use" : "Available"}
             </span>
           </button>
         ))
@@ -1524,7 +1589,7 @@ export default function SecretaryDashboard() {
       iconColor: "text-green-600",
     },
     {
-      label: "Machines Borrowed",
+      label: "Machines In Use",
       value: data?.summary.totalBorrowedMachines.toString() || "0",
       icon: <IconMachine />,
       iconBg: "bg-blue-100",

@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { DashboardHeader } from "../components/DashboardHeader";
 import { SummaryCard } from "../components/SummaryCard";
 import { IconLoan, IconMachine } from "@/components/icons";
+import { ImageModal } from "@/components/ImageModal";
 import {
   FileText,
   Users,
@@ -143,7 +144,8 @@ type MachineRequestAction =
   | "return"
   | "overdue"
   | "remind"
-  | "rejectReturn";
+  | "rejectReturn"
+  | "ping";
 
 const SECTION_META: Record<
   Section,
@@ -857,11 +859,22 @@ function MachineDetailModal({
                         <ChevronDown size={16} className="text-amber-400" />
                       )}
                     </button>
+                    <p className="mt-1.5 text-xs text-amber-600/80">
+                      These bookings have passed their scheduled end date but haven&apos;t been marked as returned.
+                    </p>
                     <div className="mt-3 space-y-2.5">
                       {(expiredExpanded ? expired : expired.slice(0, 3)).map((req) => (
                         <button
                           key={req.id}
-                          onClick={() => onViewRequest(req)}
+                          onClick={() =>
+                            setConfirmAction({
+                              requestId: req.id,
+                              action: "ping",
+                              title: `${req.member.name} — not yet returned`,
+                              message: `This booking ended on ${new Date(req.endDate!).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })} but hasn't been marked as returned. What would you like to do?`,
+                              confirmLabel: "Remind to return",
+                            })
+                          }
                           className="w-full flex items-center justify-between rounded-lg bg-white border border-amber-200 px-3 py-2.5 text-left transition hover:border-amber-300 hover:bg-amber-50/50 active:scale-[0.99]"
                         >
                           <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -892,7 +905,7 @@ function MachineDetailModal({
                             </div>
                           </div>
                           <span className="shrink-0 ml-2 px-3 py-1.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-lg">
-                            Check Request
+                            View
                           </span>
                         </button>
                       ))}
@@ -1039,34 +1052,76 @@ function MachineDetailModal({
             <p className="text-sm text-gray-500 mb-6">
               {confirmAction.message}
             </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setConfirmAction(null)}
-                disabled={machineActionBusy}
-                className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  setMachineActionBusy(true);
-                  try {
-                    await onLifecycle(confirmAction.requestId, confirmAction.action);
-                  } finally {
-                    setMachineActionBusy(false);
-                    setConfirmAction(null);
-                  }
-                }}
-                disabled={machineActionBusy}
-                className={`flex-1 py-3 text-white rounded-2xl font-bold transition disabled:opacity-50 ${
-                  confirmAction.action === "return"
-                    ? "bg-green-600 hover:bg-green-700"
-                    : "bg-red-600 hover:bg-red-700"
-                }`}
-              >
-                {machineActionBusy ? "Processing..." : confirmAction.confirmLabel}
-              </button>
-            </div>
+            {confirmAction.action === "ping" ? (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmAction(null)}
+                  disabled={machineActionBusy}
+                  className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    setMachineActionBusy(true);
+                    try {
+                      await onLifecycle(confirmAction.requestId, "ping");
+                    } finally {
+                      setMachineActionBusy(false);
+                      setConfirmAction(null);
+                    }
+                  }}
+                  disabled={machineActionBusy}
+                  className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-bold transition disabled:opacity-50"
+                >
+                  {machineActionBusy ? "Processing..." : "Remind to return"}
+                </button>
+                <button
+                  onClick={async () => {
+                    setMachineActionBusy(true);
+                    try {
+                      await onLifecycle(confirmAction.requestId, "return");
+                    } finally {
+                      setMachineActionBusy(false);
+                      setConfirmAction(null);
+                    }
+                  }}
+                  disabled={machineActionBusy}
+                  className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold transition disabled:opacity-50"
+                >
+                  {machineActionBusy ? "Processing..." : "Mark as returned"}
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmAction(null)}
+                  disabled={machineActionBusy}
+                  className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    setMachineActionBusy(true);
+                    try {
+                      await onLifecycle(confirmAction.requestId, confirmAction.action);
+                    } finally {
+                      setMachineActionBusy(false);
+                      setConfirmAction(null);
+                    }
+                  }}
+                  disabled={machineActionBusy}
+                  className={`flex-1 py-3 text-white rounded-2xl font-bold transition disabled:opacity-50 ${
+                    confirmAction.action === "return"
+                      ? "bg-green-600 hover:bg-green-700"
+                      : "bg-red-600 hover:bg-red-700"
+                  }`}
+                >
+                  {machineActionBusy ? "Processing..." : confirmAction.confirmLabel}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1514,6 +1569,7 @@ function MachineFormModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [formImageModal, setFormImageModal] = useState<string | null>(null);
 
   const isEditing = !!machine;
 
@@ -1610,12 +1666,18 @@ function MachineFormModal({
             </label>
             {imagePreview ? (
               <div className="relative rounded-2xl overflow-hidden border border-gray-200">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={imagePreview}
-                  alt="Preview"
-                  className="w-full h-48 object-cover"
-                />
+                <button
+                  type="button"
+                  onClick={() => setFormImageModal(imagePreview)}
+                  className="block w-full"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="w-full h-48 object-cover hover:opacity-90 transition"
+                  />
+                </button>
                 <button
                   type="button"
                   onClick={handleRemoveImage}
@@ -1695,6 +1757,14 @@ function MachineFormModal({
           </button>
         </div>
       </div>
+
+      {formImageModal && (
+        <ImageModal
+          src={formImageModal}
+          alt="Preview"
+          onClose={() => setFormImageModal(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1714,6 +1784,7 @@ function ApplicationDetailModal({
   >(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [imageModal, setImageModal] = useState<{ src: string; alt: string } | null>(null);
 
   const isPending = application.status === "PENDING";
 
@@ -1747,6 +1818,7 @@ function ApplicationDetailModal({
   }
 
   return (
+    <>
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
         {/* Header */}
@@ -1822,38 +1894,42 @@ function ApplicationDetailModal({
               Documents
             </p>
             <div className="grid grid-cols-2 gap-3">
-              <a
-                href={application.validIdUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 rounded-xl border border-[#eef2e8] bg-[#fafdf7] px-4 py-3 hover:border-green-300 hover:bg-green-50/30 transition"
+              <button
+                type="button"
+                onClick={() => setImageModal({ src: application.validIdUrl, alt: "Valid ID" })}
+                className="group flex items-center gap-3 rounded-xl border border-[#eef2e8] bg-[#fafdf7] px-4 py-3 hover:border-green-300 hover:bg-green-50/30 transition text-left"
               >
-                <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center shrink-0">
-                  <FileText size={18} className="text-green-600" />
-                </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={application.validIdUrl}
+                  alt="Valid ID"
+                  className="h-16 w-16 rounded-lg object-cover transition group-hover:opacity-80"
+                />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-[#173a2b] truncate">
                     Valid ID
                   </p>
-                  <p className="text-[11px] text-[#718176]">Click to view</p>
+                  <p className="text-[11px] text-[#718176]">Click to enlarge</p>
                 </div>
-              </a>
-              <a
-                href={application.proofOfFarmUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 rounded-xl border border-[#eef2e8] bg-[#fafdf7] px-4 py-3 hover:border-green-300 hover:bg-green-50/30 transition"
+              </button>
+              <button
+                type="button"
+                onClick={() => setImageModal({ src: application.proofOfFarmUrl, alt: "Proof of Farm" })}
+                className="group flex items-center gap-3 rounded-xl border border-[#eef2e8] bg-[#fafdf7] px-4 py-3 hover:border-green-300 hover:bg-green-50/30 transition text-left"
               >
-                <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center shrink-0">
-                  <FileText size={18} className="text-green-600" />
-                </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={application.proofOfFarmUrl}
+                  alt="Proof of Farm"
+                  className="h-16 w-16 rounded-lg object-cover transition group-hover:opacity-80"
+                />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-[#173a2b] truncate">
                     Proof of Farm
                   </p>
-                  <p className="text-[11px] text-[#718176]">Click to view</p>
+                  <p className="text-[11px] text-[#718176]">Click to enlarge</p>
                 </div>
-              </a>
+              </button>
             </div>
           </div>
 
@@ -1933,6 +2009,15 @@ function ApplicationDetailModal({
         )}
       </div>
     </div>
+
+    {imageModal && (
+      <ImageModal
+        src={imageModal.src}
+        alt={imageModal.alt}
+        onClose={() => setImageModal(null)}
+      />
+    )}
+    </>
   );
 }
 
@@ -2116,12 +2201,14 @@ function MachinesSection({
   onToggle,
   onAdd,
   onClickMachine,
+  onImageClick,
 }: {
   items: Machine[];
   expanded: boolean;
   onToggle: () => void;
   onAdd: () => void;
   onClickMachine: (m: Machine) => void;
+  onImageClick: (src: string, alt: string) => void;
 }) {
   const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
 
@@ -2151,12 +2238,21 @@ function MachinesSection({
             className="w-full flex items-center gap-3 rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3 text-left transition hover:border-blue-300 hover:bg-blue-50/30 active:scale-[0.99]"
           >
             {machine.imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={machine.imageUrl}
-                alt={machine.name}
-                className="h-11 w-11 rounded-lg object-cover shrink-0 border border-gray-200"
-              />
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onImageClick(machine.imageUrl!, machine.name);
+                }}
+                className="shrink-0"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={machine.imageUrl}
+                  alt={machine.name}
+                  className="h-11 w-11 rounded-lg object-cover border border-gray-200 hover:ring-2 hover:ring-blue-400 transition"
+                />
+              </button>
             ) : (
               <div className="h-11 w-11 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
                 <Tractor size={18} className="text-blue-500" />
@@ -2286,6 +2382,7 @@ export default function SecretaryDashboard() {
   );
   const [viewRejectedRequest, setViewRejectedRequest] =
     useState<MachineRequestInfo | null>(null);
+  const [imageModal, setImageModal] = useState<{ src: string; alt: string } | null>(null);
 
   async function fetchData() {
     try {
@@ -2346,6 +2443,7 @@ export default function SecretaryDashboard() {
           overdue: "OVERDUE",
           remind: undefined,
           rejectReturn: "IN_USE",
+          ping: undefined,
         }[action];
         if (newStatus) {
           setDetailMachine((prev) => {
@@ -2492,6 +2590,7 @@ export default function SecretaryDashboard() {
           onToggle={() => toggleSection("machines")}
           onAdd={handleAddMachine}
           onClickMachine={handleClickMachine}
+          onImageClick={(src, alt) => setImageModal({ src, alt })}
         />
       ),
     },
@@ -2657,6 +2756,14 @@ export default function SecretaryDashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {imageModal && (
+        <ImageModal
+          src={imageModal.src}
+          alt={imageModal.alt}
+          onClose={() => setImageModal(null)}
+        />
       )}
     </div>
   );

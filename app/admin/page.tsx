@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { ImageModal } from "@/components/ImageModal";
 import { runAdminMutation } from "@/lib/admin-mutation";
 
 type Role = "APPLICANT" | "MEMBER" | "TREASURER" | "PRESIDENT" | "SECRETARY";
@@ -109,6 +110,7 @@ export default function AdminPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [proofModalUrl, setProofModalUrl] = useState<string | null>(null);
 
   const tabs = useMemo(() => {
     if (!user) return [] as Tab[];
@@ -275,14 +277,17 @@ export default function AdminPage() {
                     return (
                       <Record key={payment.id} title={payment.user.name ?? payment.user.username} meta={`₱${payment.amount.toLocaleString()} · ${payment.loan?.name ?? "Loan payment"} · ${new Date(payment.createdAt).toLocaleDateString()}`} status={payment.status}>
                         {proofUrl ? (
-                          <a
-                            href={proofUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex rounded-lg border border-[#cddbc9] bg-[#f7faf5] px-3 py-2 text-xs font-bold text-[#26633f] transition hover:bg-[#edf6e8]"
+                          <button
+                            onClick={() => setProofModalUrl(proofUrl)}
+                            className="group mt-1 inline-block overflow-hidden rounded-xl border border-[#dce5d9]"
                           >
-                            View proof of payment
-                          </a>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={proofUrl}
+                              alt="Proof of payment"
+                              className="h-24 w-24 rounded-xl object-cover transition group-hover:opacity-80"
+                            />
+                          </button>
                         ) : legacyReference ? (
                           <p className="rounded-lg bg-[#f7faf5] px-3 py-2 text-xs font-semibold text-[#496558]">
                             Legacy reference: {legacyReference}
@@ -459,6 +464,14 @@ export default function AdminPage() {
           </>
         )}
       </main>
+
+      {proofModalUrl && (
+        <ImageModal
+          src={proofModalUrl}
+          alt="Proof of payment"
+          onClose={() => setProofModalUrl(null)}
+        />
+      )}
     </div>
   );
 }

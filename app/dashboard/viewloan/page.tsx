@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { ImageModal } from "@/components/ImageModal";
 import { DashboardHeader } from "../components/DashboardHeader";
 import { LoanCard } from "./components/LoanCard";
 import { PaymentHistoryTable } from "./components/PaymentHistoryTable";
@@ -56,6 +57,7 @@ export default function ViewLoanPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [proofModalUrl, setProofModalUrl] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -228,14 +230,17 @@ export default function ViewLoanPage() {
                     <p className="text-sm font-semibold text-gray-800">{payment.loan?.name ?? "Loan payment"} · ₱{payment.amount.toLocaleString()}</p>
                     <p className="text-xs text-gray-500">{new Date(payment.createdAt).toLocaleDateString()}</p>
                     {proofUrl ? (
-                      <a
-                        href={proofUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-1 inline-flex text-xs font-semibold text-green-700 hover:underline"
+                      <button
+                        onClick={() => setProofModalUrl(proofUrl)}
+                        className="group mt-1 inline-block overflow-hidden rounded-xl border border-gray-200"
                       >
-                        View proof of payment
-                      </a>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={proofUrl}
+                          alt="Proof of payment"
+                          className="h-24 w-24 rounded-xl object-cover transition group-hover:opacity-80"
+                        />
+                      </button>
                     ) : legacyReference ? (
                       <p className="mt-1 text-xs text-gray-500">Legacy reference: {legacyReference}</p>
                     ) : (
@@ -262,6 +267,14 @@ export default function ViewLoanPage() {
 
         <div className="h-4" />
       </main>
+
+      {proofModalUrl && (
+        <ImageModal
+          src={proofModalUrl}
+          alt="Proof of payment"
+          onClose={() => setProofModalUrl(null)}
+        />
+      )}
     </div>
   );
 }

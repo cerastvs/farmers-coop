@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { DashboardHeader } from "../components/DashboardHeader";
 import { IconChevronLeft } from "@/components/icons";
+import { ImageModal } from "@/components/ImageModal";
 import { Tractor, X } from "lucide-react";
 
 interface BookedDate {
@@ -239,6 +240,7 @@ export default function RentMachinePage() {
   const [starting, setStarting] = useState<string | null>(null);
   const [returning, setReturning] = useState<string | null>(null);
   const [returnConfirm, setReturnConfirm] = useState<string | null>(null);
+  const [imageModal, setImageModal] = useState<{ src: string; alt: string } | null>(null);
 
   useEffect(() => {
     fetchMachines();
@@ -469,12 +471,18 @@ export default function RentMachinePage() {
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-start gap-3 flex-1 min-w-0">
                           {machine.imageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={machine.imageUrl}
-                              alt={machine.name}
-                              className="h-16 w-16 rounded-xl object-cover shrink-0 border border-gray-200"
-                            />
+                            <button
+                              type="button"
+                              onClick={() => setImageModal({ src: machine.imageUrl!, alt: machine.name })}
+                              className="shrink-0"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={machine.imageUrl}
+                                alt={machine.name}
+                                className="h-16 w-16 rounded-xl object-cover border border-gray-200 hover:ring-2 hover:ring-blue-400 transition"
+                              />
+                            </button>
                           ) : (
                             <div className="h-16 w-16 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
                               <Tractor size={24} className="text-blue-500" />
@@ -744,6 +752,14 @@ export default function RentMachinePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {imageModal && (
+        <ImageModal
+          src={imageModal.src}
+          alt={imageModal.alt}
+          onClose={() => setImageModal(null)}
+        />
       )}
     </div>
   );

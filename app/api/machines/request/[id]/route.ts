@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 const ReviewSchema = z.object({
-  action: z.enum(["approve", "reject", "start", "return", "overdue", "remind", "rejectReturn"]),
+  action: z.enum(["approve", "reject", "start", "return", "overdue", "remind", "rejectReturn", "ping"]),
   message: z.string().trim().max(500).optional(),
 });
 
@@ -26,6 +26,7 @@ const ACTION_STATUS = {
   overdue: MachineStatus.OVERDUE,
   remind: MachineStatus.OVERDUE,
   rejectReturn: MachineStatus.IN_USE,
+  ping: MachineStatus.IN_USE,
 } as const;
 
 const BLOCKING_STATUSES = [
@@ -73,6 +74,11 @@ const OUTCOME_COPY: Record<
     message: (machineName) =>
       `Your return request for "${machineName}" was rejected. Please continue using the machine until the scheduled end date.`,
   },
+  ping: {
+    title: "Return reminder",
+    message: (machineName) =>
+      `Reminder: Your booking for "${machineName}" has passed its scheduled end date. Please return the machine as soon as possible.`,
+  },
 };
 
 export async function PATCH(
@@ -113,6 +119,22 @@ export async function PATCH(
           await writeAudit(tx, {
             userId: actor.userId,
             action: "MACHINE_REQUEST_REMIND",
+            entity: "MachineRequest",
+            entityId: id,
+          });
+
+          return request;
+        }
+
+        if (result.data.action === "ping") {
+          await notifyUser(tx, {
+            userId: request.userId,
+            title: "Return reminder",
+            message: `Reminder: Your booking for "${request.machine.name}" has passed its scheduled end date. Please return the machine as soon as possible.`,
+          });
+          await writeAudit(tx, {
+            userId: actor.userId,
+            action: "MACHINE_REQUEST_PING",
             entity: "MachineRequest",
             entityId: id,
           });

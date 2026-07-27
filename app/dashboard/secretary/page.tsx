@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { DashboardHeader } from "../components/DashboardHeader";
-import { SummaryCard } from "../components/SummaryCard";
-import { IconLoan, IconMachine } from "@/components/icons";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import Link from "next/link";
+import { IconLeaf, IconLoan, IconMachine } from "@/components/icons";
 import { ImageModal } from "@/components/ImageModal";
+import { logout } from "../../login/actions";
 import {
   FileText,
   Users,
@@ -19,6 +19,7 @@ import {
   X,
   ImagePlus,
   CheckCircle,
+  CheckCircle2,
   Phone,
   MapPin,
   Wheat,
@@ -26,6 +27,15 @@ import {
   BarChart3,
   Megaphone,
   ClipboardCheck,
+  Bell,
+  Search,
+  Clock,
+  LogOut,
+  AlertTriangle,
+  ArrowUpRight,
+  ArrowDownRight,
+  XCircle,
+  TrendingUp,
 } from "lucide-react";
 
 interface Application {
@@ -2887,22 +2897,85 @@ function AnnouncementsSection({
   );
 }
 
+const STAT_ACCENT: Record<string, string> = {
+  applications: "bg-amber-500",
+  loans: "bg-emerald-500",
+  payments: "bg-blue-500",
+  machines: "bg-indigo-500",
+  members: "bg-purple-500",
+  supplies: "bg-orange-500",
+};
+
+function StatCard({
+  label,
+  value,
+  sub,
+  accent,
+  icon: Icon,
+  delay,
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  accent: string;
+  icon: React.ElementType;
+  delay?: number;
+}) {
+  return (
+    <div
+      className="animate-slideUp relative overflow-hidden rounded-xl border border-[#e2ebe6] bg-white p-4 shadow-sm"
+      style={{ animationDelay: `${delay ?? 0}ms` }}
+    >
+      <div className={`absolute left-0 top-0 h-full w-[3px] ${accent}`} />
+      <div className="flex items-start justify-between">
+        <div className="pl-2">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-[#5a7267]">
+            {label}
+          </p>
+          <p
+            className="mt-1 font-mono text-2xl font-bold tracking-tight text-[#0f2318]"
+            style={{ fontFamily: "var(--font-mono)" }}
+          >
+            {value}
+          </p>
+          {sub && (
+            <p className="mt-0.5 text-[11px] text-[#5a7267]">{sub}</p>
+          )}
+        </div>
+        <div className="grid h-9 w-9 place-items-center rounded-lg bg-[#f0f7eb]">
+          <Icon size={16} className="text-[#1b5e3b]" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SecretaryLoadingSkeleton() {
+  return (
+    <div className="min-h-screen bg-[#f8faf9]">
+      <div className="h-14 bg-[#1b5e3b]" />
+      <div className="mx-auto max-w-[1400px] px-6 py-6">
+        <div className="mb-6 h-8 w-48 animate-pulse rounded-lg bg-[#e2ebe6]" />
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="h-24 animate-pulse rounded-xl border border-[#e2ebe6] bg-white" />
+          ))}
+        </div>
+        <div className="h-96 animate-pulse rounded-xl border border-[#e2ebe6] bg-white" />
+      </div>
+    </div>
+  );
+}
+
+type Tab = "overview" | Section;
+
 export default function SecretaryDashboard() {
   const [data, setData] = useState<SecretaryData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [expandedSections, setExpandedSections] = useState<
-    Record<Section, boolean>
-  >({
-    applications: false,
-    members: false,
-    loans: false,
-    payments: false,
-    machines: false,
-    supplies: false,
-    reports: false,
-    announcements: false,
-  });
-  const [activeTab, setActiveTab] = useState<Section>("applications");
+  const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [notice, setNotice] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
   const [detailMachine, setDetailMachine] = useState<Machine | null>(null);
   const [formMachine, setFormMachine] = useState<Machine | null>(null);
@@ -2910,648 +2983,507 @@ export default function SecretaryDashboard() {
   const [deleteConfirm, setDeleteConfirm] = useState<Machine | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [detailApp, setDetailApp] = useState<Application | null>(null);
-  const [viewRequest, setViewRequest] = useState<MachineRequestInfo | null>(
-    null,
-  );
-  const [viewRejectedRequest, setViewRejectedRequest] =
-    useState<MachineRequestInfo | null>(null);
+  const [viewRequest, setViewRequest] = useState<MachineRequestInfo | null>(null);
+  const [viewRejectedRequest, setViewRejectedRequest] = useState<MachineRequestInfo | null>(null);
   const [imageModal, setImageModal] = useState<{ src: string; alt: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     try {
       const res = await fetch("/api/secretary/stats");
-      if (res.ok) {
-        const json = await res.json();
-        setData(json);
-      }
-    } catch (error) {
-      console.error("Failed to fetch secretary data:", error);
+      if (res.ok) setData(await res.json());
+    } catch {
+      console.error("Failed to fetch secretary data");
     } finally {
       setLoading(false);
     }
-  }
-
-  useEffect(() => {
-    fetchData();
   }, []);
 
-  function toggleSection(section: Section) {
-    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
-  }
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  function handleClickMachine(machine: Machine) {
-    setDetailMachine(machine);
-  }
+  const now = useMemo(() => new Date(), []);
 
-  function handleEditFromDetail(machine: Machine) {
-    setDetailMachine(null);
-    setFormMachine(machine);
-    setShowForm(true);
-  }
+  const stats = useMemo(() => {
+    if (!data) return null;
+    const pendingApps = data.applications.filter((a) => a.status === "PENDING");
+    const pendingLoans = data.loans.filter((l) => l.status === "PENDING");
+    const activeLoans = data.loans.filter((l) => l.status === "APPROVED" || l.status === "ACTIVE");
+    const overdueLoans = data.loans.filter((l) => l.status === "ACTIVE" && l.due && new Date(l.due) < now);
+    const pendingPayments = data.payments.filter((p) => p.status === "PENDING");
+    const lowStock = data.supplies.filter((s) => s.stock <= 30);
+    return {
+      pendingApps: pendingApps.length,
+      activeLoans: activeLoans.length,
+      pendingLoans: pendingLoans.length,
+      pendingPayments: pendingPayments.length,
+      machinesInUse: data.summary.totalBorrowedMachines,
+      totalMembers: data.summary.totalMembers,
+      overdueLoans: overdueLoans.length,
+      lowStock: lowStock.length,
+    };
+  }, [data, now]);
 
-  function handleDeleteFromDetail(machine: Machine) {
-    setDetailMachine(null);
-    setDeleteConfirm(machine);
-  }
+  const recentActivity = useMemo(() => {
+    if (!data) return [];
+    const items: { id: string; text: string; time: string; kind: "application" | "loan" | "payment" | "machine" | "supply" }[] = [];
+    data.applications.slice(0, 3).forEach((a) => {
+      items.push({ id: `app-${a.id}`, text: `${a.fullName} — ${a.status.toLowerCase()} application`, time: new Date(a.createdAt).toLocaleDateString(), kind: "application" });
+    });
+    data.loans.slice(0, 4).forEach((l) => {
+      items.push({ id: `loan-${l.id}`, text: `${l.borrower.name} — ${l.status.toLowerCase()} ${l.name} loan`, time: new Date(l.createdAt).toLocaleDateString(), kind: "loan" });
+    });
+    data.payments.slice(0, 4).forEach((p) => {
+      items.push({ id: `pay-${p.id}`, text: `${p.user.name} — ₱${p.amount.toLocaleString()} ${p.status.toLowerCase()}`, time: new Date(p.createdAt).toLocaleDateString(), kind: "payment" });
+    });
+    return items.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 8);
+  }, [data]);
 
-  async function handleDecideRequest(
-    requestId: string,
-    action: MachineRequestAction,
-    message?: string,
-  ) {
+  const searchLower = searchQuery.toLowerCase();
+  const searchedMembers = useMemo(() => {
+    if (!data) return [];
+    return data.members.filter((m) => !searchLower || m.name.toLowerCase().includes(searchLower) || m.username.toLowerCase().includes(searchLower));
+  }, [data, searchLower]);
+  const searchedApplications = useMemo(() => {
+    if (!data) return [];
+    return data.applications.filter((a) => !searchLower || a.fullName.toLowerCase().includes(searchLower));
+  }, [data, searchLower]);
+
+  function handleClickMachine(machine: Machine) { setDetailMachine(machine); }
+  function handleEditFromDetail(machine: Machine) { setDetailMachine(null); setFormMachine(machine); setShowForm(true); }
+  function handleDeleteFromDetail(machine: Machine) { setDetailMachine(null); setDeleteConfirm(machine); }
+
+  async function handleDecideRequest(requestId: string, action: MachineRequestAction, message?: string) {
     try {
-      const res = await fetch(`/api/machines/request/${requestId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, message }),
-      });
+      const res = await fetch(`/api/machines/request/${requestId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, message }) });
       const result = await res.json();
       if (res.ok) {
         await fetchData();
-        const newStatus = {
-          approve: "APPROVED",
-          reject: "REJECTED",
-          start: "IN_USE",
-          return: "RETURNED",
-          overdue: "OVERDUE",
-          remind: undefined,
-          rejectReturn: "IN_USE",
-          ping: undefined,
-        }[action];
+        const newStatus = { approve: "APPROVED", reject: "REJECTED", start: "IN_USE", return: "RETURNED", overdue: "OVERDUE", remind: undefined, rejectReturn: "IN_USE", ping: undefined }[action];
         if (newStatus) {
-          setDetailMachine((prev) => {
-            if (!prev) return null;
-            return {
-              ...prev,
-              requests: prev.requests.map((r) =>
-                r.id === requestId
-                  ? {
-                      ...r,
-                      status: newStatus,
-                      rejectionReason:
-                        action === "reject"
-                          ? (message ?? r.rejectionReason)
-                          : r.rejectionReason,
-                    }
-                  : r,
-              ),
-            };
-          });
-          setViewRequest((prev) => {
-            if (!prev || prev.id !== requestId) return prev;
-            return {
-              ...prev,
-              status: newStatus,
-              rejectionReason:
-                action === "reject"
-                  ? (message ?? prev.rejectionReason)
-                  : prev.rejectionReason,
-            };
-          });
+          setDetailMachine((prev) => prev ? { ...prev, requests: prev.requests.map((r) => r.id === requestId ? { ...r, status: newStatus, rejectionReason: action === "reject" ? (message ?? r.rejectionReason) : r.rejectionReason } : r) } : null);
+          setViewRequest((prev) => { if (!prev || prev.id !== requestId) return prev; return { ...prev, status: newStatus, rejectionReason: action === "reject" ? (message ?? prev.rejectionReason) : prev.rejectionReason }; });
         }
-      } else {
-        alert(result.error || `Failed to ${action} request`);
-      }
-    } catch {
-      alert(`Failed to ${action} request`);
-    }
+      } else { alert(result.error || `Failed to ${action} request`); }
+    } catch { alert(`Failed to ${action} request`); }
   }
 
-  function handleAddMachine() {
-    setFormMachine(null);
-    setShowForm(true);
-  }
+  function handleAddMachine() { setFormMachine(null); setShowForm(true); }
 
   async function handleDeleteMachine() {
     if (!deleteConfirm) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/machines/${deleteConfirm.id}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(`/api/machines/${deleteConfirm.id}`, { method: "DELETE" });
       const result = await res.json();
-      if (res.ok) {
-        setDeleteConfirm(null);
-        fetchData();
-      } else {
-        alert(result.error || "Failed to delete machine");
-      }
-    } catch {
-      alert("Failed to delete machine");
-    } finally {
-      setDeleting(false);
-    }
+      if (res.ok) { setDeleteConfirm(null); fetchData(); } else { alert(result.error || "Failed to delete machine"); }
+    } catch { alert("Failed to delete machine"); } finally { setDeleting(false); }
   }
 
   async function handleLoanAction(loanId: string, action: "approve" | "reject", reason?: string) {
     setBusy(loanId);
     try {
-      const res = await fetch(`/api/secretary/loans/${loanId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, reason }),
-      });
+      const res = await fetch(`/api/secretary/loans/${loanId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, reason }) });
       const result = await res.json();
-      if (res.ok) {
-        await fetchData();
-      } else {
-        alert(result.error || `Failed to ${action} loan`);
-      }
-    } catch {
-      alert(`Failed to ${action} loan`);
-    } finally {
-      setBusy(null);
-    }
+      if (res.ok) { await fetchData(); } else { alert(result.error || `Failed to ${action} loan`); }
+    } catch { alert(`Failed to ${action} loan`); } finally { setBusy(null); }
   }
 
   async function handlePaymentAction(paymentId: string, action: "verify" | "reject", reason?: string) {
     setBusy(paymentId);
     try {
-      const res = await fetch(`/api/secretary/payments/${paymentId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, reason }),
-      });
+      const res = await fetch(`/api/secretary/payments/${paymentId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, reason }) });
       const result = await res.json();
-      if (res.ok) {
-        await fetchData();
-      } else {
-        alert(result.error || `Failed to ${action} payment`);
-      }
-    } catch {
-      alert(`Failed to ${action} payment`);
-    } finally {
-      setBusy(null);
-    }
+      if (res.ok) { await fetchData(); } else { alert(result.error || `Failed to ${action} payment`); }
+    } catch { alert(`Failed to ${action} payment`); } finally { setBusy(null); }
   }
 
-  async function handleMemberEdit(memberId: string, data: { name: string; role: string; active: boolean }) {
+  async function handleMemberEdit(memberId: string, payload: { name: string; role: string; active: boolean }) {
     setBusy(memberId);
     try {
-      const res = await fetch(`/api/admin/members/${memberId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
+      const res = await fetch(`/api/admin/members/${memberId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const result = await res.json();
-      if (res.ok) {
-        await fetchData();
-      } else {
-        alert(result.error || "Failed to update member");
-      }
-    } catch {
-      alert("Failed to update member");
-    } finally {
-      setBusy(null);
-    }
+      if (res.ok) { await fetchData(); } else { alert(result.error || "Failed to update member"); }
+    } catch { alert("Failed to update member"); } finally { setBusy(null); }
   }
 
-  async function handleAddSupply(data: { productName: string; price: number; quantity: number; loanLimitPerHectare: number | null }) {
+  async function handleAddSupply(d: { productName: string; price: number; quantity: number; loanLimitPerHectare: number | null }) {
     setBusy("supply-add");
     try {
-      const res = await fetch("/api/admin/supplies", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
+      const res = await fetch("/api/admin/supplies", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(d) });
       const result = await res.json();
-      if (res.ok) {
-        await fetchData();
-      } else {
-        alert(result.error || "Failed to add supply");
-      }
-    } catch {
-      alert("Failed to add supply");
-    } finally {
-      setBusy(null);
-    }
+      if (res.ok) { await fetchData(); } else { alert(result.error || "Failed to add supply"); }
+    } catch { alert("Failed to add supply"); } finally { setBusy(null); }
   }
 
-  async function handleUpdateSupply(supplyId: string, data: { productName: string; price: number; quantity: number; loanLimitPerHectare: number | null }) {
+  async function handleUpdateSupply(supplyId: string, d: { productName: string; price: number; quantity: number; loanLimitPerHectare: number | null }) {
     setBusy(supplyId);
     try {
-      const res = await fetch(`/api/admin/supplies/${supplyId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
+      const res = await fetch(`/api/admin/supplies/${supplyId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(d) });
       const result = await res.json();
-      if (res.ok) {
-        await fetchData();
-      } else {
-        alert(result.error || "Failed to update supply");
-      }
-    } catch {
-      alert("Failed to update supply");
-    } finally {
-      setBusy(null);
-    }
+      if (res.ok) { await fetchData(); } else { alert(result.error || "Failed to update supply"); }
+    } catch { alert("Failed to update supply"); } finally { setBusy(null); }
   }
 
   async function handleSupplyRequestAction(requestId: string, action: "approve" | "complete" | "reject", reason?: string) {
     setBusy(requestId);
     try {
-      const res = await fetch(`/api/admin/supply-requests/${requestId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, reason }),
-      });
+      const res = await fetch(`/api/admin/supply-requests/${requestId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, reason }) });
       const result = await res.json();
-      if (res.ok) {
-        await fetchData();
-      } else {
-        alert(result.error || `Failed to ${action} request`);
-      }
-    } catch {
-      alert(`Failed to ${action} request`);
-    } finally {
-      setBusy(null);
-    }
+      if (res.ok) { await fetchData(); } else { alert(result.error || `Failed to ${action} request`); }
+    } catch { alert(`Failed to ${action} request`); } finally { setBusy(null); }
   }
 
   async function handleGenerateReport(type: string, title?: string) {
     setBusy("report");
     try {
-      const res = await fetch("/api/admin/reports", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, title }),
-      });
+      const res = await fetch("/api/admin/reports", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, title }) });
       const result = await res.json();
-      if (res.ok) {
-        await fetchData();
-      } else {
-        alert(result.error || "Failed to generate report");
-      }
-    } catch {
-      alert("Failed to generate report");
-    } finally {
-      setBusy(null);
-    }
+      if (res.ok) { await fetchData(); } else { alert(result.error || "Failed to generate report"); }
+    } catch { alert("Failed to generate report"); } finally { setBusy(null); }
   }
 
   async function handleCreatePost(title: string, content: string, published: boolean) {
     setBusy("post-create");
     try {
-      const res = await fetch("/api/posts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, content, published }),
-      });
+      const res = await fetch("/api/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, content, published }) });
       const result = await res.json();
-      if (res.ok) {
-        await fetchData();
-      } else {
-        alert(result.error || "Failed to create announcement");
-      }
-    } catch {
-      alert("Failed to create announcement");
-    } finally {
-      setBusy(null);
-    }
+      if (res.ok) { await fetchData(); } else { alert(result.error || "Failed to create announcement"); }
+    } catch { alert("Failed to create announcement"); } finally { setBusy(null); }
   }
 
   async function handleTogglePublish(postId: string, currentPublished: boolean) {
     setBusy(postId);
     try {
-      const res = await fetch(`/api/posts/${postId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ published: !currentPublished }),
-      });
-      if (res.ok) {
-        await fetchData();
-      } else {
-        const result = await res.json();
-        alert(result.error || "Failed to update announcement");
-      }
-    } catch {
-      alert("Failed to update announcement");
-    } finally {
-      setBusy(null);
-    }
+      const res = await fetch(`/api/posts/${postId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ published: !currentPublished }) });
+      if (res.ok) { await fetchData(); } else { const r = await res.json(); alert(r.error || "Failed to update announcement"); }
+    } catch { alert("Failed to update announcement"); } finally { setBusy(null); }
   }
 
   async function handleDeletePost(postId: string) {
     setBusy(postId);
     try {
       const res = await fetch(`/api/posts/${postId}`, { method: "DELETE" });
-      if (res.ok) {
-        await fetchData();
-      } else {
-        const result = await res.json();
-        alert(result.error || "Failed to delete announcement");
-      }
-    } catch {
-      alert("Failed to delete announcement");
-    } finally {
-      setBusy(null);
-    }
+      if (res.ok) { await fetchData(); } else { const r = await res.json(); alert(r.error || "Failed to delete announcement"); }
+    } catch { alert("Failed to delete announcement"); } finally { setBusy(null); }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#f7f7f2] flex flex-col items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#39733e]"></div>
-      </div>
-    );
-  }
+  if (loading) return <SecretaryLoadingSkeleton />;
 
-  const summaryCards = [
-    {
-      label: "Pending Applications",
-      value: data?.summary.pendingApplicationsCount.toString() || "0",
-      icon: <FileText size={20} />,
-      iconBg: "bg-yellow-100",
-      iconColor: "text-yellow-600",
-    },
-    {
-      label: "Active Loans",
-      value: data?.summary.activeLoansCount.toString() || "0",
-      icon: <IconLoan />,
-      iconBg: "bg-green-100",
-      iconColor: "text-green-600",
-    },
-    {
-      label: "Machines In Use",
-      value: data?.summary.totalBorrowedMachines.toString() || "0",
-      icon: <IconMachine />,
-      iconBg: "bg-blue-100",
-      iconColor: "text-blue-600",
-    },
-    {
-      label: "Total Members",
-      value: data?.summary.totalMembers.toString() || "0",
-      icon: <Users size={20} />,
-      iconBg: "bg-purple-100",
-      iconColor: "text-purple-600",
-    },
-  ];
+  const nowDate = new Date();
+  const formattedDate = nowDate.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const formattedTime = nowDate.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" });
 
-  const sections: { key: Section; component: React.ReactNode }[] = [
-    {
-      key: "applications",
-      component: (
-        <ApplicationsSection
-          items={data?.applications || []}
-          expanded={expandedSections.applications}
-          onToggle={() => toggleSection("applications")}
-          onClickApp={(app) => setDetailApp(app)}
-        />
-      ),
-    },
-    {
-      key: "members",
-      component: (
-        <MembersSection
-          items={data?.members || []}
-          expanded={expandedSections.members}
-          onToggle={() => toggleSection("members")}
-          onEdit={handleMemberEdit}
-          busy={busy}
-        />
-      ),
-    },
-    {
-      key: "loans",
-      component: (
-        <LoansSection
-          items={data?.loans || []}
-          expanded={expandedSections.loans}
-          onToggle={() => toggleSection("loans")}
-          onAction={handleLoanAction}
-          busy={busy}
-        />
-      ),
-    },
-    {
-      key: "payments",
-      component: (
-        <PaymentsSection
-          items={data?.payments || []}
-          expanded={expandedSections.payments}
-          onToggle={() => toggleSection("payments")}
-          onAction={handlePaymentAction}
-          onImageClick={(src, alt) => setImageModal({ src, alt })}
-          busy={busy}
-        />
-      ),
-    },
-    {
-      key: "machines",
-      component: (
-        <MachinesSection
-          items={data?.machines || []}
-          expanded={expandedSections.machines}
-          onToggle={() => toggleSection("machines")}
-          onAdd={handleAddMachine}
-          onClickMachine={handleClickMachine}
-          onImageClick={(src, alt) => setImageModal({ src, alt })}
-        />
-      ),
-    },
-    {
-      key: "supplies",
-      component: (
-        <SuppliesSection
-          items={data?.supplies || []}
-          expanded={expandedSections.supplies}
-          onToggle={() => toggleSection("supplies")}
-          onAddSupply={handleAddSupply}
-          onUpdateSupply={handleUpdateSupply}
-          onActionRequest={handleSupplyRequestAction}
-          busy={busy}
-        />
-      ),
-    },
-    {
-      key: "reports",
-      component: (
-        <ReportsSection
-          items={data?.reports || []}
-          expanded={expandedSections.reports}
-          onToggle={() => toggleSection("reports")}
-          onGenerate={handleGenerateReport}
-          busy={busy}
-        />
-      ),
-    },
-    {
-      key: "announcements",
-      component: (
-        <AnnouncementsSection
-          items={data?.posts || []}
-          expanded={expandedSections.announcements}
-          onToggle={() => toggleSection("announcements")}
-          onCreate={handleCreatePost}
-          onTogglePublish={handleTogglePublish}
-          onDelete={handleDeletePost}
-          busy={busy}
-        />
-      ),
-    },
+  const ALL_TABS: { key: Tab; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
+    { key: "overview", label: "Overview", icon: BarChart3 },
+    ...SECTIONS.map((s) => ({ key: s as Tab, label: SECTION_META[s].label, icon: SECTION_META[s].icon })),
   ];
 
   return (
-    <div className="min-h-screen bg-[#f7f7f2] flex flex-col">
-      <DashboardHeader />
-
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 space-y-6">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[.14em] text-[#4f7e38]">
-            Secretary Portal
-          </p>
-          <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight text-[#173a2b]">
-            Secretary Dashboard
-          </h1>
-          <p className="mt-1 text-sm text-[#718176]">
-            Manage applications, members, loans, payments, machines, supplies, reports, and announcements
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {summaryCards.map((card) => (
-            <SummaryCard key={card.label} {...card} />
-          ))}
-        </div>
-
-        {/* Mobile Tab Navigation */}
-        <div className="lg:hidden -mx-4 px-4 overflow-x-auto scrollbar-hide">
-          <div className="flex gap-2 min-w-max">
-            {SECTIONS.map((section) => {
-              const meta = SECTION_META[section];
-              const Icon = meta.icon;
-              return (
-                <button
-                  key={section}
-                  onClick={() => setActiveTab(section)}
-                  className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-bold whitespace-nowrap transition ${
-                    activeTab === section
-                      ? "bg-[#174b36] text-white shadow-md"
-                      : "bg-white text-[#315646] border border-[#e2e7dc]"
-                  }`}
-                >
-                  <Icon size={14} />
-                  {meta.label}
-                </button>
-              );
-            })}
+    <div className="min-h-screen bg-[#f8faf9]">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#1b5e3b] text-white shadow-lg shadow-[#0f2318]/10">
+        <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-6">
+          <div className="flex items-center gap-3">
+            <Link href="/dashboard" className="flex items-center gap-2.5 transition-opacity hover:opacity-80">
+              <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#d6ed9f] text-[#1b5e3b]"><IconLeaf className="h-4 w-4" /></span>
+              <span className="text-sm font-bold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>FarmCoop</span>
+            </Link>
+            <div className="hidden h-5 w-px bg-white/20 sm:block" />
+            <p className="hidden text-xs font-medium text-white/70 sm:block">Secretary workspace</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="hidden items-center gap-2 text-xs text-white/60 md:flex">
+              <Calendar size={13} /><span>{formattedDate}</span><span className="text-white/30">·</span><Clock size={13} /><span style={{ fontFamily: "var(--font-mono)" }}>{formattedTime}</span>
+            </div>
+            <div className="relative hidden sm:block">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+              <input type="text" placeholder="Search members, loans…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-8 w-48 rounded-lg border border-white/20 bg-white/10 pl-9 pr-3 text-xs text-white placeholder-white/40 outline-none transition-all focus:w-56 focus:border-white/40 focus:bg-white/15" />
+            </div>
+            <Link href="/dashboard/notifications" className="relative rounded-lg p-2 transition-colors hover:bg-white/15" aria-label="Notifications"><Bell size={18} /></Link>
+            <div className="relative">
+              <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/15">
+                <div className="grid h-7 w-7 place-items-center rounded-full bg-[#2d8a56] text-[10px] font-bold text-white">S</div>
+                <ChevronDown size={14} className="text-white/60" />
+              </button>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute right-0 top-full z-50 mt-1 w-48 overflow-hidden rounded-xl border border-[#e2ebe6] bg-white py-1 shadow-2xl">
+                    <Link href="/registration" onClick={() => setMenuOpen(false)} className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-[#0f2318] transition-colors hover:bg-[#f0f7eb]">Edit profile</Link>
+                    <Link href="/dashboard" onClick={() => setMenuOpen(false)} className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-[#0f2318] transition-colors hover:bg-[#f0f7eb]">Member dashboard</Link>
+                    <div className="my-1 h-px bg-[#e2ebe6]" />
+                    <form action={logout}><button type="submit" className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"><LogOut size={13} />Sign out</button></form>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
+      </header>
 
-        {/* Mobile: Single active section */}
-        <div className="lg:hidden">
-          {sections.find((s) => s.key === activeTab)?.component}
+      <main className="mx-auto max-w-[1400px] px-6 py-6">
+        <div className="mb-6 animate-fadeIn">
+          <h1 className="text-xl font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-display)" }}>Secretary dashboard</h1>
+          <p className="mt-0.5 text-sm text-[#5a7267]">Applications, members, loans, payments, machines, supplies, and announcements</p>
         </div>
 
-        {/* Desktop: All sections in 2-column grid */}
-        <div className="hidden lg:grid lg:grid-cols-2 gap-4">
-          {sections.map((s) => (
-            <div key={s.key}>{s.component}</div>
-          ))}
+        {notice && (
+          <div role="status" aria-live="polite" className={`mb-5 flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium ${notice.kind === "success" ? "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200" : "bg-red-50 text-red-800 ring-1 ring-red-200"}`}>
+            {notice.kind === "success" ? <CheckCircle2 size={16} /> : <XCircle size={16} />}{notice.text}
+          </div>
+        )}
+
+        {stats && (
+          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <StatCard label="Pending Applications" value={stats.pendingApps} sub="Awaiting review" accent="bg-amber-500" icon={FileText} delay={0} />
+            <StatCard label="Active Loans" value={stats.activeLoans} sub={`${stats.pendingLoans} pending`} accent="bg-emerald-500" icon={Banknote} delay={50} />
+            <StatCard label="Pending Payments" value={stats.pendingPayments} sub="Need verification" accent="bg-blue-500" icon={ClipboardCheck} delay={100} />
+            <StatCard label="Machines In Use" value={stats.machinesInUse} sub="Currently borrowed" accent="bg-indigo-500" icon={Tractor} delay={150} />
+            <StatCard label="Total Members" value={stats.totalMembers} sub="Active cooperative" accent="bg-purple-500" icon={Users} delay={200} />
+            <StatCard label="Low Stock Items" value={stats.lowStock} sub="Below 30 units" accent="bg-orange-500" icon={Package} delay={250} />
+          </div>
+        )}
+
+        <div className="mb-5 flex gap-1 overflow-x-auto scrollbar-hide">
+          {ALL_TABS.map((t) => {
+            const Icon = t.icon;
+            return (
+              <button key={t.key} onClick={() => setActiveTab(t.key)} className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-2 text-xs font-semibold transition-all ${activeTab === t.key ? "bg-[#1b5e3b] text-white shadow-md shadow-[#1b5e3b]/20" : "bg-white text-[#5a7267] hover:bg-[#f0f7eb] hover:text-[#1b5e3b] border border-[#e2ebe6]"}`}>
+                <Icon size={14} />{t.label}
+              </button>
+            );
+          })}
         </div>
 
-        <div className="h-4" />
+        <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+          <div className="min-w-0 space-y-4">
+            {activeTab === "overview" && data && (
+              <>
+                <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-fadeIn">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#5a7267]">Pending Applications</h3>
+                  {data.applications.filter((a) => a.status === "PENDING").length === 0 ? (
+                    <p className="py-4 text-center text-sm text-[#5a7267]">No pending applications</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {data.applications.filter((a) => a.status === "PENDING").slice(0, 5).map((app) => (
+                        <button key={app.id} onClick={() => setDetailApp(app)} className="flex w-full items-center justify-between rounded-lg border border-[#e2ebe6] bg-[#fafdf9] px-3.5 py-2.5 text-left transition hover:border-amber-300 hover:bg-amber-50/30 active:scale-[0.99]">
+                          <div className="min-w-0 flex-1"><p className="text-sm font-medium text-[#0f2318] truncate">{app.fullName}</p><p className="text-[11px] text-[#5a7267]">{app.cropType} · {app.farmSize} ha</p></div>
+                          <span className="ml-2 shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">Review</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-fadeIn">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#5a7267]">Pending Payments</h3>
+                  {data.payments.filter((p) => p.status === "PENDING").length === 0 ? (
+                    <p className="py-4 text-center text-sm text-[#5a7267]">No pending payments</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {data.payments.filter((p) => p.status === "PENDING").slice(0, 5).map((p) => (
+                        <div key={p.id} className="flex items-center justify-between rounded-lg border border-[#e2ebe6] bg-[#fafdf9] px-3.5 py-2.5">
+                          <div className="min-w-0 flex-1"><p className="text-sm font-medium text-[#0f2318] truncate">{p.user.name}</p><p className="text-[11px] text-[#5a7267]">₱{p.amount.toLocaleString()} · {p.loan?.name ?? "Payment"}</p></div>
+                          <span className="ml-2 shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">Verify</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {stats && stats.overdueLoans > 0 && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-5 shadow-sm animate-fadeIn">
+                    <div className="flex items-center gap-2 mb-2"><AlertTriangle size={16} className="text-red-600" /><h3 className="text-xs font-semibold uppercase tracking-wider text-red-700">Overdue Loans</h3></div>
+                    <p className="text-sm text-red-800">{stats.overdueLoans} loan{stats.overdueLoans > 1 ? "s" : ""} past due date</p>
+                  </div>
+                )}
+
+                {stats && stats.lowStock > 0 && (
+                  <div className="rounded-xl border border-orange-200 bg-orange-50 p-5 shadow-sm animate-fadeIn">
+                    <div className="flex items-center gap-2 mb-2"><AlertTriangle size={16} className="text-orange-600" /><h3 className="text-xs font-semibold uppercase tracking-wider text-orange-700">Low Stock Alert</h3></div>
+                    <p className="text-sm text-orange-800">{stats.lowStock} supply item{stats.lowStock > 1 ? "s" : ""} below 30 units</p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {activeTab === "applications" && data && (
+              <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
+                <div className="border-b border-[#e2ebe6] px-5 py-4"><h3 className="text-sm font-bold text-[#0f2318]">Membership Applications</h3><p className="text-[11px] text-[#5a7267]">{data.applications.length} total · {data.applications.filter((a) => a.status === "PENDING").length} pending</p></div>
+                <div className="p-4 space-y-2">
+                  {searchedApplications.length > 0 ? searchedApplications.map((app) => (
+                    <button key={app.id} onClick={() => setDetailApp(app)} className="flex w-full items-center justify-between rounded-xl border border-[#eef2e8] bg-[#fafdf7] px-4 py-3 text-left transition hover:border-blue-300 hover:bg-blue-50/30 active:scale-[0.99]">
+                      <div className="min-w-0 flex-1"><p className="text-sm font-semibold text-[#173a2b] truncate">{app.fullName}</p><p className="text-xs text-[#718176]">{app.cropType} · Applied {new Date(app.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p></div>
+                      <span className={`shrink-0 ml-3 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${APP_STATUS_STYLE[app.status] || ""}`}>{app.status.charAt(0) + app.status.slice(1).toLowerCase()}</span>
+                    </button>
+                  )) : <EmptyState text="No applications found" />}
+                </div>
+              </div>
+            )}
+
+            {activeTab === "members" && data && (
+              <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
+                <div className="border-b border-[#e2ebe6] px-5 py-4"><h3 className="text-sm font-bold text-[#0f2318]">Members Directory</h3><p className="text-[11px] text-[#5a7267]">{data.members.length} members</p></div>
+                <div className="p-4">
+                  <MembersSection items={searchedMembers} expanded={true} onToggle={() => {}} onEdit={handleMemberEdit} busy={busy} />
+                </div>
+              </div>
+            )}
+
+            {activeTab === "loans" && data && (
+              <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
+                <div className="border-b border-[#e2ebe6] px-5 py-4"><h3 className="text-sm font-bold text-[#0f2318]">Loan Management</h3><p className="text-[11px] text-[#5a7267]">{data.loans.length} total loans</p></div>
+                <div className="p-4">
+                  <LoansSection items={data.loans} expanded={true} onToggle={() => {}} onAction={handleLoanAction} busy={busy} />
+                </div>
+              </div>
+            )}
+
+            {activeTab === "payments" && data && (
+              <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
+                <div className="border-b border-[#e2ebe6] px-5 py-4"><h3 className="text-sm font-bold text-[#0f2318]">Payment Verification</h3><p className="text-[11px] text-[#5a7267]">{data.payments.length} total · {data.payments.filter((p) => p.status === "PENDING").length} pending</p></div>
+                <div className="p-4">
+                  <PaymentsSection items={data.payments} expanded={true} onToggle={() => {}} onAction={handlePaymentAction} onImageClick={(src, alt) => setImageModal({ src, alt })} busy={busy} />
+                </div>
+              </div>
+            )}
+
+            {activeTab === "machines" && data && (
+              <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
+                <div className="flex items-center justify-between border-b border-[#e2ebe6] px-5 py-4">
+                  <div><h3 className="text-sm font-bold text-[#0f2318]">Equipment Management</h3><p className="text-[11px] text-[#5a7267]">{data.machines.length} machines · {data.machines.filter((m) => m.isBorrowed).length} in use</p></div>
+                  <button onClick={handleAddMachine} className="inline-flex items-center gap-1.5 rounded-lg bg-[#1b5e3b] px-3.5 py-2 text-xs font-semibold text-white transition-all hover:bg-[#15503a] hover:shadow-md active:scale-[0.98]"><Plus size={14} />Add Machine</button>
+                </div>
+                <div className="p-4">
+                  <MachinesSection items={data.machines} expanded={true} onToggle={() => {}} onAdd={handleAddMachine} onClickMachine={handleClickMachine} onImageClick={(src, alt) => setImageModal({ src, alt })} />
+                </div>
+              </div>
+            )}
+
+            {activeTab === "supplies" && data && (
+              <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
+                <div className="border-b border-[#e2ebe6] px-5 py-4"><h3 className="text-sm font-bold text-[#0f2318]">Supply Inventory</h3><p className="text-[11px] text-[#5a7267]">{data.supplies.length} items · {data.supplies.filter((s) => s.stock === 0).length} out of stock</p></div>
+                <div className="p-4">
+                  <SuppliesSection items={data.supplies} expanded={true} onToggle={() => {}} onAddSupply={handleAddSupply} onUpdateSupply={handleUpdateSupply} onActionRequest={handleSupplyRequestAction} busy={busy} />
+                </div>
+              </div>
+            )}
+
+            {activeTab === "reports" && data && (
+              <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
+                <div className="border-b border-[#e2ebe6] px-5 py-4"><h3 className="text-sm font-bold text-[#0f2318]">Reports & Analytics</h3><p className="text-[11px] text-[#5a7267]">{data.reports.length} reports generated</p></div>
+                <div className="p-4">
+                  <ReportsSection items={data.reports} expanded={true} onToggle={() => {}} onGenerate={handleGenerateReport} busy={busy} />
+                </div>
+              </div>
+            )}
+
+            {activeTab === "announcements" && data && (
+              <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
+                <div className="border-b border-[#e2ebe6] px-5 py-4"><h3 className="text-sm font-bold text-[#0f2318]">Announcements</h3><p className="text-[11px] text-[#5a7267]">{data.posts.length} posts · {data.posts.filter((p) => p.published).length} published</p></div>
+                <div className="p-4">
+                  <AnnouncementsSection items={data.posts} expanded={true} onToggle={() => {}} onCreate={handleCreatePost} onTogglePublish={handleTogglePublish} onDelete={handleDeletePost} busy={busy} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <aside className="hidden lg:block space-y-4">
+            <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-slideUp">
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#5a7267]">Quick Summary</h3>
+              <div className="space-y-3">
+                {stats && (
+                  <>
+                    <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Pending Applications</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.pendingApps}</span></div>
+                    <div className="h-px bg-[#e2ebe6]" />
+                    <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Active Loans</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.activeLoans}</span></div>
+                    <div className="h-px bg-[#e2ebe6]" />
+                    <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Pending Payments</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.pendingPayments}</span></div>
+                    <div className="h-px bg-[#e2ebe6]" />
+                    <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Machines In Use</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.machinesInUse}</span></div>
+                    <div className="h-px bg-[#e2ebe6]" />
+                    <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Total Members</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.totalMembers}</span></div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-slideUp" style={{ animationDelay: "100ms" }}>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#5a7267]">Recent Activity</h3>
+              <div className="space-y-3">
+                {recentActivity.length > 0 ? recentActivity.map((item) => (
+                  <div key={item.id} className="flex items-start gap-3">
+                    <div className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${item.kind === "application" ? "bg-amber-500" : item.kind === "loan" ? "bg-emerald-500" : item.kind === "payment" ? "bg-blue-500" : item.kind === "machine" ? "bg-indigo-500" : "bg-orange-500"}`} />
+                    <div className="min-w-0 flex-1"><p className="text-xs text-[#0f2318] leading-relaxed">{item.text}</p><p className="text-[10px] text-[#5a7267]">{item.time}</p></div>
+                  </div>
+                )) : <p className="text-xs text-[#5a7267]">No recent activity</p>}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-slideUp" style={{ animationDelay: "200ms" }}>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#5a7267]">Today&apos;s Priorities</h3>
+              <div className="space-y-2">
+                {stats && stats.pendingApps > 0 && (
+                  <button onClick={() => setActiveTab("applications")} className="flex w-full items-center gap-2.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-left transition hover:bg-amber-100/70 active:scale-[0.99]">
+                    <FileText size={14} className="text-amber-600 shrink-0" />
+                    <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-amber-800">{stats.pendingApps} application{stats.pendingApps > 1 ? "s" : ""} to review</p></div>
+                    <ArrowUpRight size={12} className="text-amber-500 shrink-0" />
+                  </button>
+                )}
+                {stats && stats.pendingPayments > 0 && (
+                  <button onClick={() => setActiveTab("payments")} className="flex w-full items-center gap-2.5 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2.5 text-left transition hover:bg-blue-100/70 active:scale-[0.99]">
+                    <ClipboardCheck size={14} className="text-blue-600 shrink-0" />
+                    <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-blue-800">{stats.pendingPayments} payment{stats.pendingPayments > 1 ? "s" : ""} to verify</p></div>
+                    <ArrowUpRight size={12} className="text-blue-500 shrink-0" />
+                  </button>
+                )}
+                {stats && stats.pendingLoans > 0 && (
+                  <button onClick={() => setActiveTab("loans")} className="flex w-full items-center gap-2.5 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2.5 text-left transition hover:bg-emerald-100/70 active:scale-[0.99]">
+                    <Banknote size={14} className="text-emerald-600 shrink-0" />
+                    <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-emerald-800">{stats.pendingLoans} loan{stats.pendingLoans > 1 ? "s" : ""} to process</p></div>
+                    <ArrowUpRight size={12} className="text-emerald-500 shrink-0" />
+                  </button>
+                )}
+                {stats && stats.overdueLoans > 0 && (
+                  <button onClick={() => setActiveTab("loans")} className="flex w-full items-center gap-2.5 rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-left transition hover:bg-red-100/70 active:scale-[0.99]">
+                    <AlertTriangle size={14} className="text-red-600 shrink-0" />
+                    <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-red-800">{stats.overdueLoans} overdue loan{stats.overdueLoans > 1 ? "s" : ""}</p></div>
+                    <ArrowUpRight size={12} className="text-red-500 shrink-0" />
+                  </button>
+                )}
+                {(!stats || (stats.pendingApps === 0 && stats.pendingPayments === 0 && stats.pendingLoans === 0 && stats.overdueLoans === 0)) && (
+                  <div className="py-3 text-center"><CheckCircle2 size={24} className="mx-auto text-emerald-400" /><p className="mt-2 text-xs text-[#5a7267]">All caught up!</p></div>
+                )}
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <div className="h-6" />
       </main>
 
-      {/* Machine Detail Modal */}
-      {detailMachine && (
-        <MachineDetailModal
-          machine={detailMachine}
-          onClose={() => setDetailMachine(null)}
-          onEdit={handleEditFromDetail}
-          onDelete={handleDeleteFromDetail}
-          onViewRequest={setViewRequest}
-          onViewRejected={setViewRejectedRequest}
-          onLifecycle={handleDecideRequest}
-        />
-      )}
+      {detailMachine && <MachineDetailModal machine={detailMachine} onClose={() => setDetailMachine(null)} onEdit={handleEditFromDetail} onDelete={handleDeleteFromDetail} onViewRequest={setViewRequest} onViewRejected={setViewRejectedRequest} onLifecycle={handleDecideRequest} />}
+      {viewRequest && <RequestDetailModal request={viewRequest} onClose={() => setViewRequest(null)} onDecide={handleDecideRequest} />}
+      {viewRejectedRequest && <RejectionDetailModal request={viewRejectedRequest} onClose={() => setViewRejectedRequest(null)} />}
+      {detailApp && <ApplicationDetailModal application={detailApp} onClose={() => setDetailApp(null)} onAction={fetchData} />}
+      {showForm && <MachineFormModal machine={formMachine} onClose={() => { setShowForm(false); setFormMachine(null); }} onSave={fetchData} />}
 
-      {/* Request Detail Modal */}
-      {viewRequest && (
-        <RequestDetailModal
-          request={viewRequest}
-          onClose={() => setViewRequest(null)}
-          onDecide={handleDecideRequest}
-        />
-      )}
-
-      {/* Rejection Detail Modal */}
-      {viewRejectedRequest && (
-        <RejectionDetailModal
-          request={viewRejectedRequest}
-          onClose={() => setViewRejectedRequest(null)}
-        />
-      )}
-
-      {/* Application Detail Modal */}
-      {detailApp && (
-        <ApplicationDetailModal
-          application={detailApp}
-          onClose={() => setDetailApp(null)}
-          onAction={fetchData}
-        />
-      )}
-
-      {/* Machine Form Modal */}
-      {showForm && (
-        <MachineFormModal
-          machine={formMachine}
-          onClose={() => {
-            setShowForm(false);
-            setFormMachine(null);
-          }}
-          onSave={fetchData}
-        />
-      )}
-
-      {/* Delete Confirmation */}
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
             <div className="text-center">
-              <div className="mx-auto h-12 w-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
-                <Trash2 size={20} className="text-red-600" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-1">
-                Delete Machine
-              </h3>
-              <p className="text-sm text-gray-500 mb-6">
-                Are you sure you want to delete{" "}
-                <span className="font-semibold text-gray-700">
-                  {deleteConfirm.name}
-                </span>
-                ? This action cannot be undone.
-              </p>
+              <div className="mx-auto h-12 w-12 rounded-full bg-red-100 flex items-center justify-center mb-4"><Trash2 size={20} className="text-red-600" /></div>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">Delete Machine</h3>
+              <p className="text-sm text-gray-500 mb-6">Are you sure you want to delete <span className="font-semibold text-gray-700">{deleteConfirm.name}</span>? This action cannot be undone.</p>
               <div className="flex gap-3">
-                <button
-                  onClick={() => setDeleteConfirm(null)}
-                  disabled={deleting}
-                  className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDeleteMachine}
-                  disabled={deleting}
-                  className="flex-1 py-3 bg-red-600 text-white hover:bg-red-700 rounded-2xl font-bold transition disabled:opacity-50"
-                >
-                  {deleting ? "Deleting..." : "Delete"}
-                </button>
+                <button onClick={() => setDeleteConfirm(null)} disabled={deleting} className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition">Cancel</button>
+                <button onClick={handleDeleteMachine} disabled={deleting} className="flex-1 py-3 bg-red-600 text-white hover:bg-red-700 rounded-2xl font-bold transition disabled:opacity-50">{deleting ? "Deleting..." : "Delete"}</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {imageModal && (
-        <ImageModal
-          src={imageModal.src}
-          alt={imageModal.alt}
-          onClose={() => setImageModal(null)}
-        />
-      )}
+      {imageModal && <ImageModal src={imageModal.src} alt={imageModal.alt} onClose={() => setImageModal(null)} />}
     </div>
   );
 }

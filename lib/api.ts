@@ -72,12 +72,32 @@ export function apiErrorResponse(error: unknown, fallback: string) {
         { status: 409 },
       );
     }
+    if (error.code === "P2003") {
+      return NextResponse.json(
+        { error: "Related record not found" },
+        { status: 400 },
+      );
+    }
+    if (error.code === "P2014") {
+      return NextResponse.json(
+        { error: "A required related record is missing" },
+        { status: 400 },
+      );
+    }
     if (error.code === "P2034") {
       return NextResponse.json(
         { error: "The record changed while processing; please try again" },
         { status: 409 },
       );
     }
+  }
+
+  if (error instanceof Prisma.PrismaClientUnknownRequestError) {
+    console.error(fallback, error);
+    return NextResponse.json(
+      { error: "A database error occurred" },
+      { status: 500 },
+    );
   }
 
   console.error(fallback, error);

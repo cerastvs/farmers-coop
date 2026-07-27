@@ -58,6 +58,7 @@ interface Loan {
   id: string;
   borrower: { name: string; username: string };
   name: string;
+  type: string;
   amount: number;
   remainingBalance: number;
   termMonths: number;
@@ -2305,17 +2306,72 @@ function LoansSection({
   onAction: (id: string, action: "approve" | "reject", reason?: string) => void;
   busy: string | null;
 }) {
-  const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
+  const [loanType, setLoanType] = useState<"SUPPLY" | "MONEY">("MONEY");
+  const [loanTab, setLoanTab] = useState<"requests" | "payments" | "overdue">("requests");
+
+  const now = new Date();
+  const filtered = items.filter((l) => l.type === loanType);
+
+  const requests = filtered.filter((l) => l.status === "PENDING");
+  const payments = filtered.filter((l) => l.status === "APPROVED" || l.status === "ACTIVE");
+  const overdue = filtered.filter(
+    (l) => l.status === "ACTIVE" && l.due && new Date(l.due) < now,
+  );
+
+  const activeLoans = loanTab === "requests" ? requests : loanTab === "payments" ? payments : overdue;
+
+  const TAB_STYLE = {
+    requests: "bg-yellow-100 text-yellow-700",
+    payments: "bg-blue-100 text-blue-700",
+    overdue: "bg-red-100 text-red-600",
+  } as const;
 
   return (
     <SectionCard
       section="loans"
-      count={items.length}
+      count={filtered.length}
       expanded={expanded}
       onToggle={onToggle}
     >
-      {visible.length > 0 ? (
-        visible.map((loan) => (
+      <div className="flex gap-2 mb-2">
+        <button
+          onClick={() => setLoanType("MONEY")}
+          className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+            loanType === "MONEY"
+              ? "bg-[#173a2b] text-white"
+              : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+          }`}
+        >
+          Money Loans
+        </button>
+        <button
+          onClick={() => setLoanType("SUPPLY")}
+          className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+            loanType === "SUPPLY"
+              ? "bg-[#173a2b] text-white"
+              : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+          }`}
+        >
+          Supply Loans
+        </button>
+      </div>
+
+      <div className="flex gap-1 mb-2">
+        {(["requests", "payments", "overdue"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setLoanTab(tab)}
+            className={`rounded-lg px-2.5 py-1 text-[10px] font-bold transition capitalize ${
+              loanTab === tab ? TAB_STYLE[tab] : "bg-gray-50 text-gray-400 hover:bg-gray-100"
+            }`}
+          >
+            {tab} ({tab === "requests" ? requests.length : tab === "payments" ? payments.length : overdue.length})
+          </button>
+        ))}
+      </div>
+
+      {activeLoans.length > 0 ? (
+        activeLoans.map((loan) => (
           <div
             key={loan.id}
             className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3"
@@ -2369,7 +2425,7 @@ function LoansSection({
           </div>
         ))
       ) : (
-        <EmptyState text="No loans found" />
+        <EmptyState text={`No ${loanType === "SUPPLY" ? "supply" : "money"} ${loanTab}`} />
       )}
     </SectionCard>
   );

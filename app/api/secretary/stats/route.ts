@@ -202,6 +202,7 @@ export async function GET() {
           id: l.id,
           borrower: { name: l.user.name || "Unknown", username: l.user.username },
           name: l.name,
+          type: l.type,
           amount: Number(l.amount),
           remainingBalance: Math.max(Number(l.amount) - paid, 0),
           termMonths: l.termMonths,

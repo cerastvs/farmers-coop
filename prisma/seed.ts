@@ -101,6 +101,10 @@ async function main() {
   await prisma.application.create({
     data: {
       userId: applicant.id,
+      firstName: "Jose",
+      middleName: null,
+      lastName: "Rizal",
+      extensionName: null,
       fullName: "Jose Rizal",
       age: 30,
       gender: "Male",
@@ -118,7 +122,11 @@ async function main() {
   await prisma.application.create({
     data: {
       userId: member.id,
-      fullName: "Juan Dela Cruz",
+      firstName: "Juan",
+      middleName: "Santos",
+      lastName: "Dela Cruz",
+      extensionName: "Jr.",
+      fullName: "Juan Santos Dela Cruz Jr.",
       age: 45,
       gender: "Male",
       address: "456 Mabini Ave, Quezon City",
@@ -137,6 +145,7 @@ async function main() {
     data: {
       userId: member.id,
       name: "Cash Loan",
+      type: "MONEY",
       amount: 5000,
       status: LoanStatus.ACTIVE,
       due: new Date(new Date().setMonth(new Date().getMonth() + 3)),

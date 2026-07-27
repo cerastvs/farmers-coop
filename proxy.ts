@@ -36,11 +36,11 @@ export async function proxy(req: NextRequest) {
   }
 
   if (session?.userId && isPublicRoute) {
-    return NextResponse.redirect(
-      session.userRole === "SECRETARY"
-        ? new URL("/dashboard/secretary", req.url)
-        : dashboardUrl,
-    );
+    const role = session.userRole;
+    if (role === "SECRETARY") return NextResponse.redirect(new URL("/dashboard/secretary", req.url));
+    if (role === "TREASURER") return NextResponse.redirect(new URL("/dashboard/treasurer", req.url));
+    if (role === "PRESIDENT") return NextResponse.redirect(new URL("/admin", req.url));
+    return NextResponse.redirect(dashboardUrl);
   }
 
   if (
@@ -71,7 +71,15 @@ export async function proxy(req: NextRequest) {
       ) {
         return NextResponse.next();
       }
-      return NextResponse.redirect(dashboardUrl);
+      return NextResponse.redirect(
+        session.userRole === "SECRETARY"
+          ? new URL("/dashboard/secretary", req.url)
+          : session.userRole === "TREASURER"
+            ? new URL("/dashboard/treasurer", req.url)
+            : session.userRole === "PRESIDENT"
+              ? new URL("/admin", req.url)
+              : dashboardUrl,
+      );
     }
   }
 

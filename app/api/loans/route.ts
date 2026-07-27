@@ -16,6 +16,7 @@ const LoanRequestSchema = z.object({
   amount: z.number().positive().max(5000).multipleOf(0.01),
   termMonths: z.number().int().min(6).max(24),
   purpose: z.string().trim().min(10).max(500),
+  type: z.enum(["SUPPLY", "MONEY"]).default("MONEY"),
 }).strict();
 
 export async function GET() {
@@ -62,6 +63,7 @@ export async function GET() {
         return {
           id: l.id,
           name: l.name,
+          type: l.type,
           status: l.status,
           amount: Number(l.amount),
           remainingBalance: remainingBalance > 0 ? remainingBalance : 0,
@@ -119,6 +121,7 @@ export async function POST(req: NextRequest) {
             amount: result.data.amount,
             termMonths: result.data.termMonths,
             purpose: result.data.purpose,
+            type: result.data.type,
             due,
           },
         });
@@ -149,7 +152,7 @@ export async function POST(req: NextRequest) {
             notifyUser(tx, {
               userId: reviewer.id,
               title: "New loan request",
-              message: `A ₱${result.data.amount.toLocaleString()} cash-loan request is ready for review.`,
+              message: `A ₱${result.data.amount.toLocaleString()} ${result.data.type === "SUPPLY" ? "supply" : "cash"}-loan request is ready for review.`,
             }),
           ),
         );

@@ -9,7 +9,10 @@ const sanitizeSql = (val: string) => {
 };
 
 export const ApplicationSchema = z.object({
-  fullName: z.string().min(3, "Full name must be at least 3 characters").transform(sanitizeSql),
+  firstName: z.string().min(1, "First name is required").transform(sanitizeSql),
+  middleName: z.string().optional().transform((val) => (val ? sanitizeSql(val) : "")),
+  lastName: z.string().min(1, "Last name is required").transform(sanitizeSql),
+  extensionName: z.string().optional().transform((val) => (val ? sanitizeSql(val) : "")),
 
   age: z.coerce
     .number()

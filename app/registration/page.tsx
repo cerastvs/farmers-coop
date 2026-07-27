@@ -5,25 +5,25 @@ import { logout } from "../login/actions";
 import { useEffect, useState } from "react";
 import { Application } from "../generated/prisma/client";
 import { handleSubmit } from "./actions";
+import { ArrowLeft, FileImage, Sprout } from "lucide-react";
 
-function FormField({
-  error,
-  children,
-}: {
-  error?: string;
-  children: React.ReactNode;
-}) {
+function FieldError({ error }: { error?: string }) {
+  if (!error) return null;
+  return <p className="text-red-500 text-xs mt-1.5">{error}</p>;
+}
+
+function InputLabel({ children, optional }: { children: React.ReactNode; optional?: boolean }) {
   return (
-    <div className="min-h-[72px] flex flex-col justify-start">
-      <p className="text-red-500 text-sm h-4">{error || ""}</p>
+    <label className="block text-xs font-semibold text-[#3d5c47] mb-1.5">
       {children}
-    </div>
+      {optional && <span className="font-normal text-[#8fa594] ml-1">optional</span>}
+    </label>
   );
 }
 
 export default function Registration() {
   const [loading, setLoading] = useState(false);
-  const [application, setApplicaton] = useState<Application | null>(null);
+  const [application, setApplication] = useState<Application | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -37,7 +37,7 @@ export default function Registration() {
       })
       .then((data) => {
         if (data) {
-          setApplicaton(data);
+          setApplication(data);
         }
       })
       .catch((err) => {
@@ -48,257 +48,343 @@ export default function Registration() {
   const isUpdate = !!application;
 
   return (
-    <div className="min-h-screen bg-[#cfe1ce] font-sans flex flex-col items-center py-6 sm:py-12">
-      <div className="w-full max-w-lg bg-white rounded-[2.5rem] shadow-xl overflow-hidden flex flex-col min-h-screen sm:min-h-0">
-        <div className="p-6 flex justify-between items-center">
+    <div className="relative min-h-screen bg-[#edf5df] flex flex-col items-center px-4 py-10">
+      <div className="absolute left-[-10rem] top-[-8rem] h-80 w-80 rounded-full bg-[#badb94]/50 blur-3xl" />
+      <div className="absolute bottom-[-12rem] right-[-8rem] h-96 w-96 rounded-full bg-[#86b87b]/35 blur-3xl" />
+
+      <div className="relative w-full max-w-lg">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
           <Link
             href="/dashboard"
-            className="text-[#51a808] font-bold flex items-center gap-1"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#4f7e38] transition hover:text-[#2d6a2d]"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="m15 18-6-6 6-6" />
-            </svg>
+            <ArrowLeft size={16} />
             Back
           </Link>
-          <h1 className="text-xl font-black text-[#2d6a2d]">
-            {isUpdate ? "Edit Profile" : "Application"}
-          </h1>
-          <div className="w-10"></div>
+          <div className="flex items-center gap-2">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#174b36] text-[#d6ed9f]">
+              <Sprout size={16} />
+            </span>
+            <span className="text-sm font-bold text-[#174b36] tracking-tight">FarmCoop</span>
+          </div>
         </div>
 
-        <form
-          key={application?.id || "new"}
-          className="flex-1 flex flex-col px-6 pb-8"
-          onSubmit={(e) => handleSubmit(e, setLoading, setErrors, isUpdate)}
-        >
-          <input type="hidden" name="userId" value="" />
+        {/* Card */}
+        <div className="bg-white rounded-3xl border border-white/80 shadow-2xl shadow-[#173a2b]/15 backdrop-blur-md overflow-hidden">
+          <div className="px-7 pt-7 pb-1">
+            <h1 className="text-2xl font-extrabold tracking-tight text-[#173a2b]">
+              {isUpdate ? "Edit profile" : "Membership application"}
+            </h1>
+            <p className="mt-1 text-sm text-[#718176]">
+              {isUpdate ? "Update your information below." : "Fill in your details to apply for membership."}
+            </p>
+          </div>
 
-          <div className="mb-10">
-            <h2 className="text-lg font-bold text-gray-800 mb-4 opacity-70">
-              Personal Information
-            </h2>
+          <form
+            key={application?.id || "new"}
+            className="flex flex-col px-7 pb-7 pt-5"
+            onSubmit={(e) => handleSubmit(e, setLoading, setErrors, isUpdate)}
+          >
+            <input type="hidden" name="userId" value="" />
+
+            {/* Personal Information */}
+            <SectionHeader label="Personal information" />
 
             <div className="space-y-4">
-              <FormField error={errors.fullName}>
-                <input
-                  type="text"
-                  name="fullName"
-                  placeholder="Your Name *"
-                  defaultValue={application?.fullName || ""}
-                  className={`w-full border rounded-lg px-4 py-3 ${
-                    errors.fullName ? "border-red-500" : "border-gray-200"
-                  }`}
-                />
-              </FormField>
-
-              <FormField error={errors.contact}>
-                <input
-                  type="text"
-                  name="contact"
-                  placeholder="Your Phone Number *"
-                  defaultValue={application?.contact || ""}
-                  className={`w-full border rounded-lg px-4 py-3 ${
-                    errors.contact ? "border-red-500" : "border-gray-200"
-                  }`}
-                />
-              </FormField>
-
-              <FormField error={errors.address}>
-                <input
-                  type="text"
-                  name="address"
-                  placeholder="Current Address *"
-                  defaultValue={application?.address || ""}
-                  className={`w-full border rounded-lg px-4 py-3 ${
-                    errors.address ? "border-red-500" : "border-gray-200"
-                  }`}
-                />
-              </FormField>
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField error={errors.age}>
-                  <input
-                    type="number"
-                    name="age"
-                    placeholder="Age *"
-                    defaultValue={application?.age || ""}
-                    className={`w-full border rounded-lg px-4 py-3 ${
-                      errors.age ? "border-red-500" : "border-gray-200"
-                    }`}
+              {/* Name row 1: First name + Middle name */}
+              <div className="grid grid-cols-5 gap-3">
+                <div className="col-span-3">
+                  <InputLabel>First name</InputLabel>
+                  <TextInput
+                    name="firstName"
+                    placeholder="Juan"
+                    defaultValue={application?.firstName || ""}
+                    error={errors.firstName}
                   />
-                </FormField>
+                  <FieldError error={errors.firstName} />
+                </div>
+                <div className="col-span-2">
+                  <InputLabel optional>Middle name</InputLabel>
+                  <TextInput
+                    name="middleName"
+                    placeholder="Santos"
+                    defaultValue={application?.middleName || ""}
+                    error={errors.middleName}
+                  />
+                  <FieldError error={errors.middleName} />
+                </div>
+              </div>
 
-                <FormField error={errors.gender}>
+              {/* Name row 2: Last name + Extension */}
+              <div className="grid grid-cols-5 gap-3">
+                <div className="col-span-3">
+                  <InputLabel>Last name</InputLabel>
+                  <TextInput
+                    name="lastName"
+                    placeholder="Dela Cruz"
+                    defaultValue={application?.lastName || ""}
+                    error={errors.lastName}
+                  />
+                  <FieldError error={errors.lastName} />
+                </div>
+                <div className="col-span-2">
+                  <InputLabel optional>Extension</InputLabel>
+                  <select
+                    name="extensionName"
+                    defaultValue={application?.extensionName || ""}
+                    className={`w-full rounded-xl border bg-[#fafcf8] px-3 py-2.5 text-sm text-[#173a2b] outline-none transition placeholder:text-[#9aa89e] focus:border-[#4f7e38] focus:ring-4 focus:ring-[#b9db9e]/35 ${
+                      errors.extensionName ? "border-red-400" : "border-[#dbe5d7]"
+                    }`}
+                  >
+                    <option value="">None</option>
+                    <option value="Jr.">Jr.</option>
+                    <option value="Sr.">Sr.</option>
+                    <option value="II">II</option>
+                    <option value="III">III</option>
+                    <option value="IV">IV</option>
+                  </select>
+                  <FieldError error={errors.extensionName} />
+                </div>
+              </div>
+
+              {/* Phone */}
+              <div>
+                <InputLabel>Phone number</InputLabel>
+                <TextInput
+                  name="contact"
+                  type="tel"
+                  placeholder="09171234567"
+                  defaultValue={application?.contact || ""}
+                  error={errors.contact}
+                />
+                <FieldError error={errors.contact} />
+              </div>
+
+              {/* Address */}
+              <div>
+                <InputLabel>Current address</InputLabel>
+                <TextInput
+                  name="address"
+                  placeholder="123 Rizal St, Brgy. San Isidro, Quezon City"
+                  defaultValue={application?.address || ""}
+                  error={errors.address}
+                />
+                <FieldError error={errors.address} />
+              </div>
+
+              {/* Age + Gender */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <InputLabel>Age</InputLabel>
+                  <TextInput
+                    name="age"
+                    type="number"
+                    placeholder="35"
+                    defaultValue={application?.age ?? ""}
+                    error={errors.age}
+                  />
+                  <FieldError error={errors.age} />
+                </div>
+                <div>
+                  <InputLabel>Gender</InputLabel>
                   <select
                     name="gender"
                     defaultValue={application?.gender || ""}
-                    className={`w-full border rounded-lg px-4 py-3 bg-white ${
-                      errors.gender ? "border-red-500" : "border-gray-200"
+                    className={`w-full rounded-xl border bg-[#fafcf8] px-3 py-2.5 text-sm text-[#173a2b] outline-none transition placeholder:text-[#9aa89e] focus:border-[#4f7e38] focus:ring-4 focus:ring-[#b9db9e]/35 ${
+                      errors.gender ? "border-red-400" : "border-[#dbe5d7]"
                     }`}
                   >
-                    <option value="">Gender *</option>
+                    <option value="">Select</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
                   </select>
-                </FormField>
+                  <FieldError error={errors.gender} />
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="mb-10">
-            <h2 className="text-lg font-bold text-gray-800 mb-4 opacity-70">
-              Farming Details
-            </h2>
+            {/* Farming Details */}
+            <SectionHeader label="Farming details" />
 
             <div className="space-y-4">
-              <FormField error={errors.farmSize}>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="farmSize"
-                  placeholder="Farm Size (in hectares) *"
-                  defaultValue={application?.farmSize || ""}
-                  className={`w-full border rounded-lg px-4 py-3 ${
-                    errors.farmSize ? "border-red-500" : "border-gray-200"
-                  }`}
-                />
-              </FormField>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <InputLabel>Farm size</InputLabel>
+                  <div className="relative">
+                    <TextInput
+                      name="farmSize"
+                      type="number"
+                      step="0.01"
+                      placeholder="2.5"
+                      defaultValue={application?.farmSize ?? ""}
+                      error={errors.farmSize}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#9aa89e] pointer-events-none">hectares</span>
+                  </div>
+                  <FieldError error={errors.farmSize} />
+                </div>
+                <div>
+                  <InputLabel>Years farming</InputLabel>
+                  <TextInput
+                    name="yearsFarming"
+                    type="number"
+                    placeholder="5"
+                    defaultValue={application?.yearsFarming ?? ""}
+                    error={errors.yearsFarming}
+                  />
+                  <FieldError error={errors.yearsFarming} />
+                </div>
+              </div>
 
-              <FormField error={errors.cropType}>
-                <input
-                  type="text"
+              <div>
+                <InputLabel>Principal crop types</InputLabel>
+                <TextInput
                   name="cropType"
-                  placeholder="Principal Crop Types *"
+                  placeholder="Rice, Corn, Vegetables"
                   defaultValue={application?.cropType || ""}
-                  className={`w-full border rounded-lg px-4 py-3 ${
-                    errors.cropType ? "border-red-500" : "border-gray-200"
-                  }`}
+                  error={errors.cropType}
                 />
-              </FormField>
-
-              <FormField error={errors.yearsFarming}>
-                <input
-                  type="number"
-                  name="yearsFarming"
-                  placeholder="Years of Farming *"
-                  defaultValue={application?.yearsFarming || ""}
-                  className={`w-full border rounded-lg px-4 py-3 ${
-                    errors.yearsFarming ? "border-red-500" : "border-gray-200"
-                  }`}
-                />
-              </FormField>
+                <FieldError error={errors.cropType} />
+              </div>
             </div>
-          </div>
 
-          <div className="mb-10">
-            <h2 className="text-lg font-bold text-gray-800 mb-4 opacity-70">
-              Requirements
-            </h2>
+            {/* Requirements */}
+            <SectionHeader label="Requirements" />
 
-            <div className="space-y-5">
-              <FormField error={errors.validId}>
-                <label className="text-xs font-semibold text-gray-500 uppercase px-1">
-                  Valid Identification {isUpdate && "(Leave blank to keep current)"}
-                </label>
-
-                <div
-                  className={`flex items-center justify-between border rounded-lg px-4 py-3 ${
-                    errors.validId ? "border-red-500" : "border-gray-200"
-                  }`}
-                >
-                  <input
-                    type="file"
-                    name="validId"
-                    accept="image/*"
-                    className="hidden"
-                    id="validId"
-                  />
-
-                  <label
-                    htmlFor="validId"
-                    className="cursor-pointer text-sm text-gray-600"
-                  >
-                    {isUpdate ? "Change file" : "Choose file"}
-                  </label>
-
-                  <span className="text-xs text-gray-400">Image only</span>
-                </div>
-                {application?.validIdUrl && (
-                  <p className="text-[10px] text-gray-400 mt-1 truncate">
-                    Current: {application.validIdUrl}
-                  </p>
-                )}
-              </FormField>
-
-              <FormField error={errors.proofOfFarm}>
-                <label className="text-xs font-semibold text-gray-500 uppercase px-1">
-                  Proof of Farming {isUpdate && "(Leave blank to keep current)"}
-                </label>
-
-                <div
-                  className={`flex items-center justify-between border rounded-lg px-4 py-3 ${
-                    errors.proofOfFarm ? "border-red-500" : "border-gray-200"
-                  }`}
-                >
-                  <input
-                    type="file"
-                    name="proofOfFarm"
-                    accept="image/*"
-                    className="hidden"
-                    id="proofOfFarm"
-                  />
-
-                  <label
-                    htmlFor="proofOfFarm"
-                    className="cursor-pointer text-sm text-gray-600"
-                  >
-                    {isUpdate ? "Change file" : "Choose file"}
-                  </label>
-
-                  <span className="text-xs text-gray-400">Image only</span>
-                </div>
-                {application?.proofOfFarmUrl && (
-                  <p className="text-[10px] text-gray-400 mt-1 truncate">
-                    Current: {application.proofOfFarmUrl}
-                  </p>
-                )}
-              </FormField>
+            <div className="space-y-4">
+              <FileUpload
+                name="validId"
+                label="Valid ID"
+                isUpdate={isUpdate}
+                currentUrl={application?.validIdUrl}
+                error={errors.validId}
+              />
+              <FileUpload
+                name="proofOfFarm"
+                label="Proof of farming"
+                isUpdate={isUpdate}
+                currentUrl={application?.proofOfFarmUrl}
+                error={errors.proofOfFarm}
+              />
             </div>
-          </div>
 
-          <div className="mt-auto">
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-[#51a808] text-white py-4 rounded-xl font-bold text-lg shadow-md disabled:opacity-50"
-            >
-              {loading
-                ? "Processing..."
-                : isUpdate
-                ? "Update Profile"
-                : "Submit Application"}
-            </button>
-          </div>
-        </form>
-
-        <div className="p-4 border-t text-center">
-          <form action={logout}>
-            <button type="submit" className="text-sm text-gray-400">
-              logout
-            </button>
+            {/* Submit */}
+            <div className="mt-7">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full rounded-xl bg-[#174b36] py-3.5 font-bold text-white shadow-lg shadow-[#174b36]/15 transition hover:bg-[#0e3b2a] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading
+                  ? "Processing..."
+                  : isUpdate
+                    ? "Save changes"
+                    : "Submit application"}
+              </button>
+            </div>
           </form>
+
+          {/* Logout */}
+          <div className="border-t border-[#eef3ec] px-7 py-3 text-center">
+            <form action={logout}>
+              <button type="submit" className="text-xs font-medium text-[#9aa89e] transition hover:text-[#5b6e62]">
+                Log out
+              </button>
+            </form>
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-2.5 mb-4 mt-8 first:mt-0">
+      <span className="h-2 w-2 rounded-sm bg-[#4f7e38]" />
+      <h2 className="text-xs font-bold uppercase tracking-widest text-[#4f7e38]">
+        {label}
+      </h2>
+    </div>
+  );
+}
+
+function TextInput({
+  name,
+  type = "text",
+  step,
+  placeholder,
+  defaultValue,
+  error,
+}: {
+  name: string;
+  type?: string;
+  step?: string;
+  placeholder: string;
+  defaultValue: string | number;
+  error?: string;
+}) {
+  return (
+    <input
+      type={type}
+      name={name}
+      step={step}
+      placeholder={placeholder}
+      defaultValue={defaultValue}
+      className={`w-full rounded-xl border bg-[#fafcf8] px-3 py-2.5 text-sm text-[#173a2b] outline-none transition placeholder:text-[#9aa89e] focus:border-[#4f7e38] focus:ring-4 focus:ring-[#b9db9e]/35 ${
+        error ? "border-red-400" : "border-[#dbe5d7]"
+      }`}
+    />
+  );
+}
+
+function FileUpload({
+  name,
+  label,
+  isUpdate,
+  currentUrl,
+  error,
+}: {
+  name: string;
+  label: string;
+  isUpdate: boolean;
+  currentUrl?: string;
+  error?: string;
+}) {
+  return (
+    <div>
+      <InputLabel>
+        {label}
+        {isUpdate && <span className="font-normal text-[#8fa594] ml-1">(leave blank to keep current)</span>}
+      </InputLabel>
+      <div
+        className={`flex items-center gap-3 rounded-xl border bg-[#fafcf8] px-4 py-3 transition focus-within:border-[#4f7e38] focus-within:ring-4 focus-within:ring-[#b9db9e]/35 ${
+          error ? "border-red-400" : "border-[#dbe5d7]"
+        }`}
+      >
+        <input
+          type="file"
+          name={name}
+          accept="image/*"
+          className="hidden"
+          id={name}
+        />
+        <label
+          htmlFor={name}
+          className="flex items-center gap-2 cursor-pointer text-sm text-[#5b6e62] hover:text-[#174b36] transition"
+        >
+          <FileImage size={18} className="text-[#8fa594]" />
+          <span>{isUpdate ? "Change file" : "Choose file"}</span>
+        </label>
+        <span className="ml-auto text-xs text-[#b5c4b9]">Image</span>
+      </div>
+      <FieldError error={error} />
+      {currentUrl && (
+        <p className="text-[10px] text-[#b5c4b9] mt-1 truncate">
+          Current: {currentUrl}
+        </p>
+      )}
     </div>
   );
 }

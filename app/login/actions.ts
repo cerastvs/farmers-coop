@@ -110,7 +110,14 @@ export async function login(prevState: ActionState, formData: FormData) {
     info: "User logged in",
   });
 
-  redirect(user.role === "SECRETARY" ? "/dashboard/secretary" : "/dashboard");
+  if (!application) {
+    redirect("/registration");
+  }
+
+  if (user.role === "SECRETARY") redirect("/dashboard/secretary");
+  if (user.role === "TREASURER") redirect("/dashboard/treasurer");
+  if (user.role === "PRESIDENT") redirect("/admin");
+  redirect("/dashboard");
 }
 
 export async function logout() {

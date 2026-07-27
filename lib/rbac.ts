@@ -9,6 +9,7 @@ const cooperativeMemberRoles = [
 
 export const routeAccess: Record<string, Role[]> = {
   "/dashboard/secretary": [Role.SECRETARY, Role.PRESIDENT],
+  "/dashboard/treasurer": [Role.TREASURER, Role.PRESIDENT],
   "/dashboard/applyLoan": cooperativeMemberRoles,
   "/dashboard/viewloan": cooperativeMemberRoles,
   "/dashboard/rentMachine": cooperativeMemberRoles,

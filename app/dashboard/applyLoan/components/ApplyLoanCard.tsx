@@ -27,6 +27,7 @@ export function ApplyLoanCard({ currentBalance, isLoading }: ApplyLoanCardProps)
           amount: Number(form.get("amount")),
           termMonths: Number(form.get("termMonths")),
           purpose: form.get("purpose"),
+          type: form.get("type"),
         }),
       });
       const data = await response.json();
@@ -75,6 +76,18 @@ export function ApplyLoanCard({ currentBalance, isLoading }: ApplyLoanCardProps)
         </div>
 
         <form className="space-y-4 border-t border-gray-100 pt-4" onSubmit={submitLoan}>
+          <label className="block text-sm font-semibold text-gray-700">
+            Loan Type
+            <select
+              className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 outline-none focus:border-green-600 focus:ring-2 focus:ring-green-100"
+              name="type"
+              defaultValue="MONEY"
+              disabled={hasBalance}
+            >
+              <option value="MONEY">Money Loan</option>
+              <option value="SUPPLY">Supply Loan</option>
+            </select>
+          </label>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-semibold text-gray-700">
               Amount

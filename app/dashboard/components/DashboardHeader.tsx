@@ -74,6 +74,15 @@ export function DashboardHeader() {
               Secretary Dashboard
             </Link>
           )}
+          {userRole === "TREASURER" && (
+            <Link
+              href="/dashboard/treasurer"
+              onClick={() => setMenuOpen(false)}
+              className="block w-full px-4 py-3 text-left text-sm font-semibold text-[#315646] transition-colors hover:bg-[#f0f7eb]"
+            >
+              Treasurer Dashboard
+            </Link>
+          )}
           <form action={logout}>
             <button
               type="submit"

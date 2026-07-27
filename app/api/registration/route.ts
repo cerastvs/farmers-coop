@@ -12,6 +12,16 @@ import prisma from "@/lib/client";
 import { MEMBERSHIP_ROLES } from "@/lib/permissions";
 import { ApplicationSchema } from "@/lib/validators/registration";
 
+function composeFullName(
+  firstName: string,
+  middleName: string,
+  lastName: string,
+  extensionName: string,
+): string {
+  const parts = [firstName, middleName, lastName, extensionName].filter(Boolean);
+  return parts.join(" ");
+}
+
 const uploadImage = async (file: File) => {
   try {
     const response = await imgbbUpload({
@@ -34,7 +44,10 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
 
     const dataObj = {
-      fullName: formData.get("fullName"),
+      firstName: formData.get("firstName"),
+      middleName: formData.get("middleName"),
+      lastName: formData.get("lastName"),
+      extensionName: formData.get("extensionName"),
       contact: formData.get("contact"),
       address: formData.get("address"),
       age: formData.get("age"),
@@ -61,7 +74,10 @@ export async function POST(req: NextRequest) {
     }
 
     const {
-      fullName: fullname,
+      firstName,
+      middleName,
+      lastName,
+      extensionName,
       contact,
       address,
       age,
@@ -73,6 +89,8 @@ export async function POST(req: NextRequest) {
       validId,
     } = result.data;
 
+    const fullname = composeFullName(firstName, middleName, lastName, extensionName);
+
     const farmImgUrl = await uploadImage(proofOfFarm as File);
     const validIdImgUrl = await uploadImage(validId as File);
 
@@ -80,6 +98,10 @@ export async function POST(req: NextRequest) {
       const created = await tx.application.create({
         data: {
           userId: actor.userId,
+          firstName,
+          middleName: middleName || null,
+          lastName,
+          extensionName: extensionName || null,
           fullName: fullname,
           contact,
           address,
@@ -171,7 +193,10 @@ export async function PATCH(req: NextRequest) {
     }
 
     const dataObj = {
-      fullName: formData.get("fullName"),
+      firstName: formData.get("firstName"),
+      middleName: formData.get("middleName"),
+      lastName: formData.get("lastName"),
+      extensionName: formData.get("extensionName"),
       contact: formData.get("contact"),
       address: formData.get("address"),
       age: formData.get("age"),
@@ -201,7 +226,10 @@ export async function PATCH(req: NextRequest) {
     }
 
     const {
-      fullName: fullname,
+      firstName,
+      middleName,
+      lastName,
+      extensionName,
       contact,
       address,
       age,
@@ -211,6 +239,8 @@ export async function PATCH(req: NextRequest) {
       yearsFarming,
     } = result.data;
 
+    const fullname = composeFullName(firstName, middleName, lastName, extensionName);
+
     const proofOfFarm = formData.get("proofOfFarm") as File;
     const validId = formData.get("validId") as File;
 
@@ -218,17 +248,29 @@ export async function PATCH(req: NextRequest) {
     let validIdImgUrl = existingApplication.validIdUrl;
 
     if (proofOfFarm && proofOfFarm.size > 0) {
-      farmImgUrl = await uploadImage(proofOfFarm);
+      try {
+        farmImgUrl = await uploadImage(proofOfFarm);
+      } catch {
+        throw new ApiError(400, "Failed to upload proof of farming image");
+      }
     }
 
     if (validId && validId.size > 0) {
-      validIdImgUrl = await uploadImage(validId);
+      try {
+        validIdImgUrl = await uploadImage(validId);
+      } catch {
+        throw new ApiError(400, "Failed to upload valid ID image");
+      }
     }
 
     await prisma.$transaction(async (tx) => {
       await tx.application.update({
         where: { id: existingApplication.id },
         data: {
+          firstName,
+          middleName: middleName || null,
+          lastName,
+          extensionName: extensionName || null,
           fullName: fullname,
           contact,
           address,

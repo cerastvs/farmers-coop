@@ -2,6 +2,7 @@
 import { RegistrationSchema } from "@/lib/validators/signup";
 import Link from "next/link";
 import { useState } from "react";
+import { login } from "../login/actions";
 
 export default function SignUp() {
   const [errors, setErrors] = useState<{
@@ -9,6 +10,12 @@ export default function SignUp() {
     password?: string;
     confirmPassword?: string;
   }>({});
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [credentials, setCredentials] = useState<{
+    username: string;
+    password: string;
+  } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -55,12 +62,47 @@ export default function SignUp() {
       }));
       return;
     }
+
+    setCredentials({ username: data.username, password: data.password });
+    setShowSuccess(true);
   };
+
+  async function handleContinue() {
+    if (!credentials) return;
+    setPending(true);
+    const formData = new FormData();
+    formData.append("username", credentials.username);
+    formData.append("password", credentials.password);
+    await login(undefined, formData);
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#f0f9f4] relative overflow-hidden px-4">
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-green-200/50 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-200/50 rounded-full blur-[120px] pointer-events-none" />
+
+      {showSuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full text-center space-y-4 animate-in fade-in zoom-in-95">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mx-auto">
+              <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-extrabold text-green-900">Account Created!</h2>
+            <p className="text-sm text-gray-500">
+              Welcome to FarmCoop. Click below to complete your membership application.
+            </p>
+            <button
+              onClick={handleContinue}
+              disabled={pending}
+              className="w-full bg-green-600 text-white py-3.5 rounded-2xl hover:bg-green-700 active:scale-[0.98] transition-all font-bold shadow-lg shadow-green-200 disabled:opacity-50"
+            >
+              {pending ? "Logging in…" : "Continue to Registration"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="w-full max-w-md bg-white/70 backdrop-blur-xl p-8 sm:p-10 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-white/20 relative z-10 transition-all duration-300 font-sans">
         <div className="text-center mb-10">

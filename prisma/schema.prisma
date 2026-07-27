@@ -55,6 +55,11 @@ enum TransactionStatus {
   COMPLETED
 }
 
+enum LoanType {
+  SUPPLY
+  MONEY
+}
+
 enum LoanStatus {
   PENDING
   APPROVED
@@ -107,6 +112,7 @@ model Loan {
   id                 String              @id @default(uuid())
   userId             String
   name               String              @default("Cash Loan")
+  type               LoanType            @default(MONEY)
   status             LoanStatus          @default(PENDING)
   amount             Decimal             @db.Decimal(10, 2)
   termMonths         Int                 @default(6)
@@ -147,11 +153,15 @@ model Application {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id])
 
-  fullName String
-  age      Int
-  gender   String
-  address  String
-  contact  String
+  firstName     String
+  middleName    String?
+  lastName      String
+  extensionName String?
+  fullName      String
+  age           Int
+  gender        String
+  address       String
+  contact       String
 
   farmSize     Float
   cropType     String

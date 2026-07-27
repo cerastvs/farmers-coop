@@ -23,6 +23,9 @@ import {
   MapPin,
   Wheat,
   Calendar,
+  BarChart3,
+  Megaphone,
+  ClipboardCheck,
 } from "lucide-react";
 
 interface Application {
@@ -44,18 +47,25 @@ interface Application {
 interface Member {
   id: string;
   name: string;
+  username: string;
   role: string;
+  active: boolean;
   joined: string;
   farm: string | null;
 }
 
 interface Loan {
   id: string;
-  borrower: string;
+  borrower: { name: string; username: string };
   name: string;
   amount: number;
+  remainingBalance: number;
+  termMonths: number;
+  purpose: string | null;
   status: string;
+  rejectionReason: string | null;
   due: string | null;
+  createdAt: string;
 }
 
 interface Machine {
@@ -99,6 +109,43 @@ interface Supply {
   name: string;
   stock: number;
   price: number;
+  transactions: SupplyRequest[];
+}
+
+interface SupplyRequest {
+  id: string;
+  quantity: number;
+  totalPrice: number;
+  type: string;
+  status: string;
+  rejectionReason: string | null;
+  user: { name: string; username: string };
+}
+
+interface PaymentSubmission {
+  id: string;
+  user: { name: string; username: string };
+  loan: { name: string } | null;
+  amount: number;
+  receiptUrl: string | null;
+  referenceNo: string | null;
+  status: string;
+  rejectionReason: string | null;
+  createdAt: string;
+}
+
+interface ReportRecord {
+  id: string;
+  title: string;
+  type: string;
+  createdAt: string;
+}
+
+interface PostRecord {
+  id: string;
+  title: string;
+  content: string | null;
+  published: boolean;
 }
 
 interface SecretaryData {
@@ -113,6 +160,9 @@ interface SecretaryData {
   loans: Loan[];
   machines: Machine[];
   supplies: Supply[];
+  payments: PaymentSubmission[];
+  reports: ReportRecord[];
+  posts: PostRecord[];
 }
 
 const LOAN_STATUS_STYLE: Record<string, string> = {
@@ -133,8 +183,11 @@ const SECTIONS = [
   "applications",
   "members",
   "loans",
+  "payments",
   "machines",
   "supplies",
+  "reports",
+  "announcements",
 ] as const;
 type Section = (typeof SECTIONS)[number];
 type MachineRequestAction =
@@ -174,6 +227,12 @@ const SECTION_META: Record<
     accent: "border-l-green-400",
     iconBg: "bg-green-100 text-green-600",
   },
+  payments: {
+    label: "Payments",
+    icon: ClipboardCheck,
+    accent: "border-l-emerald-400",
+    iconBg: "bg-emerald-100 text-emerald-600",
+  },
   machines: {
     label: "Machines",
     icon: Tractor,
@@ -185,6 +244,18 @@ const SECTION_META: Record<
     icon: Package,
     accent: "border-l-orange-400",
     iconBg: "bg-orange-100 text-orange-600",
+  },
+  reports: {
+    label: "Reports",
+    icon: BarChart3,
+    accent: "border-l-indigo-400",
+    iconBg: "bg-indigo-100 text-indigo-600",
+  },
+  announcements: {
+    label: "Announcements",
+    icon: Megaphone,
+    accent: "border-l-pink-400",
+    iconBg: "bg-pink-100 text-pink-600",
   },
 };
 
@@ -2090,12 +2161,27 @@ function MembersSection({
   items,
   expanded,
   onToggle,
+  onEdit,
+  busy,
 }: {
   items: Member[];
   expanded: boolean;
   onToggle: () => void;
+  onEdit: (id: string, data: { name: string; role: string; active: boolean }) => void;
+  busy: string | null;
 }) {
   const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editRole, setEditRole] = useState("");
+  const [editActive, setEditActive] = useState(true);
+
+  function startEdit(m: Member) {
+    setEditingId(m.id);
+    setEditName(m.name);
+    setEditRole(m.role);
+    setEditActive(m.active);
+  }
 
   return (
     <SectionCard
@@ -2109,30 +2195,92 @@ function MembersSection({
           {visible.map((m) => (
             <div
               key={m.id}
-              className="flex items-center gap-3 rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3"
+              className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3"
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-100 text-sm font-bold text-purple-700">
-                {m.name.charAt(0)}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-[#173a2b] truncate">
-                  {m.name}
-                </p>
-                <p className="text-[11px] text-[#718176] truncate">
-                  {m.farm || "No farm info"}
-                </p>
-                <span
-                  className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                    m.role === "PRESIDENT"
-                      ? "bg-red-100 text-red-600"
-                      : m.role === "TREASURER"
-                        ? "bg-purple-100 text-purple-700"
-                        : "bg-green-100 text-green-700"
-                  }`}
-                >
-                  {m.role.charAt(0) + m.role.slice(1).toLowerCase()}
-                </span>
-              </div>
+              {editingId === m.id ? (
+                <div className="space-y-2">
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none focus:border-[#39733e]"
+                  />
+                  <div className="flex gap-2">
+                    <select
+                      value={editRole}
+                      onChange={(e) => setEditRole(e.target.value)}
+                      className="rounded-lg border border-[#dce5d9] bg-white px-2 py-1.5 text-xs font-semibold outline-none"
+                    >
+                      {["MEMBER", "SECRETARY", "TREASURER", "PRESIDENT"].map((r) => (
+                        <option key={r}>{r}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={String(editActive)}
+                      onChange={(e) => setEditActive(e.target.value === "true")}
+                      className="rounded-lg border border-[#dce5d9] bg-white px-2 py-1.5 text-xs font-semibold outline-none"
+                    >
+                      <option value="true">Active</option>
+                      <option value="false">Inactive</option>
+                    </select>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      disabled={busy === m.id}
+                      onClick={() => {
+                        onEdit(m.id, { name: editName, role: editRole, active: editActive });
+                        setEditingId(null);
+                      }}
+                      className="rounded-lg bg-green-600 px-3 py-1 text-[11px] font-bold text-white hover:bg-green-700 disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => setEditingId(null)}
+                      className="rounded-lg border border-gray-200 px-3 py-1 text-[11px] font-bold text-gray-500 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-100 text-sm font-bold text-purple-700">
+                    {m.name.charAt(0)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-[#173a2b] truncate">
+                      {m.name}
+                    </p>
+                    <p className="text-[11px] text-[#718176] truncate">
+                      {m.farm || "No farm info"}
+                    </p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span
+                        className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          m.role === "PRESIDENT"
+                            ? "bg-red-100 text-red-600"
+                            : m.role === "TREASURER"
+                              ? "bg-purple-100 text-purple-700"
+                              : "bg-green-100 text-green-700"
+                        }`}
+                      >
+                        {m.role}
+                      </span>
+                      {!m.active && (
+                        <span className="inline-block rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">
+                          Inactive
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => startEdit(m)}
+                    className="shrink-0 rounded-lg border border-[#dce5d9] p-1.5 text-[#718176] hover:bg-[#edf5df] transition"
+                  >
+                    <Pencil size={12} />
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -2147,10 +2295,14 @@ function LoansSection({
   items,
   expanded,
   onToggle,
+  onAction,
+  busy,
 }: {
   items: Loan[];
   expanded: boolean;
   onToggle: () => void;
+  onAction: (id: string, action: "approve" | "reject", reason?: string) => void;
+  busy: string | null;
 }) {
   const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
 
@@ -2171,7 +2323,7 @@ function LoansSection({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-semibold text-[#173a2b] truncate">
-                    {loan.borrower}
+                    {loan.borrower.name}
                   </p>
                   <span
                     className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${LOAN_STATUS_STYLE[loan.status] || ""}`}
@@ -2184,8 +2336,35 @@ function LoansSection({
                   {loan.due &&
                     ` · Due ${new Date(loan.due).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
                 </p>
+                {loan.purpose && (
+                  <p className="text-xs text-[#718176] mt-0.5">{loan.purpose}</p>
+                )}
+                {loan.rejectionReason && (
+                  <p className="text-xs text-red-600 mt-0.5">Reason: {loan.rejectionReason}</p>
+                )}
               </div>
             </div>
+            {loan.status === "PENDING" && (
+              <div className="flex gap-2 mt-2">
+                <button
+                  disabled={busy === loan.id}
+                  onClick={() => onAction(loan.id, "approve")}
+                  className="rounded-lg bg-green-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-green-700 transition disabled:opacity-50"
+                >
+                  Approve
+                </button>
+                <button
+                  disabled={busy === loan.id}
+                  onClick={() => {
+                    const reason = window.prompt("Enter rejection reason:");
+                    if (reason) onAction(loan.id, "reject", reason);
+                  }}
+                  className="rounded-lg border border-red-200 px-3 py-1.5 text-[11px] font-bold text-red-600 hover:bg-red-50 transition disabled:opacity-50"
+                >
+                  Reject
+                </button>
+              </div>
+            )}
           </div>
         ))
       ) : (
@@ -2309,12 +2488,41 @@ function SuppliesSection({
   items,
   expanded,
   onToggle,
+  onAddSupply,
+  onUpdateSupply,
+  onActionRequest,
+  busy,
 }: {
   items: Supply[];
   expanded: boolean;
   onToggle: () => void;
+  onAddSupply: (data: { productName: string; price: number; quantity: number }) => void;
+  onUpdateSupply: (id: string, data: { productName: string; price: number; quantity: number }) => void;
+  onActionRequest: (id: string, action: "approve" | "complete" | "reject", reason?: string) => void;
+  busy: string | null;
 }) {
   const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
+  const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [addName, setAddName] = useState("");
+  const [addPrice, setAddPrice] = useState("");
+  const [addQty, setAddQty] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editPrice, setEditPrice] = useState("");
+  const [editQty, setEditQty] = useState("");
+
+  function handleAdd() {
+    if (!addName.trim() || !addPrice || !addQty) return;
+    onAddSupply({ productName: addName.trim(), price: Number(addPrice), quantity: Number(addQty) });
+    setAddName(""); setAddPrice(""); setAddQty(""); setShowAdd(false);
+  }
+
+  function startEdit(s: Supply) {
+    setEditingId(s.id);
+    setEditName(s.name);
+    setEditPrice(String(s.price));
+    setEditQty(String(s.stock));
+  }
 
   return (
     <SectionCard
@@ -2322,36 +2530,288 @@ function SuppliesSection({
       count={items.length}
       expanded={expanded}
       onToggle={onToggle}
+      headerAction={
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowAdd(!showAdd); }}
+          className="rounded-lg bg-orange-500 p-1.5 text-white hover:bg-orange-600 transition"
+        >
+          <Plus size={14} />
+        </button>
+      }
     >
+      {showAdd && (
+        <div className="mb-3 rounded-xl border border-orange-200 bg-orange-50 p-3 space-y-2">
+          <input value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="Product name" className="w-full rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
+          <div className="flex gap-2">
+            <input value={addPrice} onChange={(e) => setAddPrice(e.target.value)} type="number" min="0" step="0.01" placeholder="Price" className="w-1/2 rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
+            <input value={addQty} onChange={(e) => setAddQty(e.target.value)} type="number" min="0" placeholder="Stock" className="w-1/2 rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleAdd} className="rounded-lg bg-orange-600 px-3 py-1 text-[11px] font-bold text-white hover:bg-orange-700">Add</button>
+            <button onClick={() => setShowAdd(false)} className="rounded-lg border border-gray-200 px-3 py-1 text-[11px] font-bold text-gray-500">Cancel</button>
+          </div>
+        </div>
+      )}
       {visible.length > 0 ? (
         visible.map((supply) => (
-          <div
-            key={supply.id}
-            className="flex items-center justify-between rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3"
-          >
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-[#173a2b] truncate">
-                {supply.name}
-              </p>
-              <p className="text-xs text-[#718176]">
-                ₱{supply.price.toLocaleString()} per unit
-              </p>
-            </div>
-            <span
-              className={`shrink-0 ml-3 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-                supply.stock === 0
-                  ? "bg-red-100 text-red-600"
-                  : supply.stock <= 30
-                    ? "bg-yellow-100 text-yellow-700"
-                    : "bg-green-100 text-green-700"
-              }`}
-            >
-              {supply.stock === 0 ? "Out of stock" : `${supply.stock} in stock`}
-            </span>
+          <div key={supply.id} className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3">
+            {editingId === supply.id ? (
+              <div className="space-y-2">
+                <input value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
+                <div className="flex gap-2">
+                  <input value={editPrice} onChange={(e) => setEditPrice(e.target.value)} type="number" min="0" step="0.01" className="w-1/2 rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
+                  <input value={editQty} onChange={(e) => setEditQty(e.target.value)} type="number" min="0" className="w-1/2 rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
+                </div>
+                <div className="flex gap-2">
+                  <button disabled={busy === supply.id} onClick={() => { onUpdateSupply(supply.id, { productName: editName, price: Number(editPrice), quantity: Number(editQty) }); setEditingId(null); }} className="rounded-lg bg-orange-600 px-3 py-1 text-[11px] font-bold text-white disabled:opacity-50">Save</button>
+                  <button onClick={() => setEditingId(null)} className="rounded-lg border border-gray-200 px-3 py-1 text-[11px] font-bold text-gray-500">Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-[#173a2b] truncate">{supply.name}</p>
+                    <p className="text-xs text-[#718176]">₱{supply.price.toLocaleString()} per unit</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${supply.stock === 0 ? "bg-red-100 text-red-600" : supply.stock <= 30 ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
+                      {supply.stock === 0 ? "Out of stock" : `${supply.stock} in stock`}
+                    </span>
+                    <button onClick={() => startEdit(supply)} className="shrink-0 rounded-lg border border-[#dce5d9] p-1.5 text-[#718176] hover:bg-[#edf5df] transition"><Pencil size={12} /></button>
+                  </div>
+                </div>
+                {supply.transactions.filter((t) => ["PENDING", "APPROVED"].includes(t.status)).length > 0 && (
+                  <div className="mt-2 space-y-1.5">
+                    {supply.transactions.filter((t) => ["PENDING", "APPROVED"].includes(t.status)).map((t) => (
+                      <div key={t.id} className="rounded-lg bg-white border border-[#eef2e8] px-3 py-2 text-xs">
+                        <div className="flex flex-wrap items-center justify-between gap-1">
+                          <span><b>{t.user.name}</b> requests {t.quantity} · {t.type}</span>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${t.status === "APPROVED" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>{t.status}</span>
+                        </div>
+                        <div className="flex gap-1.5 mt-1.5">
+                          {t.status === "PENDING" && (
+                            <>
+                              <button disabled={busy === t.id} onClick={() => onActionRequest(t.id, "approve")} className="rounded-md bg-green-600 px-2 py-0.5 text-[10px] font-bold text-white disabled:opacity-50">Approve</button>
+                              <button disabled={busy === t.id} onClick={() => { const r = window.prompt("Rejection reason:"); if (r) onActionRequest(t.id, "reject", r); }} className="rounded-md border border-red-200 px-2 py-0.5 text-[10px] font-bold text-red-600 disabled:opacity-50">Reject</button>
+                            </>
+                          )}
+                          {t.status === "APPROVED" && (
+                            <button disabled={busy === t.id} onClick={() => onActionRequest(t.id, "complete")} className="rounded-md bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white disabled:opacity-50">Complete</button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         ))
       ) : (
         <EmptyState text="No supplies found" />
+      )}
+    </SectionCard>
+  );
+}
+
+function getSecureProofUrl(receiptUrl: string | null) {
+  if (!receiptUrl) return null;
+  try {
+    const url = new URL(receiptUrl);
+    return url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function PaymentsSection({
+  items,
+  expanded,
+  onToggle,
+  onAction,
+  onImageClick,
+  busy,
+}: {
+  items: PaymentSubmission[];
+  expanded: boolean;
+  onToggle: () => void;
+  onAction: (id: string, action: "verify" | "reject", reason?: string) => void;
+  onImageClick: (src: string, alt: string) => void;
+  busy: string | null;
+}) {
+  const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
+
+  return (
+    <SectionCard
+      section="payments"
+      count={items.length}
+      expanded={expanded}
+      onToggle={onToggle}
+    >
+      {visible.length > 0 ? (
+        visible.map((payment) => {
+          const proofUrl = getSecureProofUrl(payment.receiptUrl);
+          const legacyReference = payment.referenceNo?.trim();
+          const hasEvidence = Boolean(proofUrl || legacyReference);
+          return (
+            <div key={payment.id} className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-[#173a2b] truncate">{payment.user.name}</p>
+                  <p className="text-xs text-[#718176]">₱{payment.amount.toLocaleString()} · {payment.loan?.name ?? "Loan payment"} · {new Date(payment.createdAt).toLocaleDateString()}</p>
+                </div>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${payment.status === "VERIFIED" ? "bg-green-100 text-green-700" : payment.status === "REJECTED" ? "bg-red-100 text-red-600" : "bg-yellow-100 text-yellow-700"}`}>{payment.status}</span>
+              </div>
+              {proofUrl ? (
+                <button onClick={() => onImageClick(proofUrl, "Proof of payment")} className="group mt-2 inline-block overflow-hidden rounded-xl border border-[#dce5d9]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={proofUrl} alt="Proof of payment" className="h-20 w-20 rounded-xl object-cover transition group-hover:opacity-80" />
+                </button>
+              ) : legacyReference ? (
+                <p className="mt-1.5 text-xs text-[#718176]">Ref: {legacyReference}</p>
+              ) : (
+                <p className="mt-1.5 text-xs font-semibold text-amber-700">Missing payment evidence</p>
+              )}
+              {payment.rejectionReason && <p className="mt-1 text-xs text-red-600">{payment.rejectionReason}</p>}
+              {payment.status === "PENDING" && (
+                <div className="flex gap-2 mt-2">
+                  <button disabled={busy === payment.id || !hasEvidence} onClick={() => onAction(payment.id, "verify")} className="rounded-lg bg-green-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-green-700 transition disabled:opacity-50">Verify</button>
+                  <button disabled={busy === payment.id} onClick={() => { const r = window.prompt("Rejection reason:"); if (r) onAction(payment.id, "reject", r); }} className="rounded-lg border border-red-200 px-3 py-1.5 text-[11px] font-bold text-red-600 hover:bg-red-50 transition disabled:opacity-50">Reject</button>
+                </div>
+              )}
+            </div>
+          );
+        })
+      ) : (
+        <EmptyState text="No payment submissions found" />
+      )}
+    </SectionCard>
+  );
+}
+
+function ReportsSection({
+  items,
+  expanded,
+  onToggle,
+  onGenerate,
+  busy,
+}: {
+  items: ReportRecord[];
+  expanded: boolean;
+  onToggle: () => void;
+  onGenerate: (type: string, title?: string) => void;
+  busy: string | null;
+}) {
+  const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
+  const [reportType, setReportType] = useState("SUMMARY");
+  const [reportTitle, setReportTitle] = useState("");
+
+  return (
+    <SectionCard
+      section="reports"
+      count={items.length}
+      expanded={expanded}
+      onToggle={onToggle}
+    >
+      <div className="mb-3 rounded-xl border border-indigo-200 bg-indigo-50 p-3 space-y-2">
+        <div className="flex gap-2">
+          <select value={reportType} onChange={(e) => setReportType(e.target.value)} className="rounded-lg border border-[#dce5d9] bg-white px-2 py-1.5 text-xs font-semibold outline-none">
+            {["SUMMARY", "MEMBERS", "LOANS", "PAYMENTS", "SUPPLIES", "MACHINES", "AUDIT"].map((t) => <option key={t}>{t}</option>)}
+          </select>
+          <input value={reportTitle} onChange={(e) => setReportTitle(e.target.value)} placeholder="Optional title" className="flex-1 rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
+        </div>
+        <button disabled={busy === "report"} onClick={() => { onGenerate(reportType, reportTitle.trim() || undefined); setReportTitle(""); }} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700 transition disabled:opacity-50">Generate Report</button>
+      </div>
+      {visible.length > 0 ? (
+        visible.map((report) => (
+          <div key={report.id} className="flex items-center justify-between rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-[#173a2b] truncate">{report.title}</p>
+              <p className="text-xs text-[#718176]">{report.type} · {new Date(report.createdAt).toLocaleDateString()}</p>
+            </div>
+          </div>
+        ))
+      ) : (
+        <EmptyState text="No reports generated yet" />
+      )}
+    </SectionCard>
+  );
+}
+
+function AnnouncementsSection({
+  items,
+  expanded,
+  onToggle,
+  onCreate,
+  onTogglePublish,
+  onDelete,
+  busy,
+}: {
+  items: PostRecord[];
+  expanded: boolean;
+  onToggle: () => void;
+  onCreate: (title: string, content: string, published: boolean) => void;
+  onTogglePublish: (id: string, published: boolean) => void;
+  onDelete: (id: string) => void;
+  busy: string | null;
+}) {
+  const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
+  const [showForm, setShowForm] = useState(false);
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [publishNow, setPublishNow] = useState(false);
+
+  function handleCreate() {
+    if (!title.trim()) return;
+    onCreate(title.trim(), content.trim(), publishNow);
+    setTitle(""); setContent(""); setPublishNow(false); setShowForm(false);
+  }
+
+  return (
+    <SectionCard
+      section="announcements"
+      count={items.length}
+      expanded={expanded}
+      onToggle={onToggle}
+      headerAction={
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowForm(!showForm); }}
+          className="rounded-lg bg-pink-500 p-1.5 text-white hover:bg-pink-600 transition"
+        >
+          <Plus size={14} />
+        </button>
+      }
+    >
+      {showForm && (
+        <div className="mb-3 rounded-xl border border-pink-200 bg-pink-50 p-3 space-y-2">
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Announcement title" className="w-full rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
+          <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Write the announcement…" rows={3} className="w-full rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none resize-y" />
+          <label className="flex items-center gap-2 text-xs font-semibold text-[#496558]"><input type="checkbox" checked={publishNow} onChange={(e) => setPublishNow(e.target.checked)} /> Publish immediately</label>
+          <div className="flex gap-2">
+            <button onClick={handleCreate} className="rounded-lg bg-pink-600 px-3 py-1 text-[11px] font-bold text-white hover:bg-pink-700">Save</button>
+            <button onClick={() => setShowForm(false)} className="rounded-lg border border-gray-200 px-3 py-1 text-[11px] font-bold text-gray-500">Cancel</button>
+          </div>
+        </div>
+      )}
+      {visible.length > 0 ? (
+        visible.map((post) => (
+          <div key={post.id} className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-[#173a2b] truncate">{post.title}</p>
+                <p className="text-xs text-[#718176] truncate">{post.content || "No content"}</p>
+              </div>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${post.published ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{post.published ? "Published" : "Draft"}</span>
+            </div>
+            <div className="flex gap-2 mt-2">
+              <button disabled={busy === post.id} onClick={() => onTogglePublish(post.id, post.published)} className="rounded-lg border border-[#dce5d9] px-3 py-1 text-[11px] font-bold text-[#315646] hover:bg-[#edf5df] disabled:opacity-50">{post.published ? "Unpublish" : "Publish"}</button>
+              <button disabled={busy === post.id} onClick={() => { if (window.confirm("Delete this announcement?")) onDelete(post.id); }} className="rounded-lg border border-red-200 px-3 py-1 text-[11px] font-bold text-red-600 hover:bg-red-50 disabled:opacity-50">Delete</button>
+            </div>
+          </div>
+        ))
+      ) : (
+        <EmptyState text="No announcements found" />
       )}
     </SectionCard>
   );
@@ -2366,8 +2826,11 @@ export default function SecretaryDashboard() {
     applications: false,
     members: false,
     loans: false,
+    payments: false,
     machines: false,
     supplies: false,
+    reports: false,
+    announcements: false,
   });
   const [activeTab, setActiveTab] = useState<Section>("applications");
 
@@ -2383,6 +2846,7 @@ export default function SecretaryDashboard() {
   const [viewRejectedRequest, setViewRejectedRequest] =
     useState<MachineRequestInfo | null>(null);
   const [imageModal, setImageModal] = useState<{ src: string; alt: string } | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
   async function fetchData() {
     try {
@@ -2510,6 +2974,212 @@ export default function SecretaryDashboard() {
     }
   }
 
+  async function handleLoanAction(loanId: string, action: "approve" | "reject", reason?: string) {
+    setBusy(loanId);
+    try {
+      const res = await fetch(`/api/secretary/loans/${loanId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, reason }),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        await fetchData();
+      } else {
+        alert(result.error || `Failed to ${action} loan`);
+      }
+    } catch {
+      alert(`Failed to ${action} loan`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handlePaymentAction(paymentId: string, action: "verify" | "reject", reason?: string) {
+    setBusy(paymentId);
+    try {
+      const res = await fetch(`/api/secretary/payments/${paymentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, reason }),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        await fetchData();
+      } else {
+        alert(result.error || `Failed to ${action} payment`);
+      }
+    } catch {
+      alert(`Failed to ${action} payment`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleMemberEdit(memberId: string, data: { name: string; role: string; active: boolean }) {
+    setBusy(memberId);
+    try {
+      const res = await fetch(`/api/admin/members/${memberId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        await fetchData();
+      } else {
+        alert(result.error || "Failed to update member");
+      }
+    } catch {
+      alert("Failed to update member");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleAddSupply(data: { productName: string; price: number; quantity: number }) {
+    setBusy("supply-add");
+    try {
+      const res = await fetch("/api/admin/supplies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        await fetchData();
+      } else {
+        alert(result.error || "Failed to add supply");
+      }
+    } catch {
+      alert("Failed to add supply");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleUpdateSupply(supplyId: string, data: { productName: string; price: number; quantity: number }) {
+    setBusy(supplyId);
+    try {
+      const res = await fetch(`/api/admin/supplies/${supplyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        await fetchData();
+      } else {
+        alert(result.error || "Failed to update supply");
+      }
+    } catch {
+      alert("Failed to update supply");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleSupplyRequestAction(requestId: string, action: "approve" | "complete" | "reject", reason?: string) {
+    setBusy(requestId);
+    try {
+      const res = await fetch(`/api/admin/supply-requests/${requestId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, reason }),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        await fetchData();
+      } else {
+        alert(result.error || `Failed to ${action} request`);
+      }
+    } catch {
+      alert(`Failed to ${action} request`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleGenerateReport(type: string, title?: string) {
+    setBusy("report");
+    try {
+      const res = await fetch("/api/admin/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, title }),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        await fetchData();
+      } else {
+        alert(result.error || "Failed to generate report");
+      }
+    } catch {
+      alert("Failed to generate report");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleCreatePost(title: string, content: string, published: boolean) {
+    setBusy("post-create");
+    try {
+      const res = await fetch("/api/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, content, published }),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        await fetchData();
+      } else {
+        alert(result.error || "Failed to create announcement");
+      }
+    } catch {
+      alert("Failed to create announcement");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleTogglePublish(postId: string, currentPublished: boolean) {
+    setBusy(postId);
+    try {
+      const res = await fetch(`/api/posts/${postId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ published: !currentPublished }),
+      });
+      if (res.ok) {
+        await fetchData();
+      } else {
+        const result = await res.json();
+        alert(result.error || "Failed to update announcement");
+      }
+    } catch {
+      alert("Failed to update announcement");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleDeletePost(postId: string) {
+    setBusy(postId);
+    try {
+      const res = await fetch(`/api/posts/${postId}`, { method: "DELETE" });
+      if (res.ok) {
+        await fetchData();
+      } else {
+        const result = await res.json();
+        alert(result.error || "Failed to delete announcement");
+      }
+    } catch {
+      alert("Failed to delete announcement");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#f7f7f2] flex flex-col items-center justify-center">
@@ -2568,6 +3238,8 @@ export default function SecretaryDashboard() {
           items={data?.members || []}
           expanded={expandedSections.members}
           onToggle={() => toggleSection("members")}
+          onEdit={handleMemberEdit}
+          busy={busy}
         />
       ),
     },
@@ -2578,6 +3250,21 @@ export default function SecretaryDashboard() {
           items={data?.loans || []}
           expanded={expandedSections.loans}
           onToggle={() => toggleSection("loans")}
+          onAction={handleLoanAction}
+          busy={busy}
+        />
+      ),
+    },
+    {
+      key: "payments",
+      component: (
+        <PaymentsSection
+          items={data?.payments || []}
+          expanded={expandedSections.payments}
+          onToggle={() => toggleSection("payments")}
+          onAction={handlePaymentAction}
+          onImageClick={(src, alt) => setImageModal({ src, alt })}
+          busy={busy}
         />
       ),
     },
@@ -2601,6 +3288,36 @@ export default function SecretaryDashboard() {
           items={data?.supplies || []}
           expanded={expandedSections.supplies}
           onToggle={() => toggleSection("supplies")}
+          onAddSupply={handleAddSupply}
+          onUpdateSupply={handleUpdateSupply}
+          onActionRequest={handleSupplyRequestAction}
+          busy={busy}
+        />
+      ),
+    },
+    {
+      key: "reports",
+      component: (
+        <ReportsSection
+          items={data?.reports || []}
+          expanded={expandedSections.reports}
+          onToggle={() => toggleSection("reports")}
+          onGenerate={handleGenerateReport}
+          busy={busy}
+        />
+      ),
+    },
+    {
+      key: "announcements",
+      component: (
+        <AnnouncementsSection
+          items={data?.posts || []}
+          expanded={expandedSections.announcements}
+          onToggle={() => toggleSection("announcements")}
+          onCreate={handleCreatePost}
+          onTogglePublish={handleTogglePublish}
+          onDelete={handleDeletePost}
+          busy={busy}
         />
       ),
     },
@@ -2619,7 +3336,7 @@ export default function SecretaryDashboard() {
             Secretary Dashboard
           </h1>
           <p className="mt-1 text-sm text-[#718176]">
-            Manage applications, members, loans, machines, and supplies
+            Manage applications, members, loans, payments, machines, supplies, reports, and announcements
           </p>
         </div>
 

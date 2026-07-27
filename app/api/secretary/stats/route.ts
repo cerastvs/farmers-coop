@@ -53,6 +53,9 @@ export async function GET() {
       loans,
       machines,
       supplies,
+      payments,
+      reports,
+      posts,
     ] = await Promise.all([
       prisma.application.findMany({
         orderBy: { createdAt: "desc" },
@@ -72,7 +75,8 @@ export async function GET() {
       prisma.loan.findMany({
         orderBy: { createdAt: "desc" },
         include: {
-          user: { select: { name: true } },
+          user: { select: { id: true, name: true, username: true } },
+          payments: { select: { amount: true } },
         },
       }),
 
@@ -115,6 +119,34 @@ export async function GET() {
 
       prisma.supply.findMany({
         orderBy: { productName: "asc" },
+        include: {
+          transactions: {
+            orderBy: { createdAt: "desc" },
+            include: {
+              user: { select: { id: true, name: true, username: true } },
+            },
+          },
+        },
+      }),
+
+      prisma.payment.findMany({
+        orderBy: { createdAt: "desc" },
+        include: {
+          user: { select: { id: true, name: true, username: true } },
+          loan: { select: { id: true, name: true } },
+        },
+      }),
+
+      prisma.report.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      }),
+
+      prisma.post.findMany({
+        orderBy: [{ title: "asc" }, { id: "asc" }],
+        include: {
+          author: { select: { id: true, name: true, username: true } },
+        },
       }),
     ]);
 
@@ -153,20 +185,33 @@ export async function GET() {
       members: members.map((m) => ({
         id: m.id,
         name: m.name || "Unknown",
+        username: m.username,
         role: m.role,
-        joined: m.createdAt,
+        active: m.active,
+        joined: m.createdAt.toISOString(),
         farm: m.applications[0]
           ? `${m.applications[0].farmSize} ha - ${m.applications[0].cropType}`
           : null,
       })),
-      loans: loans.map((l) => ({
-        id: l.id,
-        borrower: l.user.name || "Unknown",
-        name: l.name,
-        amount: Number(l.amount),
-        status: l.status,
-        due: l.due,
-      })),
+      loans: loans.map((l) => {
+        const paid = l.payments.reduce(
+          (sum, p) => sum + Number(p.amount),
+          0,
+        );
+        return {
+          id: l.id,
+          borrower: { name: l.user.name || "Unknown", username: l.user.username },
+          name: l.name,
+          amount: Number(l.amount),
+          remainingBalance: Math.max(Number(l.amount) - paid, 0),
+          termMonths: l.termMonths,
+          purpose: l.purpose,
+          status: String(l.status),
+          rejectionReason: l.rejectionReason,
+          due: l.due?.toISOString() ?? null,
+          createdAt: l.createdAt.toISOString(),
+        };
+      }),
       machines: machines.map((m) => {
         const currentUsers = m.requests.filter(isCurrentlyInUse);
         return {
@@ -208,6 +253,38 @@ export async function GET() {
         name: s.productName,
         stock: s.quantity,
         price: Number(s.price),
+        transactions: s.transactions.map((t) => ({
+          id: t.id,
+          quantity: t.quantity,
+          totalPrice: Number(t.totalPrice),
+          type: t.type,
+          status: String(t.status),
+          rejectionReason: t.rejectionReason,
+          user: { name: t.user.name || "Unknown", username: t.user.username },
+        })),
+      })),
+      payments: payments.map((p) => ({
+        id: p.id,
+        user: { name: p.user.name || "Unknown", username: p.user.username },
+        loan: p.loan ? { name: p.loan.name } : null,
+        amount: Number(p.amount),
+        receiptUrl: p.receiptUrl,
+        referenceNo: p.referenceNo,
+        status: String(p.status),
+        rejectionReason: p.rejectionReason,
+        createdAt: p.createdAt.toISOString(),
+      })),
+      reports: reports.map((r) => ({
+        id: r.id,
+        title: r.title,
+        type: String(r.type),
+        createdAt: r.createdAt.toISOString(),
+      })),
+      posts: posts.map((p) => ({
+        id: p.id,
+        title: p.title,
+        content: p.content,
+        published: p.published,
       })),
     });
   } catch (error) {

@@ -65,22 +65,13 @@ export function DashboardHeader() {
           >
             Edit Profile
           </Link>
-          {["PRESIDENT", "TREASURER", "SECRETARY"].includes(userRole ?? "") && (
-            <Link
-              href="/admin"
-              onClick={() => setMenuOpen(false)}
-              className="block w-full px-4 py-3 text-left text-sm font-semibold text-[#315646] transition-colors hover:bg-[#f0f7eb]"
-            >
-              Administration
-            </Link>
-          )}
           {userRole === "SECRETARY" && (
             <Link
               href="/dashboard/secretary"
               onClick={() => setMenuOpen(false)}
               className="block w-full px-4 py-3 text-left text-sm font-semibold text-[#315646] transition-colors hover:bg-[#f0f7eb]"
             >
-              Membership Applications
+              Secretary Dashboard
             </Link>
           )}
           <form action={logout}>

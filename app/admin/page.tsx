@@ -49,6 +49,7 @@ interface Supply {
   productName: string;
   price: number;
   quantity: number;
+  loanLimitPerHectare: number | null;
   transactions: SupplyRequest[];
 }
 
@@ -326,6 +327,7 @@ export default function AdminPage() {
                       productName: form.get("productName"),
                       price: Number(form.get("price")),
                       quantity: Number(form.get("quantity")),
+                      loanLimitPerHectare: form.get("loanLimitPerHectare") ? Number(form.get("loanLimitPerHectare")) : null,
                     }, "Supply added.", "POST");
                     formElement.reset();
                   }}
@@ -333,11 +335,12 @@ export default function AdminPage() {
                   <input className={fieldClass} name="productName" required minLength={2} placeholder="Product name" />
                   <input className={fieldClass} name="price" required type="number" min="0" step="0.01" placeholder="Price" />
                   <input className={fieldClass} name="quantity" required type="number" min="0" placeholder="Stock" />
+                  <input className={fieldClass} name="loanLimitPerHectare" type="number" min="0" placeholder="Loan limit per hectare (optional)" />
                   <button disabled={busy === "new-supply"} className={buttonClass}>Add item</button>
                 </form>
                 <RecordList empty="No inventory found.">
                   {supplies.map((supply) => (
-                    <Record key={supply.id} title={supply.productName} meta={`₱${supply.price.toLocaleString()} · ${supply.quantity} in stock`}>
+                    <Record key={supply.id} title={supply.productName} meta={`₱${supply.price.toLocaleString()} · ${supply.quantity} in stock${supply.loanLimitPerHectare != null ? ` · limit ${supply.loanLimitPerHectare}/ha` : ""}`}>
                       <form
                         className="flex flex-wrap gap-2"
                         onSubmit={(event: FormEvent<HTMLFormElement>) => {
@@ -347,12 +350,14 @@ export default function AdminPage() {
                             productName: form.get("productName"),
                             price: Number(form.get("price")),
                             quantity: Number(form.get("quantity")),
+                            loanLimitPerHectare: form.get("loanLimitPerHectare") ? Number(form.get("loanLimitPerHectare")) : null,
                           }, "Inventory updated.");
                         }}
                       >
                         <input className={`${fieldClass} min-w-44 flex-1`} name="productName" defaultValue={supply.productName} required />
                         <input aria-label="Price" className={`${fieldClass} w-28`} name="price" type="number" min="0" step="0.01" defaultValue={supply.price} required />
                         <input aria-label="Quantity" className={`${fieldClass} w-24`} name="quantity" type="number" min="0" defaultValue={supply.quantity} required />
+                        <input aria-label="Loan limit per hectare" className={`${fieldClass} w-40`} name="loanLimitPerHectare" type="number" min="0" defaultValue={supply.loanLimitPerHectare ?? ""} placeholder="Limit/ha" />
                         <button disabled={busy === supply.id} className={secondaryButton}>Update</button>
                       </form>
                       {supply.transactions.filter((request) => ["PENDING", "APPROVED"].includes(request.status)).map((request) => (

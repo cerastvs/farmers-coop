@@ -123,12 +123,13 @@ model Loan {
 }
 
 model Supply {
-  id           String              @id @default(uuid())
-  productName  String
-  price        Decimal             @db.Decimal(10, 2)
-  quantity     Int
-  createdAt    DateTime            @default(now())
-  transactions SupplyTransaction[]
+  id                      String              @id @default(uuid())
+  productName             String
+  price                   Decimal             @db.Decimal(10, 2)
+  quantity                Int
+  loanLimitPerHectare     Int?
+  createdAt               DateTime            @default(now())
+  transactions            SupplyTransaction[]
 }
 
 model Log {

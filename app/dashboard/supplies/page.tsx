@@ -10,6 +10,7 @@ interface Supply {
   productName: string;
   price: number;
   quantity: number;
+  loanLimitPerHectare: number | null;
 }
 
 interface SupplyRequest {
@@ -108,6 +109,9 @@ export default function SuppliesPage() {
                     <div>
                       <h3 className="font-bold text-gray-900">{supply.productName}</h3>
                       <p className="text-sm text-gray-500">{supply.quantity} in stock</p>
+                      {supply.loanLimitPerHectare != null && (
+                        <p className="text-xs text-orange-600 font-medium">Loan limit: {supply.loanLimitPerHectare} per hectare</p>
+                      )}
                     </div>
                     <p className="font-bold text-green-700">₱{supply.price.toLocaleString()}</p>
                   </div>

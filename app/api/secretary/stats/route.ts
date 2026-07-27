@@ -253,6 +253,7 @@ export async function GET() {
         name: s.productName,
         stock: s.quantity,
         price: Number(s.price),
+        loanLimitPerHectare: s.loanLimitPerHectare,
         transactions: s.transactions.map((t) => ({
           id: t.id,
           quantity: t.quantity,

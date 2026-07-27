@@ -15,6 +15,7 @@ const SupplySchema = z.object({
   productName: z.string().trim().min(2).max(100),
   price: z.number().nonnegative().max(99_999_999.99).multipleOf(0.01),
   quantity: z.number().int().nonnegative().max(2_147_483_647),
+  loanLimitPerHectare: z.number().int().nonnegative().max(10_000).nullable().optional(),
 }).strict();
 
 export async function PATCH(

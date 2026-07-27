@@ -72,6 +72,45 @@ export async function POST(req: NextRequest) {
             400,
             "Requested quantity exceeds available stock",
           );
+
+        }
+
+        if (
+          result.data.type === SupplyTransactionType.LOAN &&
+          supply.loanLimitPerHectare != null
+        ) {
+          const application = await tx.application.findFirst({
+            where: { userId: actor.userId },
+            select: { farmSize: true },
+          });
+          if (!application) {
+            throw new ApiError(400, "No application on file — cannot verify farm size");
+          }
+          const maxAllowed = Math.floor(application.farmSize * supply.loanLimitPerHectare);
+
+          const existingLoanQty = await tx.supplyTransaction.aggregate({
+            where: {
+              userId: actor.userId,
+              supplyId: supply.id,
+              type: SupplyTransactionType.LOAN,
+              status: { in: [TransactionStatus.PENDING, TransactionStatus.APPROVED] },
+            },
+            _sum: { quantity: true },
+          });
+          const alreadyLoaned = existingLoanQty._sum.quantity ?? 0;
+          const remaining = maxAllowed - alreadyLoaned;
+          if (remaining <= 0) {
+            throw new ApiError(
+              400,
+              `Loan limit reached — you can borrow at most ${maxAllowed} units of ${supply.productName} for your ${application.farmSize} ha farm`,
+            );
+          }
+          if (result.data.quantity > remaining) {
+            throw new ApiError(
+              400,
+              `You can only borrow ${remaining} more units of ${supply.productName} (limit: ${supply.loanLimitPerHectare} per ha × ${application.farmSize} ha = ${maxAllowed} total, ${alreadyLoaned} already loaned)`,
+            );
+          }
         }
 
         const duplicate = await tx.supplyTransaction.findFirst({

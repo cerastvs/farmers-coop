@@ -109,6 +109,7 @@ interface Supply {
   name: string;
   stock: number;
   price: number;
+  loanLimitPerHectare: number | null;
   transactions: SupplyRequest[];
 }
 
@@ -2496,8 +2497,8 @@ function SuppliesSection({
   items: Supply[];
   expanded: boolean;
   onToggle: () => void;
-  onAddSupply: (data: { productName: string; price: number; quantity: number }) => void;
-  onUpdateSupply: (id: string, data: { productName: string; price: number; quantity: number }) => void;
+  onAddSupply: (data: { productName: string; price: number; quantity: number; loanLimitPerHectare: number | null }) => void;
+  onUpdateSupply: (id: string, data: { productName: string; price: number; quantity: number; loanLimitPerHectare: number | null }) => void;
   onActionRequest: (id: string, action: "approve" | "complete" | "reject", reason?: string) => void;
   busy: string | null;
 }) {
@@ -2507,14 +2508,21 @@ function SuppliesSection({
   const [addName, setAddName] = useState("");
   const [addPrice, setAddPrice] = useState("");
   const [addQty, setAddQty] = useState("");
+  const [addLimit, setAddLimit] = useState("");
   const [editName, setEditName] = useState("");
   const [editPrice, setEditPrice] = useState("");
   const [editQty, setEditQty] = useState("");
+  const [editLimit, setEditLimit] = useState("");
 
   function handleAdd() {
     if (!addName.trim() || !addPrice || !addQty) return;
-    onAddSupply({ productName: addName.trim(), price: Number(addPrice), quantity: Number(addQty) });
-    setAddName(""); setAddPrice(""); setAddQty(""); setShowAdd(false);
+    onAddSupply({
+      productName: addName.trim(),
+      price: Number(addPrice),
+      quantity: Number(addQty),
+      loanLimitPerHectare: addLimit ? Number(addLimit) : null,
+    });
+    setAddName(""); setAddPrice(""); setAddQty(""); setAddLimit(""); setShowAdd(false);
   }
 
   function startEdit(s: Supply) {
@@ -2522,6 +2530,7 @@ function SuppliesSection({
     setEditName(s.name);
     setEditPrice(String(s.price));
     setEditQty(String(s.stock));
+    setEditLimit(s.loanLimitPerHectare != null ? String(s.loanLimitPerHectare) : "");
   }
 
   return (
@@ -2546,6 +2555,7 @@ function SuppliesSection({
             <input value={addPrice} onChange={(e) => setAddPrice(e.target.value)} type="number" min="0" step="0.01" placeholder="Price" className="w-1/2 rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
             <input value={addQty} onChange={(e) => setAddQty(e.target.value)} type="number" min="0" placeholder="Stock" className="w-1/2 rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
           </div>
+          <input value={addLimit} onChange={(e) => setAddLimit(e.target.value)} type="number" min="0" placeholder="Loan limit per hectare (optional)" className="w-full rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
           <div className="flex gap-2">
             <button onClick={handleAdd} className="rounded-lg bg-orange-600 px-3 py-1 text-[11px] font-bold text-white hover:bg-orange-700">Add</button>
             <button onClick={() => setShowAdd(false)} className="rounded-lg border border-gray-200 px-3 py-1 text-[11px] font-bold text-gray-500">Cancel</button>
@@ -2562,8 +2572,9 @@ function SuppliesSection({
                   <input value={editPrice} onChange={(e) => setEditPrice(e.target.value)} type="number" min="0" step="0.01" className="w-1/2 rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
                   <input value={editQty} onChange={(e) => setEditQty(e.target.value)} type="number" min="0" className="w-1/2 rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
                 </div>
+                <input value={editLimit} onChange={(e) => setEditLimit(e.target.value)} type="number" min="0" placeholder="Loan limit per hectare (optional)" className="w-full rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
                 <div className="flex gap-2">
-                  <button disabled={busy === supply.id} onClick={() => { onUpdateSupply(supply.id, { productName: editName, price: Number(editPrice), quantity: Number(editQty) }); setEditingId(null); }} className="rounded-lg bg-orange-600 px-3 py-1 text-[11px] font-bold text-white disabled:opacity-50">Save</button>
+                  <button disabled={busy === supply.id} onClick={() => { onUpdateSupply(supply.id, { productName: editName, price: Number(editPrice), quantity: Number(editQty), loanLimitPerHectare: editLimit ? Number(editLimit) : null }); setEditingId(null); }} className="rounded-lg bg-orange-600 px-3 py-1 text-[11px] font-bold text-white disabled:opacity-50">Save</button>
                   <button onClick={() => setEditingId(null)} className="rounded-lg border border-gray-200 px-3 py-1 text-[11px] font-bold text-gray-500">Cancel</button>
                 </div>
               </div>
@@ -2573,6 +2584,9 @@ function SuppliesSection({
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-[#173a2b] truncate">{supply.name}</p>
                     <p className="text-xs text-[#718176]">₱{supply.price.toLocaleString()} per unit</p>
+                    {supply.loanLimitPerHectare != null && (
+                      <p className="text-[11px] text-orange-600 font-medium mt-0.5">Loan limit: {supply.loanLimitPerHectare} per ha</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${supply.stock === 0 ? "bg-red-100 text-red-600" : supply.stock <= 30 ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
@@ -3037,7 +3051,7 @@ export default function SecretaryDashboard() {
     }
   }
 
-  async function handleAddSupply(data: { productName: string; price: number; quantity: number }) {
+  async function handleAddSupply(data: { productName: string; price: number; quantity: number; loanLimitPerHectare: number | null }) {
     setBusy("supply-add");
     try {
       const res = await fetch("/api/admin/supplies", {
@@ -3058,7 +3072,7 @@ export default function SecretaryDashboard() {
     }
   }
 
-  async function handleUpdateSupply(supplyId: string, data: { productName: string; price: number; quantity: number }) {
+  async function handleUpdateSupply(supplyId: string, data: { productName: string; price: number; quantity: number; loanLimitPerHectare: number | null }) {
     setBusy(supplyId);
     try {
       const res = await fetch(`/api/admin/supplies/${supplyId}`, {

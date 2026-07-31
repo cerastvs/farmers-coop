@@ -16,6 +16,7 @@ import {
   X,
   XCircle,
 } from "lucide-react";
+import { BookedDate, BookingCalendar, todayISO } from "../components/BookingCalendar";
 
 type MemberApplication = {
   fullName: string;
@@ -85,6 +86,7 @@ type MachineCatalog = {
   name: string;
   description: string | null;
   imageUrl: string | null;
+  bookedDates: BookedDate[];
 };
 
 type SupplyCatalog = {
@@ -235,6 +237,7 @@ function ModalShell({
   onSubmit,
   children,
   submitLabel,
+  submitDisabled,
 }: {
   title: string;
   subtitle: string;
@@ -245,6 +248,7 @@ function ModalShell({
   onSubmit: () => void;
   children: React.ReactNode;
   submitLabel: string;
+  submitDisabled?: boolean;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
@@ -279,7 +283,7 @@ function ModalShell({
           )}
           <button
             type="submit"
-            disabled={busy}
+            disabled={busy || submitDisabled}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1b5e3b] py-3 text-sm font-bold text-white transition-all hover:bg-[#15503a] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy && <Loader2 size={15} className="animate-spin" />}
@@ -414,7 +418,24 @@ function MachineModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const selectedMachine = machines.find((m) => m.id === machineId);
+  const bookedDates = selectedMachine?.bookedDates ?? [];
+
+  const hasDateConflict = Boolean(
+    startDate &&
+      endDate &&
+      bookedDates.some((bd) => {
+        const bdStart = bd.startDate.split("T")[0];
+        const bdEnd = bd.endDate.split("T")[0];
+        return startDate <= bdEnd && endDate >= bdStart;
+      }),
+  );
+
   async function handleSubmit() {
+    if (hasDateConflict) {
+      setError("Selected dates overlap with an existing booking");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -444,6 +465,7 @@ function MachineModal({
       onClose={onClose}
       onSubmit={handleSubmit}
       submitLabel="Reserve Machine"
+      submitDisabled={hasDateConflict}
     >
       <div>
         <label className={labelClass}>Machine</label>
@@ -453,16 +475,34 @@ function MachineModal({
           ))}
         </select>
       </div>
+      <div>
+        <p className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-[#5a7267]">
+          Unavailable dates
+        </p>
+        <BookingCalendar bookedDates={bookedDates} myRequests={[]} startDate={startDate} endDate={endDate} />
+        <p className="mt-1.5 text-[10px] text-[#5a7267]">
+          Red and orange dates are already booked. Selected dates that conflict with an existing booking are marked.
+        </p>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={labelClass}>Start date</label>
-          <input className={inputClass} type="date" required value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          <input className={inputClass} type="date" min={todayISO()} required value={startDate} onChange={(e) => {
+            setStartDate(e.target.value);
+            if (endDate && e.target.value > endDate) setEndDate("");
+          }} />
         </div>
         <div>
           <label className={labelClass}>End date</label>
-          <input className={inputClass} type="date" required value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          <input className={inputClass} type="date" min={startDate || todayISO()} required value={endDate} onChange={(e) => setEndDate(e.target.value)} />
         </div>
       </div>
+      {hasDateConflict && (
+        <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-700 ring-1 ring-red-200">
+          <AlertTriangle size={14} className="shrink-0" />
+          Selected dates overlap with an existing booking
+        </div>
+      )}
       <ContextFields value={context} onChange={setContext} />
     </ModalShell>
   );
@@ -875,11 +915,12 @@ export default function AdminActionsPanel({ onDone }: { onDone?: () => void }) {
       fetch("/api/supplies").then((r) => r.json()),
     ]);
     setCatalogs({
-      machines: machineRes.machines?.map((m: MachineCatalog & { bookedDates?: unknown[] }) => ({
+      machines: machineRes.machines?.map((m: MachineCatalog) => ({
         id: m.id,
         name: m.name,
         description: m.description,
         imageUrl: m.imageUrl,
+        bookedDates: m.bookedDates ?? [],
       })) ?? [],
       supplies: supplyRes.supplies ?? [],
     });

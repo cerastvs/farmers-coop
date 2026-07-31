@@ -275,6 +275,14 @@ const SECTION_META: Record<
 
 const VISIBLE_COUNT = 3;
 
+const PENDING_MACHINE_STATUSES = ["QUEUED", "RETURN_PENDING", "OVERDUE"] as const;
+
+function hasPendingMachineAction(m: Machine) {
+  return m.requests.some((r) =>
+    (PENDING_MACHINE_STATUSES as readonly string[]).includes(r.status),
+  );
+}
+
 function SectionCard({
   section,
   count,
@@ -341,6 +349,42 @@ function EmptyState({ text }: { text: string }) {
     <div className="rounded-xl border border-dashed border-[#d5ddd0] bg-[#fafdf7] p-6 text-center text-xs text-[#718176]">
       {text}
     </div>
+  );
+}
+
+function PendingOnlyToggle({
+  active,
+  count,
+  onToggle,
+}: {
+  active: boolean;
+  count: number;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold transition-all active:scale-[0.98] ${
+        active
+          ? "bg-red-50 text-red-600 ring-1 ring-red-200"
+          : "bg-white text-[#5a7267] ring-1 ring-[#e2ebe6] hover:bg-[#f0f7eb]"
+      }`}
+      title={active ? "Show all items" : "Show only items awaiting action"}
+    >
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${active ? "bg-red-500" : "bg-[#c4d2c6]"}`}
+      />
+      {active ? "Showing pending" : "Pending only"}
+      {count > 0 && (
+        <span
+          className={`rounded-full px-1.5 py-px ${
+            active ? "bg-red-500 text-white" : "bg-[#eef2e8] text-[#718176]"
+          }`}
+        >
+          {count > 99 ? "99+" : count}
+        </span>
+      )}
+    </button>
   );
 }
 
@@ -2311,12 +2355,14 @@ function LoansSection({
   onToggle,
   onAction,
   busy,
+  pendingOnly = false,
 }: {
   items: Loan[];
   expanded: boolean;
   onToggle: () => void;
   onAction: (id: string, action: "approve" | "reject", reason?: string) => void;
   busy: string | null;
+  pendingOnly?: boolean;
 }) {
   const [loanType, setLoanType] = useState<"SUPPLY" | "MONEY">("MONEY");
   const [loanTab, setLoanTab] = useState<"requests" | "payments" | "overdue">("requests");
@@ -2330,7 +2376,7 @@ function LoansSection({
     (l) => l.status === "ACTIVE" && l.due && new Date(l.due) < now,
   );
 
-  const activeLoans = loanTab === "requests" ? requests : loanTab === "payments" ? payments : overdue;
+  const activeLoans = pendingOnly ? requests : loanTab === "requests" ? requests : loanTab === "payments" ? payments : overdue;
 
   const TAB_STYLE = {
     requests: "bg-yellow-100 text-yellow-700",
@@ -2368,19 +2414,21 @@ function LoansSection({
         </button>
       </div>
 
-      <div className="flex gap-1 mb-2">
-        {(["requests", "payments", "overdue"] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setLoanTab(tab)}
-            className={`rounded-lg px-2.5 py-1 text-[10px] font-bold transition capitalize ${
-              loanTab === tab ? TAB_STYLE[tab] : "bg-gray-50 text-gray-400 hover:bg-gray-100"
-            }`}
-          >
-            {tab} ({tab === "requests" ? requests.length : tab === "payments" ? payments.length : overdue.length})
-          </button>
-        ))}
-      </div>
+      {!pendingOnly && (
+        <div className="flex gap-1 mb-2">
+          {(["requests", "payments", "overdue"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setLoanTab(tab)}
+              className={`rounded-lg px-2.5 py-1 text-[10px] font-bold transition capitalize ${
+                loanTab === tab ? TAB_STYLE[tab] : "bg-gray-50 text-gray-400 hover:bg-gray-100"
+              }`}
+            >
+              {tab} ({tab === "requests" ? requests.length : tab === "payments" ? payments.length : overdue.length})
+            </button>
+          ))}
+        </div>
+      )}
 
       {activeLoans.length > 0 ? (
         activeLoans.map((loan) => (
@@ -2437,7 +2485,13 @@ function LoansSection({
           </div>
         ))
       ) : (
-        <EmptyState text={`No ${loanType === "SUPPLY" ? "supply" : "money"} ${loanTab}`} />
+        <EmptyState
+          text={
+            pendingOnly
+              ? `No pending ${loanType === "SUPPLY" ? "supply" : "money"} loan requests`
+              : `No ${loanType === "SUPPLY" ? "supply" : "money"} ${loanTab}`
+          }
+        />
       )}
     </SectionCard>
   );
@@ -2989,6 +3043,16 @@ export default function SecretaryDashboard() {
   const [viewRejectedRequest, setViewRejectedRequest] = useState<MachineRequestInfo | null>(null);
   const [imageModal, setImageModal] = useState<{ src: string; alt: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [pendingFilter, setPendingFilter] = useState<Record<Section, boolean>>({
+    applications: false,
+    members: false,
+    loans: false,
+    payments: false,
+    machines: false,
+    supplies: false,
+    reports: false,
+    announcements: false,
+  });
 
   const fetchData = useCallback(async () => {
     try {
@@ -3002,6 +3066,16 @@ export default function SecretaryDashboard() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    const id = setInterval(() => { fetchData(); }, 30000);
+    const onFocus = () => { fetchData(); };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [fetchData]);
 
   const now = useMemo(() => new Date(), []);
 
@@ -3024,6 +3098,52 @@ export default function SecretaryDashboard() {
       lowStock: lowStock.length,
     };
   }, [data, now]);
+
+  const badges = useMemo<Record<Section, number>>(() => {
+    if (!data) {
+      return {
+        applications: 0,
+        members: 0,
+        loans: 0,
+        payments: 0,
+        machines: 0,
+        supplies: 0,
+        reports: 0,
+        announcements: 0,
+      };
+    }
+    const machinePending = data.machines.reduce(
+      (acc, m) => acc + m.requests.filter((r) =>
+        (PENDING_MACHINE_STATUSES as readonly string[]).includes(r.status),
+      ).length,
+      0,
+    );
+    const supplyPending = data.supplies.reduce(
+      (acc, s) => acc + s.transactions.filter((t) => t.status === "PENDING").length,
+      0,
+    );
+    return {
+      applications: data.applications.filter((a) => a.status === "PENDING").length,
+      members: 0,
+      loans: data.loans.filter((l) => l.status === "PENDING").length,
+      payments: data.payments.filter((p) => p.status === "PENDING").length,
+      machines: machinePending,
+      supplies: supplyPending,
+      reports: 0,
+      announcements: data.posts.filter((p) => !p.published).length,
+    };
+  }, [data]);
+
+  function togglePendingFilter(section: Section) {
+    setPendingFilter((prev) => ({ ...prev, [section]: !prev[section] }));
+  }
+
+  function openSection(section: Section) {
+    setActiveTab(section);
+    if (badges[section] > 0) {
+      setPendingFilter((prev) => ({ ...prev, [section]: true }));
+    }
+  }
 
   const recentActivity = useMemo(() => {
     if (!data) return [];
@@ -3249,9 +3369,23 @@ export default function SecretaryDashboard() {
         <div className="mb-5 flex gap-1 overflow-x-auto scrollbar-hide">
           {ALL_TABS.map((t) => {
             const Icon = t.icon;
+            const isSection = (SECTIONS as readonly string[]).includes(t.key);
+            const count = isSection ? badges[t.key as Section] : 0;
             return (
-              <button key={t.key} onClick={() => setActiveTab(t.key)} className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-2 text-xs font-semibold transition-all ${activeTab === t.key ? "bg-[#1b5e3b] text-white shadow-md shadow-[#1b5e3b]/20" : "bg-white text-[#5a7267] hover:bg-[#f0f7eb] hover:text-[#1b5e3b] border border-[#e2ebe6]"}`}>
-                <Icon size={14} />{t.label}
+              <button
+                key={t.key}
+                onClick={() => (isSection ? openSection(t.key as Section) : setActiveTab(t.key))}
+                className={`relative flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-2 text-xs font-semibold transition-all ${activeTab === t.key ? "bg-[#1b5e3b] text-white shadow-md shadow-[#1b5e3b]/20" : "bg-white text-[#5a7267] hover:bg-[#f0f7eb] hover:text-[#1b5e3b] border border-[#e2ebe6]"}`}
+              >
+                <Icon size={14} />
+                <span className="relative">
+                  {t.label}
+                  {isSection && count > 0 && (
+                    <span className="absolute -right-2.5 -top-2 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#EF4444] px-1 text-[10px] font-bold leading-none text-white shadow-sm">
+                      {count > 99 ? "99+" : count}
+                    </span>
+                  )}
+                </span>
               </button>
             );
           })}
@@ -3315,14 +3449,17 @@ export default function SecretaryDashboard() {
 
             {activeTab === "applications" && data && (
               <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
-                <div className="border-b border-[#e2ebe6] px-5 py-4"><h3 className="text-sm font-bold text-[#0f2318]">Membership Applications</h3><p className="text-[11px] text-[#5a7267]">{data.applications.length} total · {data.applications.filter((a) => a.status === "PENDING").length} pending</p></div>
+                <div className="flex items-center justify-between gap-3 border-b border-[#e2ebe6] px-5 py-4">
+                  <div><h3 className="text-sm font-bold text-[#0f2318]">Membership Applications</h3><p className="text-[11px] text-[#5a7267]">{data.applications.length} total · {data.applications.filter((a) => a.status === "PENDING").length} pending</p></div>
+                  <PendingOnlyToggle active={pendingFilter.applications} count={badges.applications} onToggle={() => togglePendingFilter("applications")} />
+                </div>
                 <div className="p-4 space-y-2">
-                  {searchedApplications.length > 0 ? searchedApplications.map((app) => (
+                  {(pendingFilter.applications ? searchedApplications.filter((a) => a.status === "PENDING") : searchedApplications).length > 0 ? (pendingFilter.applications ? searchedApplications.filter((a) => a.status === "PENDING") : searchedApplications).map((app) => (
                     <button key={app.id} onClick={() => setDetailApp(app)} className="flex w-full items-center justify-between rounded-xl border border-[#eef2e8] bg-[#fafdf7] px-4 py-3 text-left transition hover:border-blue-300 hover:bg-blue-50/30 active:scale-[0.99]">
                       <div className="min-w-0 flex-1"><p className="text-sm font-semibold text-[#173a2b] truncate">{app.fullName}</p><p className="text-xs text-[#718176]">{app.cropType} · Applied {new Date(app.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p></div>
                       <span className={`shrink-0 ml-3 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${APP_STATUS_STYLE[app.status] || ""}`}>{app.status.charAt(0) + app.status.slice(1).toLowerCase()}</span>
                     </button>
-                  )) : <EmptyState text="No applications found" />}
+                  )) : <EmptyState text={pendingFilter.applications ? "No pending applications" : "No applications found"} />}
                 </div>
               </div>
             )}
@@ -3338,18 +3475,24 @@ export default function SecretaryDashboard() {
 
             {activeTab === "loans" && data && (
               <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
-                <div className="border-b border-[#e2ebe6] px-5 py-4"><h3 className="text-sm font-bold text-[#0f2318]">Loan Management</h3><p className="text-[11px] text-[#5a7267]">{data.loans.length} total loans</p></div>
+                <div className="flex items-center justify-between gap-3 border-b border-[#e2ebe6] px-5 py-4">
+                  <div><h3 className="text-sm font-bold text-[#0f2318]">Loan Management</h3><p className="text-[11px] text-[#5a7267]">{data.loans.length} total loans</p></div>
+                  <PendingOnlyToggle active={pendingFilter.loans} count={badges.loans} onToggle={() => togglePendingFilter("loans")} />
+                </div>
                 <div className="p-4">
-                  <LoansSection items={data.loans} expanded={true} onToggle={() => {}} onAction={handleLoanAction} busy={busy} />
+                  <LoansSection items={data.loans} expanded={true} onToggle={() => {}} onAction={handleLoanAction} busy={busy} pendingOnly={pendingFilter.loans} />
                 </div>
               </div>
             )}
 
             {activeTab === "payments" && data && (
               <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
-                <div className="border-b border-[#e2ebe6] px-5 py-4"><h3 className="text-sm font-bold text-[#0f2318]">Payment Verification</h3><p className="text-[11px] text-[#5a7267]">{data.payments.length} total · {data.payments.filter((p) => p.status === "PENDING").length} pending</p></div>
+                <div className="flex items-center justify-between gap-3 border-b border-[#e2ebe6] px-5 py-4">
+                  <div><h3 className="text-sm font-bold text-[#0f2318]">Payment Verification</h3><p className="text-[11px] text-[#5a7267]">{data.payments.length} total · {data.payments.filter((p) => p.status === "PENDING").length} pending</p></div>
+                  <PendingOnlyToggle active={pendingFilter.payments} count={badges.payments} onToggle={() => togglePendingFilter("payments")} />
+                </div>
                 <div className="p-4">
-                  <PaymentsSection items={data.payments} expanded={true} onToggle={() => {}} onAction={handlePaymentAction} onImageClick={(src, alt) => setImageModal({ src, alt })} busy={busy} />
+                  <PaymentsSection items={pendingFilter.payments ? data.payments.filter((p) => p.status === "PENDING") : data.payments} expanded={true} onToggle={() => {}} onAction={handlePaymentAction} onImageClick={(src, alt) => setImageModal({ src, alt })} busy={busy} />
                 </div>
               </div>
             )}
@@ -3357,20 +3500,26 @@ export default function SecretaryDashboard() {
             {activeTab === "machines" && data && (
               <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
                 <div className="flex items-center justify-between border-b border-[#e2ebe6] px-5 py-4">
-                  <div><h3 className="text-sm font-bold text-[#0f2318]">Equipment Management</h3><p className="text-[11px] text-[#5a7267]">{data.machines.length} machines · {data.machines.filter((m) => m.isBorrowed).length} in use</p></div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div><h3 className="text-sm font-bold text-[#0f2318]">Equipment Management</h3><p className="text-[11px] text-[#5a7267]">{data.machines.length} machines · {data.machines.filter((m) => m.isBorrowed).length} in use</p></div>
+                    <PendingOnlyToggle active={pendingFilter.machines} count={badges.machines} onToggle={() => togglePendingFilter("machines")} />
+                  </div>
                   <button onClick={handleAddMachine} className="inline-flex items-center gap-1.5 rounded-lg bg-[#1b5e3b] px-3.5 py-2 text-xs font-semibold text-white transition-all hover:bg-[#15503a] hover:shadow-md active:scale-[0.98]"><Plus size={14} />Add Machine</button>
                 </div>
                 <div className="p-4">
-                  <MachinesSection items={data.machines} expanded={true} onToggle={() => {}} onAdd={handleAddMachine} onClickMachine={handleClickMachine} onImageClick={(src, alt) => setImageModal({ src, alt })} />
+                  <MachinesSection items={pendingFilter.machines ? data.machines.filter(hasPendingMachineAction) : data.machines} expanded={true} onToggle={() => {}} onAdd={handleAddMachine} onClickMachine={handleClickMachine} onImageClick={(src, alt) => setImageModal({ src, alt })} />
                 </div>
               </div>
             )}
 
             {activeTab === "supplies" && data && (
               <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
-                <div className="border-b border-[#e2ebe6] px-5 py-4"><h3 className="text-sm font-bold text-[#0f2318]">Supply Inventory</h3><p className="text-[11px] text-[#5a7267]">{data.supplies.length} items · {data.supplies.filter((s) => s.stock === 0).length} out of stock</p></div>
+                <div className="flex items-center justify-between gap-3 border-b border-[#e2ebe6] px-5 py-4">
+                  <div><h3 className="text-sm font-bold text-[#0f2318]">Supply Inventory</h3><p className="text-[11px] text-[#5a7267]">{data.supplies.length} items · {data.supplies.filter((s) => s.stock === 0).length} out of stock</p></div>
+                  <PendingOnlyToggle active={pendingFilter.supplies} count={badges.supplies} onToggle={() => togglePendingFilter("supplies")} />
+                </div>
                 <div className="p-4">
-                  <SuppliesSection items={data.supplies} expanded={true} onToggle={() => {}} onAddSupply={handleAddSupply} onUpdateSupply={handleUpdateSupply} onActionRequest={handleSupplyRequestAction} busy={busy} />
+                  <SuppliesSection items={pendingFilter.supplies ? data.supplies.filter((s) => s.transactions.some((t) => t.status === "PENDING")) : data.supplies} expanded={true} onToggle={() => {}} onAddSupply={handleAddSupply} onUpdateSupply={handleUpdateSupply} onActionRequest={handleSupplyRequestAction} busy={busy} />
                 </div>
               </div>
             )}
@@ -3386,9 +3535,12 @@ export default function SecretaryDashboard() {
 
             {activeTab === "announcements" && data && (
               <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
-                <div className="border-b border-[#e2ebe6] px-5 py-4"><h3 className="text-sm font-bold text-[#0f2318]">Announcements</h3><p className="text-[11px] text-[#5a7267]">{data.posts.length} posts · {data.posts.filter((p) => p.published).length} published</p></div>
+                <div className="flex items-center justify-between gap-3 border-b border-[#e2ebe6] px-5 py-4">
+                  <div><h3 className="text-sm font-bold text-[#0f2318]">Announcements</h3><p className="text-[11px] text-[#5a7267]">{data.posts.length} posts · {data.posts.filter((p) => p.published).length} published</p></div>
+                  <PendingOnlyToggle active={pendingFilter.announcements} count={badges.announcements} onToggle={() => togglePendingFilter("announcements")} />
+                </div>
                 <div className="p-4">
-                  <AnnouncementsSection items={data.posts} expanded={true} onToggle={() => {}} onCreate={handleCreatePost} onTogglePublish={handleTogglePublish} onDelete={handleDeletePost} busy={busy} />
+                  <AnnouncementsSection items={pendingFilter.announcements ? data.posts.filter((p) => !p.published) : data.posts} expanded={true} onToggle={() => {}} onCreate={handleCreatePost} onTogglePublish={handleTogglePublish} onDelete={handleDeletePost} busy={busy} />
                 </div>
               </div>
             )}
@@ -3430,28 +3582,28 @@ export default function SecretaryDashboard() {
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#5a7267]">Today&apos;s Priorities</h3>
               <div className="space-y-2">
                 {stats && stats.pendingApps > 0 && (
-                  <button onClick={() => setActiveTab("applications")} className="flex w-full items-center gap-2.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-left transition hover:bg-amber-100/70 active:scale-[0.99]">
+                  <button onClick={() => openSection("applications")} className="flex w-full items-center gap-2.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-left transition hover:bg-amber-100/70 active:scale-[0.99]">
                     <FileText size={14} className="text-amber-600 shrink-0" />
                     <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-amber-800">{stats.pendingApps} application{stats.pendingApps > 1 ? "s" : ""} to review</p></div>
                     <ArrowUpRight size={12} className="text-amber-500 shrink-0" />
                   </button>
                 )}
                 {stats && stats.pendingPayments > 0 && (
-                  <button onClick={() => setActiveTab("payments")} className="flex w-full items-center gap-2.5 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2.5 text-left transition hover:bg-blue-100/70 active:scale-[0.99]">
+                  <button onClick={() => openSection("payments")} className="flex w-full items-center gap-2.5 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2.5 text-left transition hover:bg-blue-100/70 active:scale-[0.99]">
                     <ClipboardCheck size={14} className="text-blue-600 shrink-0" />
                     <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-blue-800">{stats.pendingPayments} payment{stats.pendingPayments > 1 ? "s" : ""} to verify</p></div>
                     <ArrowUpRight size={12} className="text-blue-500 shrink-0" />
                   </button>
                 )}
                 {stats && stats.pendingLoans > 0 && (
-                  <button onClick={() => setActiveTab("loans")} className="flex w-full items-center gap-2.5 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2.5 text-left transition hover:bg-emerald-100/70 active:scale-[0.99]">
+                  <button onClick={() => openSection("loans")} className="flex w-full items-center gap-2.5 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2.5 text-left transition hover:bg-emerald-100/70 active:scale-[0.99]">
                     <Banknote size={14} className="text-emerald-600 shrink-0" />
                     <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-emerald-800">{stats.pendingLoans} loan{stats.pendingLoans > 1 ? "s" : ""} to process</p></div>
                     <ArrowUpRight size={12} className="text-emerald-500 shrink-0" />
                   </button>
                 )}
                 {stats && stats.overdueLoans > 0 && (
-                  <button onClick={() => setActiveTab("loans")} className="flex w-full items-center gap-2.5 rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-left transition hover:bg-red-100/70 active:scale-[0.99]">
+                  <button onClick={() => openSection("loans")} className="flex w-full items-center gap-2.5 rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-left transition hover:bg-red-100/70 active:scale-[0.99]">
                     <AlertTriangle size={14} className="text-red-600 shrink-0" />
                     <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-red-800">{stats.overdueLoans} overdue loan{stats.overdueLoans > 1 ? "s" : ""}</p></div>
                     <ArrowUpRight size={12} className="text-red-500 shrink-0" />

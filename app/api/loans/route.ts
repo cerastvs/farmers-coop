@@ -7,17 +7,11 @@ import {
   requireUser,
 } from "@/lib/api";
 import { MEMBER_ROLES } from "@/lib/permissions";
-import { notifyUser, writeAudit } from "@/lib/activity";
-import { LoanStatus, Prisma, Role } from "@/app/generated/prisma";
-import { calculateLoanDueDate } from "@/lib/lifecycles";
-import { z } from "zod";
-
-const LoanRequestSchema = z.object({
-  amount: z.number().positive().max(5000).multipleOf(0.01),
-  termMonths: z.number().int().min(6).max(24),
-  purpose: z.string().trim().min(10).max(500),
-  type: z.enum(["SUPPLY", "MONEY"]).default("MONEY"),
-}).strict();
+import {
+  LoanRequestSchema,
+  submitLoanRequest,
+} from "@/lib/services/member-actions";
+import { ONLINE_CONTEXT } from "@/lib/services/entry-context";
 
 export async function GET() {
   try {
@@ -94,73 +88,12 @@ export async function POST(req: NextRequest) {
       throw new ApiError(400, result.error.issues[0].message);
     }
 
-    const due = calculateLoanDueDate(new Date(), result.data.termMonths);
-
-    const loan = await prisma.$transaction(
-      async (tx) => {
-        const existing = await tx.loan.findFirst({
-          where: {
-            userId: actor.userId,
-            status: {
-              in: [LoanStatus.PENDING, LoanStatus.APPROVED, LoanStatus.ACTIVE],
-            },
-          },
-          select: { id: true },
-        });
-
-        if (existing) {
-          throw new ApiError(
-            409,
-            "You already have a pending or active loan account",
-          );
-        }
-
-        const created = await tx.loan.create({
-          data: {
-            userId: actor.userId,
-            amount: result.data.amount,
-            termMonths: result.data.termMonths,
-            purpose: result.data.purpose,
-            type: result.data.type,
-            due,
-          },
-        });
-
-        await tx.loanStatusHistory.create({
-          data: { loanId: created.id, status: LoanStatus.PENDING },
-        });
-        await writeAudit(tx, {
-          userId: actor.userId,
-          action: "LOAN_REQUESTED",
-          entity: "Loan",
-          entityId: created.id,
-          metadata: {
-            amount: result.data.amount,
-            termMonths: result.data.termMonths,
-          },
-        });
-
-        const reviewers = await tx.user.findMany({
-          where: {
-            role: { in: [Role.TREASURER, Role.PRESIDENT] },
-            active: true,
-          },
-          select: { id: true },
-        });
-        await Promise.all(
-          reviewers.map((reviewer) =>
-            notifyUser(tx, {
-              userId: reviewer.id,
-              title: "New loan request",
-              message: `A ₱${result.data.amount.toLocaleString()} ${result.data.type === "SUPPLY" ? "supply" : "cash"}-loan request is ready for review.`,
-            }),
-          ),
-        );
-
-        return created;
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    );
+    const loan = await submitLoanRequest({
+      actor,
+      memberId: actor.userId,
+      input: result.data,
+      context: ONLINE_CONTEXT,
+    });
 
     return NextResponse.json(
       { message: "Loan request submitted", loanId: loan.id },

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { IconLeaf, IconLoan, IconMachine } from "@/components/icons";
 import { ImageModal } from "@/components/ImageModal";
 import { logout } from "../../login/actions";
+import AdminActionsPanel from "./AdminActionsPanel";
 import {
   FileText,
   Users,
@@ -36,6 +37,7 @@ import {
   ArrowDownRight,
   XCircle,
   TrendingUp,
+  HandHelping,
 } from "lucide-react";
 
 interface Application {
@@ -2967,7 +2969,7 @@ function SecretaryLoadingSkeleton() {
   );
 }
 
-type Tab = "overview" | Section;
+type Tab = "overview" | Section | "admin-actions";
 
 export default function SecretaryDashboard() {
   const [data, setData] = useState<SecretaryData | null>(null);
@@ -3175,6 +3177,7 @@ export default function SecretaryDashboard() {
 
   const ALL_TABS: { key: Tab; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
     { key: "overview", label: "Overview", icon: BarChart3 },
+    { key: "admin-actions", label: "Admin Actions", icon: HandHelping },
     ...SECTIONS.map((s) => ({ key: s as Tab, label: SECTION_META[s].label, icon: SECTION_META[s].icon })),
   ];
 
@@ -3304,6 +3307,10 @@ export default function SecretaryDashboard() {
                   </div>
                 )}
               </>
+            )}
+
+            {activeTab === "admin-actions" && (
+              <AdminActionsPanel onDone={fetchData} />
             )}
 
             {activeTab === "applications" && data && (

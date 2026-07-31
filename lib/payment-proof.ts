@@ -30,7 +30,7 @@ export function hasPaymentEvidence(payment: {
   return Boolean(payment.receiptUrl || payment.referenceNo);
 }
 
-export async function readPaymentSubmission(request: Request) {
+export async function readMultipartFormData(request: Request) {
   const contentType = request.headers.get("content-type")?.toLowerCase();
   if (!contentType || !/^multipart\/form-data(?:;|$)/.test(contentType)) {
     throw new ApiError(
@@ -49,24 +49,20 @@ export async function readPaymentSubmission(request: Request) {
   }
 
   try {
-    return await parsePaymentSubmission(await request.formData());
+    return await request.formData();
   } catch (error) {
     if (error instanceof ApiError) throw error;
     throw new ApiError(400, "Request body must be valid multipart form data");
   }
 }
 
-export async function parsePaymentSubmission(
-  formData: FormData,
-): Promise<PaymentSubmission> {
-  const result = PaymentFieldsSchema.safeParse({
-    loanId: formData.get("loanId"),
-    amount: formData.get("amount"),
-  });
-  if (!result.success) {
-    throw new ApiError(400, result.error.issues[0].message);
-  }
+export async function readPaymentSubmission(request: Request) {
+  return parsePaymentSubmission(await readMultipartFormData(request));
+}
 
+export async function readProofOfPaymentFile(
+  formData: FormData,
+): Promise<File> {
   const proofOfPayment = formData.get("proofOfPayment");
   if (!(proofOfPayment instanceof File) || proofOfPayment.size === 0) {
     throw new ApiError(400, "Proof of payment is required");
@@ -90,8 +86,21 @@ export async function parsePaymentSubmission(
       "Proof of payment content does not match its image type",
     );
   }
+  return proofOfPayment;
+}
 
-  return { ...result.data, proofOfPayment };
+export async function parsePaymentSubmission(
+  formData: FormData,
+): Promise<PaymentSubmission> {
+  const result = PaymentFieldsSchema.safeParse({
+    loanId: formData.get("loanId"),
+    amount: formData.get("amount"),
+  });
+  if (!result.success) {
+    throw new ApiError(400, result.error.issues[0].message);
+  }
+
+  return { ...result.data, proofOfPayment: await readProofOfPaymentFile(formData) };
 }
 
 type UploadPaymentProofOptions = {

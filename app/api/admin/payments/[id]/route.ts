@@ -1,9 +1,4 @@
-import {
-  LoanStatus,
-  PaymentStatus,
-  PaymentType,
-  Prisma,
-} from "@/app/generated/prisma";
+import { PaymentStatus, PaymentType, Prisma } from "@/app/generated/prisma";
 import { notifyUser, writeAudit } from "@/lib/activity";
 import {
   apiErrorResponse,
@@ -15,11 +10,11 @@ import {
 import prisma from "@/lib/client";
 import {
   assertTransition,
-  loanTransitions,
   paymentTransitions,
 } from "@/lib/lifecycles";
 import { hasPaymentEvidence } from "@/lib/payment-proof";
 import { FINANCE_ROLES } from "@/lib/permissions";
+import { applyVerifiedLoanPayment } from "@/lib/services/loan-payments";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -102,60 +97,7 @@ export async function PATCH(
         }
 
         if (nextStatus === PaymentStatus.VERIFIED) {
-          if (!payment.loan) {
-            throw new ApiError(409, "Payment is not linked to a loan");
-          }
-          if (payment.loan.userId !== payment.userId) {
-            throw new ApiError(
-              409,
-              "Payment owner does not match the loan borrower",
-            );
-          }
-          if (payment.loan.status !== LoanStatus.ACTIVE) {
-            throw new ApiError(409, "The linked loan is not active");
-          }
-
-          const alreadyPaid = payment.loan.payments.reduce(
-            (sum, entry) => sum.plus(entry.amount),
-            new Prisma.Decimal(0),
-          );
-          const balance = payment.loan.amount.minus(alreadyPaid);
-          if (payment.amount.greaterThan(balance)) {
-            throw new ApiError(
-              409,
-              `Payment exceeds the current balance of ₱${balance.toNumber().toLocaleString()}`,
-            );
-          }
-
-          await tx.loanPayment.create({
-            data: {
-              loanId: payment.loan.id,
-              amount: payment.amount,
-              receiptNo: `RCP-${new Date().getFullYear()}-${payment.id.slice(0, 8).toUpperCase()}`,
-            },
-          });
-
-          if (payment.amount.equals(balance)) {
-            assertTransition(
-              loanTransitions,
-              payment.loan.status,
-              LoanStatus.PAID,
-              "Loan",
-            );
-            const closed = await tx.loan.updateMany({
-              where: {
-                id: payment.loan.id,
-                status: payment.loan.status,
-              },
-              data: { status: LoanStatus.PAID },
-            });
-            if (closed.count !== 1) {
-              throw new ApiError(409, "Loan status changed during payment");
-            }
-            await tx.loanStatusHistory.create({
-              data: { loanId: payment.loan.id, status: LoanStatus.PAID },
-            });
-          }
+          await applyVerifiedLoanPayment(tx, payment);
         }
 
         await notifyUser(tx, {

@@ -25,6 +25,8 @@ enum PaymentType {
   APPLICATION_FEE
   LOAN_PAYMENT
   EQUIPMENT_PURCHASE
+  MEMBERSHIP_FEE
+  OTHER_FEE
 }
 
 enum PaymentStatus {
@@ -78,6 +80,22 @@ enum ReportType {
   AUDIT
 }
 
+enum EntryType {
+  ONLINE
+  MANUAL
+}
+
+enum InitiatedBy {
+  MEMBER
+  SECRETARY
+}
+
+enum EntrySource {
+  PORTAL
+  OFFICE
+  WALK_IN
+}
+
 model User {
   id                 String              @id @default(uuid())
   name               String?
@@ -126,6 +144,14 @@ model Loan {
   payments           LoanPayment[]
   paymentSubmissions Payment[]
   statusHistory      LoanStatusHistory[]
+
+  createdById  String?
+  createdByRole Role?
+  entryType    EntryType     @default(ONLINE)
+  initiatedBy  InitiatedBy   @default(MEMBER)
+  source       EntrySource   @default(PORTAL)
+  remarks      String?
+  auditId      String?
 }
 
 model Supply {
@@ -195,6 +221,15 @@ model Payment {
   verifiedBy      String?
   verifiedAt      DateTime?
   rejectionReason String?
+
+  receiptNo    String?
+  createdById  String?
+  createdByRole Role?
+  entryType    EntryType    @default(ONLINE)
+  initiatedBy  InitiatedBy  @default(MEMBER)
+  source       EntrySource  @default(PORTAL)
+  remarks      String?
+  auditId      String?
 }
 
 model Machine {
@@ -222,6 +257,14 @@ model MachineRequest {
   endDate      DateTime?
   startedAt    DateTime?
   returnedAt   DateTime?
+
+  createdById  String?
+  createdByRole Role?
+  entryType    EntryType   @default(ONLINE)
+  initiatedBy  InitiatedBy @default(MEMBER)
+  source       EntrySource @default(PORTAL)
+  remarks      String?
+  auditId      String?
 }
 
 model SupplyTransaction {
@@ -242,6 +285,14 @@ model SupplyTransaction {
   rejectionReason String?
 
   createdAt DateTime @default(now())
+
+  createdById  String?
+  createdByRole Role?
+  entryType    EntryType   @default(ONLINE)
+  initiatedBy  InitiatedBy @default(MEMBER)
+  source       EntrySource @default(PORTAL)
+  remarks      String?
+  auditId      String?
 }
 
 model LoanPayment {

@@ -8,6 +8,21 @@ import {
   readProofOfPaymentFile,
 } from "@/lib/payment-proof";
 
+export const SearchSchema = z
+  .object({
+    search: z.string().trim().max(100).optional(),
+    status: z
+      .enum([
+        "PENDING_PAYMENT",
+        "PENDING_APPLICATION_REVIEW",
+        "APPROVED",
+        "REJECTED",
+        "PENDING",
+      ])
+      .optional(),
+  })
+  .strict();
+
 export function getApplicationFeeAmount() {
   const raw = process.env.APPLICATION_FEE_AMOUNT?.trim();
   if (!raw) return 500;

@@ -125,6 +125,9 @@ model User {
   notifications      Notification[]
   auditEntries       AuditTrail[]
   logs               Log[]
+  proofUploadedPayments Payment[] @relation("PaymentProofUploader")
+  verifiedPayments       Payment[] @relation("PaymentVerifier")
+  declinedPayments       Payment[] @relation("PaymentDecliner")
 }
 
 model Post {
@@ -236,6 +239,20 @@ model Payment {
   verifiedBy      String?
   verifiedAt      DateTime?
   rejectionReason String?
+
+  // Application-fee payment audit trail. proofUploadedBy and verifiedBy are
+  // deliberately distinct: an applicant (or President for on-site) uploads the
+  // proof, while the President verifies/approves it. declinedBy records who
+  // rejected a proof. These store authenticated user IDs only.
+  proofUploadedById String?
+  proofUploadedAt   DateTime?
+  declinedById      String?
+  declinedAt        DateTime?
+  paidAt            DateTime?
+
+  proofUploadedBy User? @relation("PaymentProofUploader", fields: [proofUploadedById], references: [id])
+  verifiedByUser  User? @relation("PaymentVerifier", fields: [verifiedBy], references: [id])
+  declinedByUser  User? @relation("PaymentDecliner", fields: [declinedById], references: [id])
 
   receiptNo    String?
   createdById  String?

@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { PaymentMethod } from "../app/generated/prisma";
-import { getApplicationFeeAmount, parseApplicationFeeSubmission } from "../lib/application-fee";
+import {
+  getApplicationFeeAmount,
+  parseApplicationFeeSubmission,
+  SearchSchema,
+} from "../lib/application-fee";
 import { ApiError } from "../lib/errors";
 import {
   applicationFeePaymentTransitions,
@@ -107,6 +111,21 @@ test("on-site submissions are rejected from the applicant path", async () => {
     () => parseApplicationFeeSubmission(Promise.resolve(formData)),
     400,
     "On-site payments are recorded by cooperative staff instead.",
+  );
+});
+
+test("application fee search schema parses query filters", () => {
+  assert.deepEqual(
+    SearchSchema.parse({ search: "Jose Rizal" }),
+    { search: "Jose Rizal" },
+  );
+  assert.deepEqual(
+    SearchSchema.parse({ search: "  ", status: "PENDING_PAYMENT" }),
+    { search: "", status: "PENDING_PAYMENT" },
+  );
+  assert.equal(
+    SearchSchema.safeParse({ status: "NOT_A_STATUS" }).success,
+    false,
   );
 });
 

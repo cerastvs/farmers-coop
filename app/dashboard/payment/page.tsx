@@ -22,6 +22,13 @@ type ApplicationFeeStatus =
   | "declined"
   | "rejected";
 
+interface AuditUser {
+  id: string;
+  name: string | null;
+  username: string;
+  role: string;
+}
+
 interface PaymentRecord {
   id: string;
   status: "PENDING_APPROVAL" | "APPROVED" | "DECLINED";
@@ -30,8 +37,14 @@ interface PaymentRecord {
   referenceNo: string | null;
   receiptUrl: string | null;
   createdAt: string;
+  paidAt: string | null;
   verifiedAt: string | null;
   rejectionReason: string | null;
+  proofUploadedBy: AuditUser | null;
+  proofUploadedAt: string | null;
+  verifiedBy: AuditUser | null;
+  declinedBy: AuditUser | null;
+  declinedAt: string | null;
 }
 
 interface ApplicationFeeData {
@@ -491,6 +504,47 @@ function PaymentApproved({ data }: { data: ApplicationFeeData }) {
           </p>
         )}
       </div>
+      {latest && (
+        <div className="mb-6 rounded-3xl border border-[#dce5d9] bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-extrabold text-[#173a2b]">Payment Details</h2>
+          <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-xs font-bold uppercase tracking-wider text-[#8fa594]">Payment method</dt>
+              <dd className="mt-0.5 font-semibold text-[#173a2b]">{latest.paymentMethod === "ON_SITE" ? "On-Site" : "Online"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-bold uppercase tracking-wider text-[#8fa594]">Status</dt>
+              <dd className="mt-0.5 font-semibold text-green-700">Approved</dd>
+            </div>
+            {latest.referenceNo && (
+              <div>
+                <dt className="text-xs font-bold uppercase tracking-wider text-[#8fa594]">Reference</dt>
+                <dd className="mt-0.5 font-semibold text-[#173a2b]">{latest.referenceNo}</dd>
+              </div>
+            )}
+            {latest.receiptUrl && (
+              <div>
+                <dt className="text-xs font-bold uppercase tracking-wider text-[#8fa594]">Proof</dt>
+                <dd className="mt-0.5 break-all font-semibold text-[#4f7e38]">{latest.receiptUrl}</dd>
+              </div>
+            )}
+            <div>
+              <dt className="text-xs font-bold uppercase tracking-wider text-[#8fa594]">Uploaded by</dt>
+              <dd className="mt-0.5 font-semibold text-[#173a2b]">
+                {personLabel(latest.proofUploadedBy) ?? "—"}
+                {latest.proofUploadedAt ? <span className="block text-xs font-normal text-[#8fa594]">{formatDate(latest.proofUploadedAt)}</span> : null}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-bold uppercase tracking-wider text-[#8fa594]">Verified by</dt>
+              <dd className="mt-0.5 font-semibold text-[#173a2b]">
+                {personLabel(latest.verifiedBy) ?? "—"}
+                {latest.verifiedAt ? <span className="block text-xs font-normal text-[#8fa594]">{formatDate(latest.verifiedAt)}</span> : null}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      )}
       {inReview && (
         <div className="mb-6 rounded-3xl border border-[#dce5d9] bg-white p-6">
           <h2 className="text-lg font-extrabold text-[#173a2b]">
@@ -563,33 +617,88 @@ function ApplicationRejected({ data }: { data: ApplicationFeeData }) {
   );
 }
 
+const ROLE_LABELS: Record<string, string> = {
+  APPLICANT: "Applicant",
+  MEMBER: "Member",
+  TREASURER: "Treasurer",
+  PRESIDENT: "President",
+  SECRETARY: "Secretary",
+};
+
+function personLabel(user: AuditUser | null) {
+  if (!user) return null;
+  return `${user.name ?? user.username} — ${ROLE_LABELS[user.role] ?? user.role}`;
+}
+
+function formatDate(value: string | null) {
+  if (!value) return "";
+  return new Date(value).toLocaleString("en-PH", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function PaymentHistoryCard({ history }: { history: PaymentRecord[] }) {
   if (history.length === 0) return null;
   return (
     <div className="rounded-3xl border border-[#dce5d9] bg-white p-6 shadow-sm">
-      <h2 className="text-lg font-extrabold text-[#173a2b]">Payment History</h2>
+      <h2 className="text-lg font-extrabold text-[#173a2b]">Payment History & Audit Trail</h2>
       <p className="mt-1 text-sm text-[#718176]">
-        Every payment proof you have submitted for this application.
+        Every payment proof submission and decision for this application, with
+        the person who uploaded and reviewed it.
       </p>
       <div className="mt-4 space-y-2">
         {history.map((record) => (
           <div
             key={record.id}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#e3eae0] bg-[#fafdf7] px-4 py-3"
+            className="rounded-xl border border-[#e3eae0] bg-[#fafdf7] px-4 py-3"
           >
-            <div>
-              <p className="text-sm font-bold text-[#173a2b]">
-                ₱{record.amount.toLocaleString()}
-                <span className="ml-2 text-xs font-semibold text-[#718176]">
-                  {record.paymentMethod === "ON_SITE" ? "On-site" : "Online"}
-                </span>
-              </p>
-              <p className="text-xs text-[#8fa594]">
-                {formatDate(record.createdAt)}
-                {record.referenceNo ? ` · ${record.referenceNo}` : ""}
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-bold text-[#173a2b]">
+                  ₱{record.amount.toLocaleString()}
+                  <span className="ml-2 text-xs font-semibold text-[#718176]">
+                    {record.paymentMethod === "ON_SITE" ? "On-site" : "Online"}
+                  </span>
+                </p>
+                <p className="text-xs text-[#8fa594]">
+                  {formatDate(record.createdAt)}
+                  {record.referenceNo ? ` · ${record.referenceNo}` : ""}
+                </p>
+              </div>
+              <StatusPill status={record.status} />
             </div>
-            <StatusPill status={record.status} />
+            <div className="mt-2 space-y-1 border-t border-[#e3eae0] pt-2 text-xs text-[#496558]">
+              {record.proofUploadedBy && (
+                <p>
+                  <span className="font-bold text-[#315646]">Proof uploaded by:</span>{" "}
+                  {personLabel(record.proofUploadedBy)}
+                  <span className="text-[#8fa594]"> · {formatDate(record.proofUploadedAt)}</span>
+                </p>
+              )}
+              {record.verifiedBy && (
+                <p>
+                  <span className="font-bold text-[#315646]">Payment verified by:</span>{" "}
+                  {personLabel(record.verifiedBy)}
+                  <span className="text-[#8fa594]"> · {formatDate(record.verifiedAt)}</span>
+                </p>
+              )}
+              {record.declinedBy && (
+                <p>
+                  <span className="font-bold text-[#315646]">Payment declined by:</span>{" "}
+                  {personLabel(record.declinedBy)}
+                  <span className="text-[#8fa594]"> · {formatDate(record.declinedAt)}</span>
+                </p>
+              )}
+              {record.rejectionReason && (
+                <p className="text-red-600">
+                  <span className="font-bold">Reason:</span> {record.rejectionReason}
+                </p>
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -613,15 +722,4 @@ function StatusPill({ status }: { status: PaymentRecord["status"] }) {
       {labels[status]}
     </span>
   );
-}
-
-function formatDate(value: string | null) {
-  if (!value) return "";
-  return new Date(value).toLocaleString("en-PH", {
-    month: "short",
-    day: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }

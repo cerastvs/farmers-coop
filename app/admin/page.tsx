@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ImageModal } from "@/components/ImageModal";
 import { runAdminMutation } from "@/lib/admin-mutation";
@@ -84,6 +84,8 @@ interface Post {
   published: boolean;
 }
 
+type AuditUser = { id: string; name: string | null; username: string; role: Role };
+
 interface ApplicationFee {
   id: string;
   user: { id: string; name: string; username: string };
@@ -92,6 +94,8 @@ interface ApplicationFee {
     fullName: string;
     contact: string | null;
     status: string;
+    createdAt: string;
+    username: string;
   } | null;
   amount: number;
   receiptUrl: string | null;
@@ -100,7 +104,13 @@ interface ApplicationFee {
   status: string;
   rejectionReason: string | null;
   createdAt: string;
+  paidAt: string | null;
+  proofUploadedBy: AuditUser | null;
+  proofUploadedAt: string | null;
+  verifiedBy: AuditUser | null;
   verifiedAt: string | null;
+  declinedBy: AuditUser | null;
+  declinedAt: string | null;
 }
 
 interface ApplicationAwaitingPayment {
@@ -133,6 +143,39 @@ async function requestJson(url: string, options?: RequestInit) {
   return data;
 }
 
+const ROLE_LABELS: Record<Role, string> = {
+  APPLICANT: "Applicant",
+  MEMBER: "Member",
+  TREASURER: "Treasurer",
+  PRESIDENT: "President",
+  SECRETARY: "Secretary",
+};
+
+function auditPerson(user: AuditUser | null) {
+  if (!user) return "—";
+  return `${user.name ?? user.username} — ${ROLE_LABELS[user.role]}`;
+}
+
+function formatAuditDate(value: string | null) {
+  if (!value) return "";
+  return new Date(value).toLocaleString("en-PH", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function AuditRow({ label, user, at }: { label: string; user: AuditUser | null; at: string | null }) {
+  return (
+    <p className="text-xs text-[#496558]">
+      <span className="font-bold text-[#315646]">{label}:</span> {auditPerson(user)}
+      {at ? <span className="text-[#8fa594]"> · {formatAuditDate(at)}</span> : null}
+    </p>
+  );
+}
+
 export default function AdminPage() {
   const [user, setUser] = useState<User | null>(null);
   const [tab, setTab] = useState<Tab>("members");
@@ -149,7 +192,14 @@ export default function AdminPage() {
   const [applicationsAwaitingPayment, setApplicationsAwaitingPayment] = useState<
     ApplicationAwaitingPayment[]
   >([]);
+  const [feeAmount, setFeeAmount] = useState(0);
   const [proofModalUrl, setProofModalUrl] = useState<string | null>(null);
+  const [feeSearch, setFeeSearch] = useState("");
+  const [feeStatus, setFeeStatus] = useState("");
+  const [onsiteTarget, setOnsiteTarget] = useState<ApplicationAwaitingPayment | null>(null);
+  const [onsiteProof, setOnsiteProof] = useState<File | null>(null);
+  const [onsiteRemarks, setOnsiteRemarks] = useState("");
+  const onsiteInputRef = useRef<HTMLInputElement>(null);
 
   const tabs = useMemo(() => {
     if (!user) return [] as Tab[];
@@ -172,12 +222,17 @@ export default function AdminPage() {
     };
     setLoading(true);
     try {
-      const data = await requestJson(endpoints[selected]);
+      const query =
+        selected === "applicationPayments"
+          ? `?search=${encodeURIComponent(feeSearch.trim())}${feeStatus ? `&status=${encodeURIComponent(feeStatus)}` : ""}`
+          : "";
+      const data = await requestJson(`${endpoints[selected]}${query}`);
       if (selected === "loans") setLoans(data);
       if (selected === "payments") setPayments(data);
       if (selected === "applicationPayments") {
         setApplicationFees(data.payments ?? []);
         setApplicationsAwaitingPayment(data.pendingApplications ?? []);
+        setFeeAmount(Number(data.feeAmount) || 0);
       }
       if (selected === "supplies") setSupplies(data);
       if (selected === "members") setMembers(data.members ?? data);
@@ -188,7 +243,7 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [feeSearch, feeStatus]);
 
   useEffect(() => {
     requestJson("/api/me")
@@ -230,6 +285,31 @@ export default function AdminPage() {
 
   function rejectReason() {
     return window.prompt("Enter the reason for rejection:");
+  }
+
+  async function recordOnsite() {
+    if (!onsiteTarget) return;
+    const target = onsiteTarget;
+    setBusy(target.id);
+    setNotice(null);
+    try {
+      const formData = new FormData();
+      formData.set("applicationId", target.id);
+      if (onsiteRemarks.trim()) formData.set("remarks", onsiteRemarks.trim());
+      if (onsiteProof) formData.set("proofOfPayment", onsiteProof);
+      await runAdminMutation({
+        request: () => requestJson("/api/admin/application-payments/record-onsite", { method: "POST", body: formData }),
+        refresh: () => loadTab(tab),
+        onSuccess: () => setNotice({ kind: "success", text: "On-site payment recorded and application advanced." }),
+        onError: (error) => setNotice({ kind: "error", text: error instanceof Error ? error.message : "Action failed" }),
+      });
+      setOnsiteTarget(null);
+      setOnsiteProof(null);
+      setOnsiteRemarks("");
+      if (onsiteInputRef.current) onsiteInputRef.current.value = "";
+    } finally {
+      setBusy(null);
+    }
   }
 
   function tabLabel(item: Tab) {
@@ -366,6 +446,24 @@ export default function AdminPage() {
 
             {tab === "applicationPayments" && (
               <AdminSection title="Application Payment Approvals" description="Review application-fee proofs and record on-site payments for applicants.">
+                <form
+                  className="mb-5 grid gap-2 rounded-2xl border border-[#dce5d9] bg-[#f7faf5] p-4 sm:grid-cols-[2fr_1fr_auto]"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void loadTab("applicationPayments");
+                  }}
+                >
+                  <input className={fieldClass} value={feeSearch} onChange={(e) => setFeeSearch(e.target.value)} placeholder="Search by name, application ID, username, or contact" />
+                  <select className={fieldClass} value={feeStatus} onChange={(e) => setFeeStatus(e.target.value)}>
+                    <option value="">All application statuses</option>
+                    <option value="PENDING_PAYMENT">Pending payment</option>
+                    <option value="PENDING">Pending</option>
+                    <option value="PENDING_APPLICATION_REVIEW">Under review</option>
+                    <option value="APPROVED">Approved</option>
+                    <option value="REJECTED">Rejected</option>
+                  </select>
+                  <button disabled={loading} className={buttonClass}>Search</button>
+                </form>
                 {applicationsAwaitingPayment.length > 0 && (
                   <div className="mb-5 rounded-2xl border border-[#dce5d9] bg-[#f7faf5] p-4">
                     <p className="text-sm font-extrabold text-[#173a2b]">Record On-Site Payment</p>
@@ -375,18 +473,14 @@ export default function AdminPage() {
                         <div key={app.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#e3e9e0] bg-white px-4 py-3">
                           <div>
                             <p className="text-sm font-bold text-[#173a2b]">{app.fullName}</p>
-                            <p className="text-xs text-[#718176]">{app.contact ?? "No contact"} · {new Date(app.createdAt).toLocaleDateString()}</p>
+                            <p className="text-xs text-[#718176]">{app.contact ?? "No contact"} · App #{app.id.slice(0, 8)} · {new Date(app.createdAt).toLocaleDateString()}</p>
                           </div>
                           <button
                             disabled={busy === app.id}
-                            onClick={() => {
-                              if (window.confirm(`Record the on-site application fee for ${app.fullName}? This will mark the payment verified.`)) {
-                                void mutate(app.id, "/api/admin/application-payments/record-onsite", { applicationId: app.id }, "On-site payment recorded and application advanced.", "POST");
-                              }
-                            }}
+                            onClick={() => { setOnsiteTarget(app); setOnsiteProof(null); setOnsiteRemarks(""); }}
                             className={buttonClass}
                           >
-                            Record on-site payment
+                            Mark as Paid On-Site
                           </button>
                         </div>
                       ))}
@@ -399,7 +493,12 @@ export default function AdminPage() {
                     const isOnline = fee.paymentMethod === "ONLINE";
                     const pending = fee.status === "PENDING_APPROVAL";
                     return (
-                      <Record key={fee.id} title={fee.application?.fullName ?? fee.user.name} meta={`₱${fee.amount.toLocaleString()} · ${isOnline ? "Online" : "On-site"} · ${new Date(fee.createdAt).toLocaleDateString()}`} status={fee.status}>
+                      <Record key={fee.id} title={fee.application?.fullName ?? fee.user.name} meta={`App #${fee.application?.id.slice(0, 8) ?? "—"} · ₱${fee.amount.toLocaleString()} · ${isOnline ? "Online" : "On-site"} · ${new Date(fee.createdAt).toLocaleDateString()}`} status={fee.status}>
+                        <div className="grid gap-2 text-xs">
+                          <AuditRow label="Proof uploaded by" user={fee.proofUploadedBy} at={fee.proofUploadedAt} />
+                          <AuditRow label="Verified by" user={fee.verifiedBy} at={fee.verifiedAt} />
+                          <AuditRow label="Declined by" user={fee.declinedBy} at={fee.declinedAt} />
+                        </div>
                         {proofUrl ? (
                           <button
                             onClick={() => setProofModalUrl(proofUrl)}
@@ -603,6 +702,52 @@ export default function AdminPage() {
           alt="Proof of payment"
           onClose={() => setProofModalUrl(null)}
         />
+      )}
+
+      {onsiteTarget && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => { if (!busy) setOnsiteTarget(null); }}>
+          <div className="w-full max-w-md rounded-3xl border border-[#dce5d9] bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-black text-[#173a2b]">Confirm On-Site Payment</h2>
+            <p className="mt-1 text-sm text-[#718176]">
+              You are recording that this applicant has paid the application fee in person.
+            </p>
+            <div className="mt-4 space-y-2 rounded-2xl bg-[#f7faf5] p-4 text-sm text-[#315646]">
+              <p><b>Applicant:</b> {onsiteTarget.fullName}</p>
+              <p><b>Application ID:</b> #{onsiteTarget.id}</p>
+              <p><b>Application date:</b> {new Date(onsiteTarget.createdAt).toLocaleDateString("en-PH")}</p>
+              <p><b>Application fee:</b> ₱{feeAmount.toLocaleString()}</p>
+              <p><b>Payment Method:</b> On-Site</p>
+            </div>
+            <div className="mt-4">
+              <label className="mb-1.5 block text-xs font-semibold text-[#3d5c47]">
+                Supporting proof <span className="font-normal text-[#8fa594]">(optional — photo of receipt, etc.)</span>
+              </label>
+              <input
+                ref={onsiteInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="block w-full rounded-xl border border-[#dbe5d7] bg-[#fafcf8] px-3 py-2 text-sm text-[#173a2b] outline-none file:mr-3 file:rounded-lg file:border-0 file:bg-[#edf5df] file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-[#39733e]"
+                onChange={(e) => setOnsiteProof(e.target.files?.[0] ?? null)}
+              />
+              <input
+                value={onsiteRemarks}
+                onChange={(e) => setOnsiteRemarks(e.target.value)}
+                placeholder="Remarks (optional)"
+                maxLength={500}
+                className="mt-2 w-full rounded-xl border border-[#dbe5d7] bg-[#fafcf8] px-3 py-2 text-sm text-[#173a2b] outline-none placeholder:text-[#9aa89e]"
+              />
+              <p className="mt-2 text-xs font-semibold text-amber-700">
+                On-site payments recorded without proof are clearly marked as admin-recorded on-site payments.
+              </p>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button className={secondaryButton} disabled={busy === onsiteTarget.id} onClick={() => setOnsiteTarget(null)}>Cancel</button>
+              <button className={buttonClass} disabled={busy === onsiteTarget.id} onClick={() => void recordOnsite()}>
+                {busy === onsiteTarget.id ? "Recording…" : "Confirm Payment"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

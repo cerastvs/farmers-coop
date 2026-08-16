@@ -80,17 +80,26 @@ export async function PATCH(
           );
         }
 
+        const now = new Date();
         const claimed = await tx.payment.updateMany({
           where: { id, status: payment.status },
-          data: {
-            status: nextStatus,
-            verifiedBy: actor.userId,
-            verifiedAt: new Date(),
-            rejectionReason:
-              nextStatus === PaymentStatus.DECLINED
-                ? (result.data.reason ?? null)
-                : null,
-          },
+          data:
+            nextStatus === PaymentStatus.APPROVED
+              ? {
+                  status: nextStatus,
+                  verifiedBy: actor.userId,
+                  verifiedAt: now,
+                  paidAt: now,
+                  declinedById: null,
+                  declinedAt: null,
+                  rejectionReason: null,
+                }
+              : {
+                  status: nextStatus,
+                  declinedById: actor.userId,
+                  declinedAt: now,
+                  rejectionReason: result.data.reason ?? null,
+                },
         });
         if (claimed.count !== 1) {
           throw new ApiError(409, "Payment status changed during review");

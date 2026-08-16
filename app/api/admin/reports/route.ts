@@ -143,6 +143,23 @@ async function generatePaymentsReport() {
     include: {
       user: { select: { id: true, name: true, username: true } },
       loan: { select: { id: true, name: true } },
+      application: {
+        select: {
+          id: true,
+          fullName: true,
+          status: true,
+          createdAt: true,
+        },
+      },
+      proofUploadedBy: {
+        select: { id: true, name: true, username: true, role: true },
+      },
+      verifiedByUser: {
+        select: { id: true, name: true, username: true, role: true },
+      },
+      declinedByUser: {
+        select: { id: true, name: true, username: true, role: true },
+      },
     },
   });
 
@@ -155,18 +172,48 @@ async function generatePaymentsReport() {
         0,
       ),
       verifiedAmount: payments
-        .filter((payment) => payment.status === PaymentStatus.VERIFIED)
+        .filter(
+          (payment) =>
+            payment.status === PaymentStatus.VERIFIED ||
+            payment.status === PaymentStatus.APPROVED,
+        )
         .reduce((sum, payment) => sum + Number(payment.amount), 0),
       byStatus: countsBy(
         payments.map((payment) => payment.status),
         Object.values(PaymentStatus),
       ),
+      byMethod: countsBy(
+        payments.map((payment) => payment.paymentMethod),
+        ["ONLINE", "ON_SITE"] as const,
+      ),
     },
     payments: payments.map((payment) => ({
-      ...payment,
+      id: payment.id,
+      applicant: payment.application
+        ? {
+            id: payment.application.id,
+            fullName: payment.application.fullName,
+            applicationStatus: payment.application.status,
+            appliedAt: payment.application.createdAt.toISOString(),
+          }
+        : null,
+      user: payment.user,
+      loan: payment.loan,
+      type: payment.type,
       amount: Number(payment.amount),
+      paymentMethod: payment.paymentMethod,
+      status: payment.status,
+      receiptUrl: payment.receiptUrl,
+      referenceNo: payment.referenceNo,
       createdAt: payment.createdAt.toISOString(),
+      paidAt: payment.paidAt?.toISOString() ?? null,
       verifiedAt: payment.verifiedAt?.toISOString() ?? null,
+      proofUploadedBy: payment.proofUploadedBy,
+      proofUploadedAt: payment.proofUploadedAt?.toISOString() ?? null,
+      verifiedBy: payment.verifiedByUser,
+      declinedBy: payment.declinedByUser,
+      declinedAt: payment.declinedAt?.toISOString() ?? null,
+      rejectionReason: payment.rejectionReason,
     })),
   };
 }

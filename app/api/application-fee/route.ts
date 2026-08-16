@@ -38,6 +38,36 @@ export async function GET() {
         type: PaymentType.APPLICATION_FEE,
       },
       orderBy: { createdAt: "desc" },
+      include: {
+        user: { select: { id: true, name: true, username: true, role: true } },
+        proofUploadedBy: {
+          select: { id: true, name: true, username: true, role: true },
+        },
+        verifiedByUser: {
+          select: { id: true, name: true, username: true, role: true },
+        },
+        declinedByUser: {
+          select: { id: true, name: true, username: true, role: true },
+        },
+      },
+    });
+
+    const serialize = (payment: (typeof payments)[number]) => ({
+      id: payment.id,
+      status: payment.status,
+      amount: Number(payment.amount),
+      paymentMethod: payment.paymentMethod,
+      referenceNo: payment.referenceNo,
+      receiptUrl: payment.receiptUrl,
+      createdAt: payment.createdAt.toISOString(),
+      verifiedAt: payment.verifiedAt?.toISOString() ?? null,
+      paidAt: payment.paidAt?.toISOString() ?? null,
+      rejectionReason: payment.rejectionReason,
+      proofUploadedBy: payment.proofUploadedBy,
+      proofUploadedAt: payment.proofUploadedAt?.toISOString() ?? null,
+      verifiedBy: payment.verifiedByUser,
+      declinedBy: payment.declinedByUser,
+      declinedAt: payment.declinedAt?.toISOString() ?? null,
     });
 
     return NextResponse.json({
@@ -48,18 +78,8 @@ export async function GET() {
       fee: {
         amount: getApplicationFeeAmount(),
       },
-      payment: payments[0] ?? null,
-      history: payments.map((payment) => ({
-        id: payment.id,
-        status: payment.status,
-        amount: Number(payment.amount),
-        paymentMethod: payment.paymentMethod,
-        referenceNo: payment.referenceNo,
-        receiptUrl: payment.receiptUrl,
-        createdAt: payment.createdAt.toISOString(),
-        verifiedAt: payment.verifiedAt?.toISOString() ?? null,
-        rejectionReason: payment.rejectionReason,
-      })),
+      payment: payments[0] ? serialize(payments[0]) : null,
+      history: payments.map(serialize),
     });
   } catch (error) {
     return apiErrorResponse(error, "Failed to fetch application fee status");
@@ -198,7 +218,12 @@ async function completeApplicationFeePayment(
           status: PaymentStatus.PENDING_APPROVAL,
           receiptUrl: null,
         },
-        data: { receiptUrl, referenceNo },
+        data: {
+          receiptUrl,
+          referenceNo,
+          proofUploadedById: userId,
+          proofUploadedAt: new Date(),
+        },
       });
       if (completed.count !== 1) {
         throw new ApiError(409, "Payment reservation changed during upload");

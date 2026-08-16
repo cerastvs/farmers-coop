@@ -191,6 +191,8 @@ async function main() {
         status: PaymentStatus.PENDING_APPROVAL,
         receiptUrl: "https://example.com/application-fee-proof.jpg",
         referenceNo: "GCASH-2026-0001",
+        proofUploadedById: applicant.id,
+        proofUploadedAt: new Date(),
       },
     ],
   });

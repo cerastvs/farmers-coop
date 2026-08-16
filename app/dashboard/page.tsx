@@ -210,7 +210,14 @@ export default function Dashboard() {
 }
 
 interface ApplicantPaymentStatus {
-  application: { id: string; status: string };
+  application: {
+    id: string;
+    status: string;
+    rejectionReason: string | null;
+    rejectionDetails: string | null;
+    reviewedAt: string | null;
+    reviewedBy: { id: string; name: string | null; username: string; role: string } | null;
+  };
   payment: {
     status: string;
     rejectionReason: string | null;
@@ -264,8 +271,8 @@ function ApplicantPendingScreen() {
   } else if (approved || inReview) {
     icon = <FileSearch className="text-blue-600 w-10 h-10" />;
     iconBg = "bg-blue-100";
-    title = "Application under review";
-    body = "Your application fee has been verified. Your application is now being reviewed by the cooperative.";
+    title = "Payment Approved";
+    body = "Your application fee has been verified. Your membership application is now being reviewed by the President.";
     actionLabel = "View payment status";
   } else if (membershipApproved) {
     icon = <ShieldCheck className="text-green-600 w-10 h-10" />;
@@ -283,9 +290,10 @@ function ApplicantPendingScreen() {
   } else if (rejected) {
     icon = <FileSearch className="text-red-500 w-10 h-10" />;
     iconBg = "bg-red-100";
-    title = "Application not approved";
-    body = "Your membership application was not approved.";
-    actionLabel = "View payment status";
+    title = "Membership Application Denied";
+    body =
+      "Your membership application was reviewed and not approved. Your payment remains separate and approved.";
+    actionLabel = "View application status";
   }
 
   return (
@@ -298,6 +306,35 @@ function ApplicantPendingScreen() {
           </div>
           <h1 className="text-3xl font-black text-[#2d6a2d] mb-4">{title}</h1>
           <p className="text-gray-600 text-lg mb-8 max-w-md mx-auto">{body}</p>
+
+          {rejected && (
+            <div className="mb-8 max-w-md mx-auto space-y-4 rounded-3xl border border-red-200 bg-red-50 p-6 text-left">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-red-600">Reason</p>
+                <p className="mt-1 text-sm font-semibold text-red-800">
+                  {status?.application.rejectionReason ?? "No reason was provided."}
+                </p>
+              </div>
+              {status?.application.rejectionDetails && (
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-red-600">Message from the President</p>
+                  <p className="mt-1 text-sm text-red-800">{status.application.rejectionDetails}</p>
+                </div>
+              )}
+              {status?.application.reviewedBy && (
+                <p className="text-xs text-red-700/80">
+                  Decided by: {status.application.reviewedBy.name ?? status.application.reviewedBy.username} — President
+                  {status.application.reviewedAt
+                    ? ` · ${new Date(status.application.reviewedAt).toLocaleString("en-PH", {
+                        month: "short",
+                        day: "2-digit",
+                        year: "numeric",
+                      })}`
+                    : ""}
+                </p>
+              )}
+            </div>
+          )}
 
           {!membershipApproved && !rejected && (
             <Link

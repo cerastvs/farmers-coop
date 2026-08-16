@@ -10,6 +10,7 @@ type Tab =
   | "loans"
   | "payments"
   | "applicationPayments"
+  | "membershipApplications"
   | "supplies"
   | "members"
   | "reports"
@@ -121,6 +122,32 @@ interface ApplicationAwaitingPayment {
   createdAt: string;
 }
 
+interface MembershipApplication {
+  id: string;
+  fullName: string;
+  contact: string | null;
+  status: string;
+  createdAt: string;
+  reviewedBy: AuditUser | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
+  rejectionDetails: string | null;
+  payment: {
+    id: string;
+    status: string;
+    paymentMethod: string;
+    verifiedAt: string | null;
+    verifiedBy: AuditUser | null;
+  } | null;
+}
+
+interface MembershipCounts {
+  pendingPaymentApprovals: number;
+  awaitingReview: number;
+  denied: number;
+  approvedMembers: number;
+}
+
 const fieldClass = "rounded-xl border border-[#dce5d9] bg-white px-3 py-2 text-sm text-[#173a2b] outline-none focus:border-[#39733e] focus:ring-2 focus:ring-[#dcefd0]";
 const buttonClass = "rounded-xl bg-[#26633f] px-3.5 py-2 text-xs font-bold text-white transition hover:bg-[#174b36] disabled:cursor-not-allowed disabled:opacity-50";
 const secondaryButton = "rounded-xl border border-[#cddbc9] bg-white px-3.5 py-2 text-xs font-bold text-[#315646] transition hover:bg-[#f0f7eb] disabled:opacity-50";
@@ -192,7 +219,17 @@ export default function AdminPage() {
   const [applicationsAwaitingPayment, setApplicationsAwaitingPayment] = useState<
     ApplicationAwaitingPayment[]
   >([]);
+  const [membershipApplications, setMembershipApplications] = useState<
+    MembershipApplication[]
+  >([]);
+  const [membershipCounts, setMembershipCounts] = useState<MembershipCounts>({
+    pendingPaymentApprovals: 0,
+    awaitingReview: 0,
+    denied: 0,
+    approvedMembers: 0,
+  });
   const [feeAmount, setFeeAmount] = useState(0);
+  const [memFilter, setMemFilter] = useState("PENDING_APPLICATION_REVIEW");
   const [proofModalUrl, setProofModalUrl] = useState<string | null>(null);
   const [feeSearch, setFeeSearch] = useState("");
   const [feeStatus, setFeeStatus] = useState("");
@@ -205,7 +242,7 @@ export default function AdminPage() {
     if (!user) return [] as Tab[];
     const result: Tab[] = ["members", "reports", "posts"];
     if (["PRESIDENT", "TREASURER"].includes(user.role)) result.unshift("loans", "payments");
-    if (user.role === "PRESIDENT") result.splice(result.indexOf("members"), 0, "applicationPayments");
+    if (user.role === "PRESIDENT") result.splice(result.indexOf("members"), 0, "applicationPayments", "membershipApplications");
     if (["SECRETARY", "TREASURER"].includes(user.role)) result.splice(result.includes("payments") ? 2 : 0, 0, "supplies");
     return result;
   }, [user]);
@@ -215,6 +252,7 @@ export default function AdminPage() {
       loans: "/api/admin/loans",
       payments: "/api/admin/payments",
       applicationPayments: "/api/admin/application-payments",
+      membershipApplications: "/api/admin/membership-applications",
       supplies: "/api/admin/supplies",
       members: "/api/admin/members",
       reports: "/api/admin/reports",
@@ -233,6 +271,17 @@ export default function AdminPage() {
         setApplicationFees(data.payments ?? []);
         setApplicationsAwaitingPayment(data.pendingApplications ?? []);
         setFeeAmount(Number(data.feeAmount) || 0);
+      }
+      if (selected === "membershipApplications") {
+        setMembershipApplications(data.applications ?? []);
+        setMembershipCounts(
+          data.counts ?? {
+            pendingPaymentApprovals: 0,
+            awaitingReview: 0,
+            denied: 0,
+            approvedMembers: 0,
+          },
+        );
       }
       if (selected === "supplies") setSupplies(data);
       if (selected === "members") setMembers(data.members ?? data);
@@ -314,6 +363,7 @@ export default function AdminPage() {
 
   function tabLabel(item: Tab) {
     if (item === "applicationPayments") return "Application Payments";
+    if (item === "membershipApplications") return "Membership Applications";
     return item;
   }
 
@@ -541,6 +591,110 @@ export default function AdminPage() {
               </AdminSection>
             )}
 
+            {tab === "membershipApplications" && (
+              <AdminSection
+                title="Membership Applications"
+                description="Review fully-paid applications and decide whether the applicant becomes a cooperative member."
+              >
+                <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <StatCard
+                    label="Pending Payment Approvals"
+                    value={membershipCounts.pendingPaymentApprovals}
+                  />
+                  <StatCard
+                    label="Membership Applications"
+                    value={membershipCounts.awaitingReview}
+                  />
+                  <StatCard label="Denied Applications" value={membershipCounts.denied} />
+                  <StatCard label="Approved Members" value={membershipCounts.approvedMembers} />
+                </div>
+
+                <form
+                  className="mb-5 grid gap-2 rounded-2xl border border-[#dce5d9] bg-[#f7faf5] p-4 sm:grid-cols-[2fr_1fr_auto]"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void loadTab("membershipApplications");
+                  }}
+                >
+                  <input
+                    className={fieldClass}
+                    value={feeSearch}
+                    onChange={(e) => setFeeSearch(e.target.value)}
+                    placeholder="Search by name, application ID, or contact"
+                  />
+                  <select className={fieldClass} value={memFilter} onChange={(e) => setMemFilter(e.target.value)}>
+                    <option value="PENDING_APPLICATION_REVIEW">Awaiting President review</option>
+                    <option value="REJECTED">Denied</option>
+                    <option value="APPROVED">Approved</option>
+                    <option value="PENDING_PAYMENT">Pending payment</option>
+                    <option value="">All applications</option>
+                  </select>
+                  <button disabled={loading} className={buttonClass}>Filter</button>
+                </form>
+
+                <RecordList empty="No membership applications found.">
+                  {membershipApplications
+                    .filter(
+                      (app) =>
+                        (!memFilter || app.status === memFilter) &&
+                        (!feeSearch.trim() ||
+                          app.fullName.toLowerCase().includes(feeSearch.trim().toLowerCase()) ||
+                          app.id.toLowerCase().includes(feeSearch.trim().toLowerCase()) ||
+                          (app.contact ?? "").toLowerCase().includes(feeSearch.trim().toLowerCase())),
+                    )
+                    .map((app) => {
+                      const paymentOk = app.payment?.status === "APPROVED";
+                      return (
+                        <Record
+                          key={app.id}
+                          title={app.fullName}
+                          meta={`App #${app.id.slice(0, 8)} · ${new Date(app.createdAt).toLocaleDateString("en-PH")} · ${app.contact ?? "No contact"}`}
+                          status={app.status}
+                        >
+                          <div className="grid gap-2 text-xs text-[#496558]">
+                            <p>
+                              <span className="font-bold text-[#315646]">Payment:</span>{" "}
+                              {app.payment
+                                ? paymentOk
+                                  ? "✓ Approved"
+                                  : app.payment.status
+                                : "No payment"}
+                              {app.payment?.paymentMethod === "ONLINE"
+                                ? " · Online"
+                                : app.payment
+                                  ? " · On-site"
+                                  : ""}
+                            </p>
+                            {app.payment?.verifiedBy && (
+                              <AuditRow label="Payment verified by" user={app.payment.verifiedBy} at={app.payment.verifiedAt} />
+                            )}
+                            <p>
+                              <span className="font-bold text-[#315646]">Application status:</span>{" "}
+                              {app.status === "PENDING_APPLICATION_REVIEW"
+                                ? "Pending President review"
+                                : app.status}
+                            </p>
+                            {app.status === "REJECTED" && app.rejectionReason && (
+                              <p className="text-red-600">
+                                <span className="font-bold">Denial reason:</span> {app.rejectionReason}
+                              </p>
+                            )}
+                          </div>
+                          <ActionRow>
+                            <Link
+                              href={`/admin/applications/${app.id}`}
+                              className={`${buttonClass} inline-block`}
+                            >
+                              View Full Application
+                            </Link>
+                          </ActionRow>
+                        </Record>
+                      );
+                    })}
+                </RecordList>
+              </AdminSection>
+            )}
+
             {tab === "supplies" && (
               <AdminSection title="Supply Inventory" description="Maintain stock and process member requests.">
                 <form
@@ -760,6 +914,15 @@ function AdminSection({ title, description, children }: { title: string; descrip
       <p className="mb-5 mt-1 text-sm text-[#718176]">{description}</p>
       {children}
     </section>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border border-[#e3e9e0] bg-[#f7faf5] px-4 py-3">
+      <p className="text-xs font-semibold text-[#718176]">{label}</p>
+      <p className="mt-1 text-2xl font-black text-[#173a2b]">{value}</p>
+    </div>
   );
 }
 

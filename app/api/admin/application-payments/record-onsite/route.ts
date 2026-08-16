@@ -202,8 +202,8 @@ async function completeOnSiteApplicationFee(
         },
       });
 
-      const reviewers = await tx.user.findMany({
-        where: { role: Role.SECRETARY, active: true },
+      const presidents = await tx.user.findMany({
+        where: { role: Role.PRESIDENT, active: true },
         select: { id: true },
       });
       await Promise.all([
@@ -213,11 +213,11 @@ async function completeOnSiteApplicationFee(
           message:
             "Your on-site application fee payment was recorded. Your application will now proceed to the next stage.",
         }),
-        ...reviewers.map((reviewer) =>
+        ...presidents.map((president) =>
           notifyUser(tx, {
-            userId: reviewer.id,
-            title: "Application ready for review",
-            message: `${application!.fullName}'s application fee was verified on-site and the application is ready for review.`,
+            userId: president.id,
+            title: "Membership application awaiting review",
+            message: `${application!.fullName}'s application fee was verified on-site and their membership application is now ready for your review.`,
           }),
         ),
       ]);

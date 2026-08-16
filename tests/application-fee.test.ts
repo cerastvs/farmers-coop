@@ -4,6 +4,7 @@ import test from "node:test";
 import { PaymentMethod } from "../app/generated/prisma";
 import {
   getApplicationFeeAmount,
+  MembershipReviewSchema,
   parseApplicationFeeSubmission,
   SearchSchema,
 } from "../lib/application-fee";
@@ -149,5 +150,61 @@ test("application fee payment transitions only allow approve and decline", () =>
       "PENDING_APPROVAL" as never,
       "Application fee payment",
     ),
+  );
+});
+
+test("membership review approve does not require a reason", () => {
+  assert.deepEqual(
+    MembershipReviewSchema.parse({ action: "approve" }),
+    { action: "approve" },
+  );
+});
+
+test("membership review deny requires a reason", () => {
+  assert.equal(MembershipReviewSchema.safeParse({ action: "deny" }).success, false);
+  assert.equal(
+    MembershipReviewSchema.safeParse({ action: "deny", reason: "" }).success,
+    false,
+  );
+  assert.deepEqual(
+    MembershipReviewSchema.parse({
+      action: "deny",
+      reason: "Incomplete application",
+      explanation: "Farm documents are missing.",
+    }),
+    {
+      action: "deny",
+      reason: "Incomplete application",
+      explanation: "Farm documents are missing.",
+    },
+  );
+});
+
+test("membership review deny with Other requires an explanation", () => {
+  assert.equal(
+    MembershipReviewSchema.safeParse({
+      action: "deny",
+      reason: "Other",
+    }).success,
+    false,
+  );
+  assert.deepEqual(
+    MembershipReviewSchema.parse({
+      action: "deny",
+      reason: "Other",
+      explanation: "The applicant moved to another province.",
+    }),
+    {
+      action: "deny",
+      reason: "Other",
+      explanation: "The applicant moved to another province.",
+    },
+  );
+});
+
+test("membership review rejects unknown actions", () => {
+  assert.equal(
+    MembershipReviewSchema.safeParse({ action: "maybe" }).success,
+    false,
   );
 });

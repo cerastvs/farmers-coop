@@ -116,16 +116,16 @@ export async function PATCH(
             throw new ApiError(409, "Application status changed during review");
           }
 
-          const reviewers = await tx.user.findMany({
-            where: { role: Role.SECRETARY, active: true },
+          const presidents = await tx.user.findMany({
+            where: { role: Role.PRESIDENT, active: true },
             select: { id: true },
           });
           await Promise.all(
-            reviewers.map((reviewer) =>
+            presidents.map((president) =>
               notifyUser(tx, {
-                userId: reviewer.id,
-                title: "Application ready for review",
-                message: `${payment.application!.fullName}'s application fee was verified and the application is ready for review.`,
+                userId: president.id,
+                title: "Membership application awaiting review",
+                message: `${payment.application!.fullName}'s application fee was verified and their membership application is now ready for your review.`,
               }),
             ),
           );

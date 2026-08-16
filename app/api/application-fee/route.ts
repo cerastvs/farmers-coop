@@ -26,7 +26,16 @@ export async function GET() {
 
     const application = await prisma.application.findFirst({
       where: { userId: actor.userId },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        rejectionReason: true,
+        rejectionDetails: true,
+        reviewedAt: true,
+        reviewedByUser: {
+          select: { id: true, name: true, username: true, role: true },
+        },
+      },
     });
     if (!application) {
       throw new ApiError(404, "Application not found");
@@ -74,6 +83,10 @@ export async function GET() {
       application: {
         id: application.id,
         status: application.status,
+        rejectionReason: application.rejectionReason,
+        rejectionDetails: application.rejectionDetails,
+        reviewedAt: application.reviewedAt?.toISOString() ?? null,
+        reviewedBy: application.reviewedByUser,
       },
       fee: {
         amount: getApplicationFeeAmount(),

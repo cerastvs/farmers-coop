@@ -23,6 +23,40 @@ export const SearchSchema = z
   })
   .strict();
 
+export const APPLICATION_DENIAL_REASONS = [
+  "Incomplete application",
+  "Invalid information",
+  "Does not meet membership requirements",
+  "Required documents missing",
+  "Application information could not be verified",
+  "Other",
+] as const;
+
+export const MembershipReviewSchema = z.discriminatedUnion("action", [
+  z
+    .object({
+      action: z.literal("approve"),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal("deny"),
+      reason: z.string().trim().min(1).max(200),
+      explanation: z.string().trim().max(1000).optional(),
+    })
+    .superRefine((value, ctx) => {
+      const explanation = value.explanation?.trim() ?? "";
+      if (value.reason.toLowerCase() === "other" && !explanation) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'An explanation is required when the reason is "Other"',
+        });
+      }
+    })
+    .strict(),
+]);
+
 export function getApplicationFeeAmount() {
   const raw = process.env.APPLICATION_FEE_AMOUNT?.trim();
   if (!raw) return 500;

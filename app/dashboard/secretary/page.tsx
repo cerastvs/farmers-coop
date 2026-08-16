@@ -1901,50 +1901,13 @@ function MachineFormModal({
 function ApplicationDetailModal({
   application,
   onClose,
-  onAction,
 }: {
   application: Application;
   onClose: () => void;
-  onAction: () => void;
 }) {
-  const [acting, setActing] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<
-    "approve" | "reject" | null
-  >(null);
-  const [rejectionReason, setRejectionReason] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [imageModal, setImageModal] = useState<{ src: string; alt: string } | null>(null);
 
   const isPending = application.status === "PENDING";
-
-  async function handleConfirm(action: "approve" | "reject") {
-    setActing(true);
-    setError(null);
-    try {
-      const res = await fetch(
-        `/api/secretary/applications/${application.id}/${action}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            action === "reject" ? { reason: rejectionReason.trim() } : {},
-          ),
-        },
-      );
-      const data = await res.json();
-      if (res.ok) {
-        setConfirmAction(null);
-        onAction();
-        onClose();
-      } else {
-        setError(data.error || `Failed to ${action} application`);
-      }
-    } catch {
-      setError(`Failed to ${action} application`);
-    } finally {
-      setActing(false);
-    }
-  }
 
   return (
     <>
@@ -1977,12 +1940,6 @@ function ApplicationDetailModal({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          {error && (
-            <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 font-medium">
-              {error}
-            </div>
-          )}
-
           {/* Personal Info */}
           <div>
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
@@ -2074,66 +2031,12 @@ function ApplicationDetailModal({
 
         {/* Actions */}
         {isPending && (
-          <div className="p-6 border-t border-gray-100 bg-gray-50 flex gap-3">
-            {confirmAction ? (
-              <div className="flex-1 space-y-3">
-                {confirmAction === "reject" && (
-                  <textarea
-                    value={rejectionReason}
-                    onChange={(event) => setRejectionReason(event.target.value)}
-                    placeholder="Reason for rejection"
-                    rows={3}
-                    maxLength={500}
-                    className="w-full resize-none rounded-xl border border-red-200 bg-white px-3 py-2 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                  />
-                )}
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      setConfirmAction(null);
-                      setRejectionReason("");
-                    }}
-                    disabled={acting}
-                    className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => handleConfirm(confirmAction)}
-                    disabled={
-                      acting ||
-                      (confirmAction === "reject" && !rejectionReason.trim())
-                    }
-                    className={`flex-1 py-3 text-white rounded-2xl font-bold transition disabled:opacity-50 ${
-                      confirmAction === "approve"
-                        ? "bg-green-600 hover:bg-green-700"
-                        : "bg-red-600 hover:bg-red-700"
-                    }`}
-                  >
-                    {acting
-                      ? "Processing..."
-                      : confirmAction === "approve"
-                        ? "Confirm Approve"
-                        : "Confirm Reject"}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <button
-                  onClick={() => setConfirmAction("reject")}
-                  className="flex-1 py-3 bg-white border-2 border-red-200 text-red-600 hover:bg-red-50 rounded-2xl font-bold transition"
-                >
-                  Reject
-                </button>
-                <button
-                  onClick={() => setConfirmAction("approve")}
-                  className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold transition"
-                >
-                  Approve
-                </button>
-              </>
-            )}
+          <div className="p-6 border-t border-gray-100 bg-gray-50">
+            <p className="text-sm text-gray-500">
+              Membership application decisions are made by the{" "}
+              <span className="font-bold text-[#173a2b]">President</span> in
+              the Membership Applications section of the admin workspace.
+            </p>
           </div>
         )}
       </div>
@@ -3623,7 +3526,7 @@ export default function SecretaryDashboard() {
       {detailMachine && <MachineDetailModal machine={detailMachine} onClose={() => setDetailMachine(null)} onEdit={handleEditFromDetail} onDelete={handleDeleteFromDetail} onViewRequest={setViewRequest} onViewRejected={setViewRejectedRequest} onLifecycle={handleDecideRequest} />}
       {viewRequest && <RequestDetailModal request={viewRequest} onClose={() => setViewRequest(null)} onDecide={handleDecideRequest} />}
       {viewRejectedRequest && <RejectionDetailModal request={viewRejectedRequest} onClose={() => setViewRejectedRequest(null)} />}
-      {detailApp && <ApplicationDetailModal application={detailApp} onClose={() => setDetailApp(null)} onAction={fetchData} />}
+      {detailApp && <ApplicationDetailModal application={detailApp} onClose={() => setDetailApp(null)} />}
       {showForm && <MachineFormModal machine={formMachine} onClose={() => { setShowForm(false); setFormMachine(null); }} onSave={fetchData} />}
 
       {deleteConfirm && (

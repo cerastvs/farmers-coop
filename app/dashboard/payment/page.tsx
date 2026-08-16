@@ -48,7 +48,14 @@ interface PaymentRecord {
 }
 
 interface ApplicationFeeData {
-  application: { id: string; status: string };
+  application: {
+    id: string;
+    status: string;
+    rejectionReason: string | null;
+    rejectionDetails: string | null;
+    reviewedAt: string | null;
+    reviewedBy: AuditUser | null;
+  };
   fee: { amount: number };
   payment: PaymentRecord | null;
   history: PaymentRecord[];
@@ -56,10 +63,10 @@ interface ApplicationFeeData {
 
 const STEPS = [
   "Application Submitted",
-  "Payment",
-  "Payment Verification",
-  "Application Review",
-  "Membership",
+  "Application Fee Paid",
+  "Payment Verified",
+  "President Review",
+  "Membership Approved",
 ];
 
 export default function PaymentPage() {
@@ -180,6 +187,7 @@ function derivePhase(
 
 function currentStepIndex(applicationStatus: string, phase: ApplicationFeeStatus) {
   if (applicationStatus === "APPROVED") return 4;
+  if (applicationStatus === "REJECTED") return 3;
   if (phase === "approved") return 3;
   if (phase === "pending") return 2;
   return 1;
@@ -596,23 +604,61 @@ function DeclinedProof({
 }
 
 function ApplicationRejected({ data }: { data: ApplicationFeeData }) {
-  const latest = data.history[0];
+  const { application } = data;
   return (
     <div className="mb-6 rounded-3xl border border-red-200 bg-red-50 p-6">
       <div className="flex items-center gap-2 text-red-600">
         <XCircle size={18} />
-        <h2 className="font-extrabold">Application Not Approved</h2>
+        <h2 className="font-extrabold">Membership Application Denied</h2>
       </div>
       <p className="mt-2 text-sm text-red-800">
-        {data.application.status === "REJECTED"
-          ? "Your membership application was not approved."
-          : "Your application could not be processed."}
+        Unfortunately, your membership application was not approved. This
+        decision concerns your application — your approved payment remains
+        valid and separate.
       </p>
-      {latest?.rejectionReason && (
-        <p className="mt-3 text-sm font-semibold text-red-700">
-          {latest.rejectionReason}
-        </p>
-      )}
+      <div className="mt-4 space-y-4 rounded-2xl border border-red-200 bg-white p-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-red-600">
+              Application status
+            </p>
+            <p className="mt-1 text-sm font-semibold text-red-700">Denied</p>
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-[#4f7e38]">
+              Payment status
+            </p>
+            <p className="mt-1 text-sm font-semibold text-green-700">Approved</p>
+          </div>
+        </div>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-red-600">
+            Reason
+          </p>
+          <p className="mt-1 text-sm font-semibold text-red-800">
+            {application.rejectionReason || "No reason was provided."}
+          </p>
+        </div>
+        {application.rejectionDetails && (
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-red-600">
+              Message from the President
+            </p>
+            <p className="mt-1 text-sm text-red-800">
+              {application.rejectionDetails}
+            </p>
+          </div>
+        )}
+        {application.reviewedBy && (
+          <p className="text-xs text-[#718176]">
+            Decided by: {personLabel(application.reviewedBy)} ·{" "}
+            {formatDate(application.reviewedAt)}
+          </p>
+        )}
+      </div>
+      <p className="mt-3 text-sm font-semibold text-red-700">
+        You do not need to pay the application fee again.
+      </p>
     </div>
   );
 }

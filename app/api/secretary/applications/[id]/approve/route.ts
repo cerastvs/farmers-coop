@@ -4,14 +4,13 @@ import { ApplicationStatus, Role } from "@/app/generated/prisma";
 import { notifyUser, writeAudit } from "@/lib/activity";
 import { apiErrorResponse, ApiError, requireUser } from "@/lib/api";
 import prisma from "@/lib/client";
-import { MEMBERSHIP_ROLES } from "@/lib/permissions";
 
 export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const actor = await requireUser(MEMBERSHIP_ROLES);
+    const actor = await requireUser([Role.PRESIDENT]);
     const { id } = await params;
     const application = await prisma.application.findUnique({
       where: { id },

@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { ApplicationStatus } from "@/app/generated/prisma";
+import { ApplicationStatus, Role } from "@/app/generated/prisma";
 import { notifyUser, writeAudit } from "@/lib/activity";
 import { apiErrorResponse, ApiError, requireUser } from "@/lib/api";
 import prisma from "@/lib/client";
-import { MEMBERSHIP_ROLES } from "@/lib/permissions";
 
 const RejectApplicationSchema = z
   .object({
@@ -21,7 +20,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const actor = await requireUser(MEMBERSHIP_ROLES);
+    const actor = await requireUser([Role.PRESIDENT]);
     const parsed = RejectApplicationSchema.safeParse(
       await req.json().catch(() => ({})),
     );

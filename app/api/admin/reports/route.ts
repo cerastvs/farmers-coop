@@ -3,6 +3,7 @@ import {
   LoanStatus,
   MachineStatus,
   PaymentStatus,
+  PaymentType,
   Prisma,
   ReportType,
   Role,
@@ -60,7 +61,25 @@ async function generateMembersReport() {
       },
     }),
     prisma.application.findMany({
-      select: { status: true },
+      orderBy: { createdAt: "desc" },
+      include: {
+        reviewedByUser: {
+          select: { id: true, name: true, username: true, role: true },
+        },
+        payments: {
+          where: { type: PaymentType.APPLICATION_FEE },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: {
+            status: true,
+            paymentMethod: true,
+            verifiedAt: true,
+            verifiedByUser: {
+              select: { id: true, name: true, username: true, role: true },
+            },
+          },
+        },
+      },
     }),
   ]);
 
@@ -82,6 +101,28 @@ async function generateMembersReport() {
     members: users.map((user) => ({
       ...user,
       createdAt: user.createdAt.toISOString(),
+    })),
+    applications: applications.map((application) => ({
+      id: application.id,
+      applicant: application.fullName,
+      appliedAt: application.createdAt.toISOString(),
+      paymentStatus: application.payments[0]?.status ?? null,
+      paymentMethod: application.payments[0]?.paymentMethod ?? null,
+      paymentVerifiedAt:
+        application.payments[0]?.verifiedAt?.toISOString() ?? null,
+      paymentVerifiedBy: application.payments[0]?.verifiedByUser ?? null,
+      applicationStatus: application.status,
+      decision: application.reviewedAt
+        ? application.status === ApplicationStatus.APPROVED
+          ? "Approved"
+          : application.status === ApplicationStatus.REJECTED
+            ? "Denied"
+            : null
+        : null,
+      decisionAt: application.reviewedAt?.toISOString() ?? null,
+      decidedBy: application.reviewedByUser,
+      denialReason: application.rejectionReason,
+      denialDetails: application.rejectionDetails,
     })),
   };
 }

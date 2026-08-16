@@ -17,6 +17,8 @@ enum Role {
 
 enum ApplicationStatus {
   PENDING
+  PENDING_PAYMENT
+  PENDING_APPLICATION_REVIEW
   APPROVED
   REJECTED
 }
@@ -33,6 +35,14 @@ enum PaymentStatus {
   PENDING
   VERIFIED
   REJECTED
+  PENDING_APPROVAL
+  APPROVED
+  DECLINED
+}
+
+enum PaymentMethod {
+  ONLINE
+  ON_SITE
 }
 
 enum MachineStatus {
@@ -201,6 +211,8 @@ model Application {
   reviewedBy      String?
   reviewedAt      DateTime?
   rejectionReason String?
+
+  payments Payment[]
 }
 
 model Payment {
@@ -212,10 +224,13 @@ model Payment {
   amount Decimal     @db.Decimal(10, 2)
   loanId String?
   loan   Loan?       @relation(fields: [loanId], references: [id], onDelete: SetNull)
+  applicationId String?
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
 
-  receiptUrl  String?
-  referenceNo String?
-  status      PaymentStatus @default(PENDING)
+  receiptUrl    String?
+  referenceNo   String?
+  paymentMethod PaymentMethod @default(ONLINE)
+  status        PaymentStatus @default(PENDING)
 
   createdAt       DateTime  @default(now())
   verifiedBy      String?

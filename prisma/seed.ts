@@ -5,6 +5,7 @@ import {
   Role,
   PaymentType,
   PaymentStatus,
+  PaymentMethod,
   LoanStatus,
   MachineStatus,
   SupplyTransactionType,
@@ -98,7 +99,7 @@ async function main() {
     ],
   });
 
-  await prisma.application.create({
+  const applicantApplication = await prisma.application.create({
     data: {
       userId: applicant.id,
       firstName: "Jose",
@@ -115,7 +116,7 @@ async function main() {
       yearsFarming: 5,
       validIdUrl: "https://example.com/valid-id.jpg",
       proofOfFarmUrl: "https://example.com/proof-of-farm.jpg",
-      status: ApplicationStatus.PENDING,
+      status: ApplicationStatus.PENDING_PAYMENT,
     },
   });
 
@@ -183,10 +184,13 @@ async function main() {
       },
       {
         userId: applicant.id,
+        applicationId: applicantApplication.id,
         type: PaymentType.APPLICATION_FEE,
-        amount: 100,
-        status: PaymentStatus.PENDING,
-        receiptUrl: null,
+        paymentMethod: PaymentMethod.ONLINE,
+        amount: 500,
+        status: PaymentStatus.PENDING_APPROVAL,
+        receiptUrl: "https://example.com/application-fee-proof.jpg",
+        referenceNo: "GCASH-2026-0001",
       },
     ],
   });

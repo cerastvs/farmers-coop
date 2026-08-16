@@ -1,4 +1,4 @@
-import { Prisma, Role } from "@/app/generated/prisma";
+import { ApplicationStatus, Prisma, Role } from "@/app/generated/prisma";
 import { NextRequest } from "next/server";
 import { imgbbUpload } from "sdk-imagebb";
 
@@ -9,7 +9,6 @@ import {
 } from "@/lib/activity";
 import { apiErrorResponse, ApiError, requireUser } from "@/lib/api";
 import prisma from "@/lib/client";
-import { MEMBERSHIP_ROLES } from "@/lib/permissions";
 import { ApplicationSchema } from "@/lib/validators/registration";
 
 function composeFullName(
@@ -112,6 +111,7 @@ export async function POST(req: NextRequest) {
           yearsFarming,
           proofOfFarmUrl: farmImgUrl!,
           validIdUrl: validIdImgUrl!,
+          status: ApplicationStatus.PENDING_PAYMENT,
         },
       });
       await tx.user.update({
@@ -128,25 +128,8 @@ export async function POST(req: NextRequest) {
         userId: actor.userId,
         title: "Application submitted",
         message:
-          "Your membership application was received and is awaiting review.",
+          "Your membership application was received. Please pay the application fee to continue.",
       });
-
-      const reviewers = await tx.user.findMany({
-        where: {
-          role: { in: [...MEMBERSHIP_ROLES] },
-          active: true,
-        },
-        select: { id: true },
-      });
-      await Promise.all(
-        reviewers.map((reviewer) =>
-          notifyUser(tx, {
-            userId: reviewer.id,
-            title: "New membership application",
-            message: `${fullname}'s membership application is ready for review.`,
-          }),
-        ),
-      );
 
       return created;
     });

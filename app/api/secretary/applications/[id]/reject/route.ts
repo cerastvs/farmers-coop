@@ -46,7 +46,10 @@ export async function POST(
       throw new ApiError(404, "Application not found");
     }
 
-    if (application.status !== ApplicationStatus.PENDING) {
+    if (
+      application.status !== ApplicationStatus.PENDING &&
+      application.status !== ApplicationStatus.PENDING_APPLICATION_REVIEW
+    ) {
       throw new ApiError(409, "Application is already processed");
     }
 

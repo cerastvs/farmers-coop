@@ -65,6 +65,15 @@ export function DashboardHeader() {
           >
             Edit Profile
           </Link>
+          {userRole === "APPLICANT" && (
+            <Link
+              href="/dashboard/payment"
+              onClick={() => setMenuOpen(false)}
+              className="block w-full px-4 py-3 text-left text-sm font-semibold text-[#315646] transition-colors hover:bg-[#f0f7eb]"
+            >
+              Application Payment
+            </Link>
+          )}
           {userRole === "SECRETARY" && (
             <Link
               href="/dashboard/secretary"

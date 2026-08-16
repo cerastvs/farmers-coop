@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="480" viewBox="0 0 480 480" font-family="Arial, Helvetica, sans-serif">
+  <rect width="480" height="480" fill="#ffffff"/>
+  <!-- Find patterns -->
+  <g fill="#000000">
+    <rect x="24" y="24" width="96" height="96"/>
+    <rect x="40" y="40" width="64" height="64" fill="#ffffff"/>
+    <rect x="56" y="56" width="32" height="32"/>
+    <rect x="360" y="24" width="96" height="96"/>
+    <rect x="376" y="40" width="64" height="64" fill="#ffffff"/>
+    <rect x="392" y="56" width="32" height="32"/>
+    <rect x="24" y="360" width="96" height="96"/>
+    <rect x="40" y="376" width="64" height="64" fill="#ffffff"/>
+    <rect x="56" y="392" width="32" height="32"/>
+  </g>
+  <!-- Data modules (deterministic pattern, placeholder only) -->
+  <g fill="#000000">
+    <rect x="136" y="32" width="16" height="16"/><rect x="168" y="32" width="16" height="16"/><rect x="232" y="32" width="16" height="16"/><rect x="264" y="32" width="16" height="16"/><rect x="312" y="32" width="16" height="16"/><rect x="344" y="32" width="16" height="16"/>
+    <rect x="32" y="136" width="16" height="16"/><rect x="64" y="136" width="16" height="16"/><rect x="136" y="136" width="16" height="16"/><rect x="200" y="136" width="16" height="16"/><rect x="264" y="136" width="16" height="16"/><rect x="328" y="136" width="16" height="16"/><rect x="392" y="136" width="16" height="16"/><rect x="424" y="136" width="16" height="16"/>
+    <rect x="168" y="168" width="16" height="16"/><rect x="232" y="168" width="16" height="16"/><rect x="296" y="168" width="16" height="16"/><rect x="360" y="168" width="16" height="16"/>
+    <rect x="64" y="200" width="16" height="16"/><rect x="136" y="200" width="16" height="16"/><rect x="264" y="200" width="16" height="16"/><rect x="344" y="200" width="16" height="16"/><rect x="424" y="200" width="16" height="16"/>
+    <rect x="96" y="232" width="16" height="16"/><rect x="168" y="232" width="16" height="16"/><rect x="232" y="232" width="16" height="16"/><rect x="312" y="232" width="16" height="16"/><rect x="376" y="232" width="16" height="16"/>
+    <rect x="32" y="264" width="16" height="16"/><rect x="136" y="264" width="16" height="16"/><rect x="200" y="264" width="16" height="16"/><rect x="264" y="264" width="16" height="16"/><rect x="328" y="264" width="16" height="16"/><rect x="392" y="264" width="16" height="16"/>
+    <rect x="64" y="296" width="16" height="16"/><rect x="136" y="296" width="16" height="16"/><rect x="232" y="296" width="16" height="16"/><rect x="296" y="296" width="16" height="16"/><rect x="360" y="296" width="16" height="16"/><rect x="424" y="296" width="16" height="16"/>
+    <rect x="168" y="328" width="16" height="16"/><rect x="264" y="328" width="16" height="16"/><rect x="344" y="328" width="16" height="16"/>
+    <rect x="136" y="360" width="16" height="16"/><rect x="200" y="360" width="16" height="16"/><rect x="296" y="360" width="16" height="16"/><rect x="360" y="360" width="16" height="16"/><rect x="424" y="360" width="16" height="16"/>
+  </g>
+  <g fill="#666666">
+    <rect x="120" y="112" width="208" height="32" rx="8"/>
+  </g>
+  <text x="224" y="135" text-anchor="middle" font-size="20" font-weight="bold" fill="#ffffff">FarmCoop Payment QR</text>
+  <text x="240" y="440" text-anchor="middle" font-size="18" fill="#888888">Replace this placeholder with the cooperative's payment QR code.</text>
+</svg>

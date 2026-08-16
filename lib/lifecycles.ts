@@ -20,6 +20,20 @@ export const paymentTransitions: TransitionMap<PaymentStatus> = {
   PENDING: [PaymentStatus.VERIFIED, PaymentStatus.REJECTED],
   VERIFIED: [],
   REJECTED: [],
+  // Application-fee workflow. Resubmissions create a fresh payment row, so a
+  // declined proof never needs to move back to PENDING_APPROVAL in place.
+  PENDING_APPROVAL: [PaymentStatus.APPROVED, PaymentStatus.DECLINED],
+  APPROVED: [],
+  DECLINED: [],
+};
+
+export const applicationFeePaymentTransitions: TransitionMap<PaymentStatus> = {
+  PENDING: [],
+  VERIFIED: [],
+  REJECTED: [],
+  PENDING_APPROVAL: [PaymentStatus.APPROVED, PaymentStatus.DECLINED],
+  APPROVED: [],
+  DECLINED: [],
 };
 
 export const supplyTransitions: TransitionMap<TransactionStatus> = {

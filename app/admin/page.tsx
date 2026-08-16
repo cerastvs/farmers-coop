@@ -6,7 +6,14 @@ import { ImageModal } from "@/components/ImageModal";
 import { runAdminMutation } from "@/lib/admin-mutation";
 
 type Role = "APPLICANT" | "MEMBER" | "TREASURER" | "PRESIDENT" | "SECRETARY";
-type Tab = "loans" | "payments" | "supplies" | "members" | "reports" | "posts";
+type Tab =
+  | "loans"
+  | "payments"
+  | "applicationPayments"
+  | "supplies"
+  | "members"
+  | "reports"
+  | "posts";
 type User = { id: string; name: string | null; username: string; role: Role };
 type Notice = { kind: "success" | "error"; text: string };
 
@@ -77,6 +84,33 @@ interface Post {
   published: boolean;
 }
 
+interface ApplicationFee {
+  id: string;
+  user: { id: string; name: string; username: string };
+  application: {
+    id: string;
+    fullName: string;
+    contact: string | null;
+    status: string;
+  } | null;
+  amount: number;
+  receiptUrl: string | null;
+  referenceNo: string | null;
+  paymentMethod: string;
+  status: string;
+  rejectionReason: string | null;
+  createdAt: string;
+  verifiedAt: string | null;
+}
+
+interface ApplicationAwaitingPayment {
+  id: string;
+  fullName: string;
+  contact: string | null;
+  status: string;
+  createdAt: string;
+}
+
 const fieldClass = "rounded-xl border border-[#dce5d9] bg-white px-3 py-2 text-sm text-[#173a2b] outline-none focus:border-[#39733e] focus:ring-2 focus:ring-[#dcefd0]";
 const buttonClass = "rounded-xl bg-[#26633f] px-3.5 py-2 text-xs font-bold text-white transition hover:bg-[#174b36] disabled:cursor-not-allowed disabled:opacity-50";
 const secondaryButton = "rounded-xl border border-[#cddbc9] bg-white px-3.5 py-2 text-xs font-bold text-[#315646] transition hover:bg-[#f0f7eb] disabled:opacity-50";
@@ -111,12 +145,17 @@ export default function AdminPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [applicationFees, setApplicationFees] = useState<ApplicationFee[]>([]);
+  const [applicationsAwaitingPayment, setApplicationsAwaitingPayment] = useState<
+    ApplicationAwaitingPayment[]
+  >([]);
   const [proofModalUrl, setProofModalUrl] = useState<string | null>(null);
 
   const tabs = useMemo(() => {
     if (!user) return [] as Tab[];
     const result: Tab[] = ["members", "reports", "posts"];
     if (["PRESIDENT", "TREASURER"].includes(user.role)) result.unshift("loans", "payments");
+    if (user.role === "PRESIDENT") result.splice(result.indexOf("members"), 0, "applicationPayments");
     if (["SECRETARY", "TREASURER"].includes(user.role)) result.splice(result.includes("payments") ? 2 : 0, 0, "supplies");
     return result;
   }, [user]);
@@ -125,6 +164,7 @@ export default function AdminPage() {
     const endpoints: Record<Tab, string> = {
       loans: "/api/admin/loans",
       payments: "/api/admin/payments",
+      applicationPayments: "/api/admin/application-payments",
       supplies: "/api/admin/supplies",
       members: "/api/admin/members",
       reports: "/api/admin/reports",
@@ -135,6 +175,10 @@ export default function AdminPage() {
       const data = await requestJson(endpoints[selected]);
       if (selected === "loans") setLoans(data);
       if (selected === "payments") setPayments(data);
+      if (selected === "applicationPayments") {
+        setApplicationFees(data.payments ?? []);
+        setApplicationsAwaitingPayment(data.pendingApplications ?? []);
+      }
       if (selected === "supplies") setSupplies(data);
       if (selected === "members") setMembers(data.members ?? data);
       if (selected === "reports") setReports(data.reports ?? data);
@@ -188,6 +232,11 @@ export default function AdminPage() {
     return window.prompt("Enter the reason for rejection:");
   }
 
+  function tabLabel(item: Tab) {
+    if (item === "applicationPayments") return "Application Payments";
+    return item;
+  }
+
   if (!user && loading) {
     return <div className="grid min-h-screen place-items-center bg-[#f7f7f2] text-sm font-semibold text-[#315646]">Loading administration…</div>;
   }
@@ -229,9 +278,9 @@ export default function AdminPage() {
                 setNotice(null);
                 void loadTab(item);
               }}
-              className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold capitalize ${tab === item ? "bg-[#26633f] text-white" : "border border-[#dce5d9] bg-white text-[#496558]"}`}
+              className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold ${tab === item ? "bg-[#26633f] text-white" : "border border-[#dce5d9] bg-white text-[#496558]"}`}
             >
-              {item}
+              {tabLabel(item)}
             </button>
           ))}
         </div>
@@ -243,7 +292,7 @@ export default function AdminPage() {
         )}
 
         {loading ? (
-          <div className="rounded-2xl border border-[#e1e8de] bg-white p-10 text-center text-sm text-[#718176]">Loading {tab}…</div>
+          <div className="rounded-2xl border border-[#e1e8de] bg-white p-10 text-center text-sm text-[#718176]">Loading {tabLabel(tab)}…</div>
         ) : (
           <>
             {tab === "loans" && (
@@ -306,6 +355,84 @@ export default function AdminPage() {
                               const reason = rejectReason();
                               if (reason) void mutate(payment.id, `/api/admin/payments/${payment.id}`, { action: "reject", reason }, "Payment rejected.");
                             }} className={secondaryButton}>Reject</button>
+                          </ActionRow>
+                        )}
+                      </Record>
+                    );
+                  })}
+                </RecordList>
+              </AdminSection>
+            )}
+
+            {tab === "applicationPayments" && (
+              <AdminSection title="Application Payment Approvals" description="Review application-fee proofs and record on-site payments for applicants.">
+                {applicationsAwaitingPayment.length > 0 && (
+                  <div className="mb-5 rounded-2xl border border-[#dce5d9] bg-[#f7faf5] p-4">
+                    <p className="text-sm font-extrabold text-[#173a2b]">Record On-Site Payment</p>
+                    <p className="mb-3 mt-1 text-xs text-[#718176]">Applicants who will pay at the cooperative office and have no pending proof.</p>
+                    <div className="space-y-2">
+                      {applicationsAwaitingPayment.map((app) => (
+                        <div key={app.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#e3e9e0] bg-white px-4 py-3">
+                          <div>
+                            <p className="text-sm font-bold text-[#173a2b]">{app.fullName}</p>
+                            <p className="text-xs text-[#718176]">{app.contact ?? "No contact"} · {new Date(app.createdAt).toLocaleDateString()}</p>
+                          </div>
+                          <button
+                            disabled={busy === app.id}
+                            onClick={() => {
+                              if (window.confirm(`Record the on-site application fee for ${app.fullName}? This will mark the payment verified.`)) {
+                                void mutate(app.id, "/api/admin/application-payments/record-onsite", { applicationId: app.id }, "On-site payment recorded and application advanced.", "POST");
+                              }
+                            }}
+                            className={buttonClass}
+                          >
+                            Record on-site payment
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <RecordList empty="No application fee payments found.">
+                  {applicationFees.map((fee) => {
+                    const proofUrl = getSecureProofUrl(fee.receiptUrl);
+                    const isOnline = fee.paymentMethod === "ONLINE";
+                    const pending = fee.status === "PENDING_APPROVAL";
+                    return (
+                      <Record key={fee.id} title={fee.application?.fullName ?? fee.user.name} meta={`₱${fee.amount.toLocaleString()} · ${isOnline ? "Online" : "On-site"} · ${new Date(fee.createdAt).toLocaleDateString()}`} status={fee.status}>
+                        {proofUrl ? (
+                          <button
+                            onClick={() => setProofModalUrl(proofUrl)}
+                            className="group mt-1 inline-block overflow-hidden rounded-xl border border-[#dce5d9]"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={proofUrl}
+                              alt="Proof of payment"
+                              className="h-24 w-24 rounded-xl object-cover transition group-hover:opacity-80"
+                            />
+                          </button>
+                        ) : fee.referenceNo ? (
+                          <p className="rounded-lg bg-[#f7faf5] px-3 py-2 text-xs font-semibold text-[#496558]">
+                            Reference: {fee.referenceNo}
+                          </p>
+                        ) : isOnline && pending ? (
+                          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                            Waiting for uploaded proof
+                          </p>
+                        ) : (
+                          <p className="rounded-lg bg-[#f7faf5] px-3 py-2 text-xs font-semibold text-[#496558]">
+                            Recorded on-site
+                          </p>
+                        )}
+                        {fee.rejectionReason && <p className="text-xs text-red-600">Reason: {fee.rejectionReason}</p>}
+                        {pending && (
+                          <ActionRow>
+                            <button disabled={busy === fee.id} onClick={() => mutate(fee.id, `/api/admin/application-payments/${fee.id}`, { action: "approve" }, "Payment approved and application advanced.")} className={buttonClass}>Approve</button>
+                            <button disabled={busy === fee.id} onClick={() => {
+                              const reason = window.prompt("Optional reason for declining:", "");
+                              if (reason !== null) void mutate(fee.id, `/api/admin/application-payments/${fee.id}`, { action: "decline", reason: reason.trim() || undefined }, "Payment proof declined.");
+                            }} className={secondaryButton}>Decline</button>
                           </ActionRow>
                         )}
                       </Record>
@@ -511,7 +638,7 @@ function Record({ title, meta, status, children }: { title: string; meta: string
 
 function Status({ value }: { value: string }) {
   const positive = ["ACTIVE", "APPROVED", "VERIFIED", "COMPLETED", "PAID", "PUBLISHED"].includes(value);
-  const negative = ["REJECTED", "INACTIVE"].includes(value);
+  const negative = ["REJECTED", "INACTIVE", "DECLINED"].includes(value);
   return <span className={`rounded-full px-2.5 py-1 text-[11px] font-black ${positive ? "bg-green-100 text-green-700" : negative ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>{value}</span>;
 }
 

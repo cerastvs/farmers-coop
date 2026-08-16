@@ -59,8 +59,12 @@ export async function handleSubmit(
 
     await refreshSession();
 
-    alert(isUpdate ? "Profile updated!" : "Application submitted!");
-    if (!isUpdate) form.reset();
+    if (isUpdate) {
+      alert("Profile updated!");
+    } else {
+      alert("Application submitted!");
+      window.location.href = "/dashboard/payment";
+    }
   } catch {
     alert("Something went wrong");
   } finally {

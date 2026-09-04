@@ -128,6 +128,7 @@ interface Supply {
   name: string;
   stock: number;
   price: number;
+  imageUrl: string | null;
   loanLimitPerHectare: number | null;
   transactions: SupplyRequest[];
 }
@@ -2588,8 +2589,8 @@ function SuppliesSection({
   items: Supply[];
   expanded: boolean;
   onToggle: () => void;
-  onAddSupply: (data: { productName: string; price: number; quantity: number; loanLimitPerHectare: number | null }) => void;
-  onUpdateSupply: (id: string, data: { productName: string; price: number; quantity: number; loanLimitPerHectare: number | null }) => void;
+  onAddSupply: (formData: FormData) => void;
+  onUpdateSupply: (id: string, formData: FormData) => void;
   onActionRequest: (id: string, action: "approve" | "complete" | "reject", reason?: string) => void;
   busy: string | null;
 }) {
@@ -2600,20 +2601,48 @@ function SuppliesSection({
   const [addPrice, setAddPrice] = useState("");
   const [addQty, setAddQty] = useState("");
   const [addLimit, setAddLimit] = useState("");
+  const [addImage, setAddImage] = useState<File | null>(null);
+  const [addPreview, setAddPreview] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editPrice, setEditPrice] = useState("");
   const [editQty, setEditQty] = useState("");
   const [editLimit, setEditLimit] = useState("");
+  const [editImage, setEditImage] = useState<File | null>(null);
+  const [editPreview, setEditPreview] = useState<string | null>(null);
+  const [editRemoveImage, setEditRemoveImage] = useState(false);
+  const addFileRef = useRef<HTMLInputElement>(null);
+  const editFileRef = useRef<HTMLInputElement>(null);
+
+  function handleAddImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAddImage(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setAddPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  function handleEditImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEditImage(file);
+    setEditRemoveImage(false);
+    const reader = new FileReader();
+    reader.onloadend = () => setEditPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  }
 
   function handleAdd() {
     if (!addName.trim() || !addPrice || !addQty) return;
-    onAddSupply({
-      productName: addName.trim(),
-      price: Number(addPrice),
-      quantity: Number(addQty),
-      loanLimitPerHectare: addLimit ? Number(addLimit) : null,
-    });
-    setAddName(""); setAddPrice(""); setAddQty(""); setAddLimit(""); setShowAdd(false);
+    const fd = new FormData();
+    fd.append("productName", addName.trim());
+    fd.append("price", addPrice);
+    fd.append("quantity", addQty);
+    if (addLimit) fd.append("loanLimitPerHectare", addLimit);
+    if (addImage) fd.append("image", addImage);
+    onAddSupply(fd);
+    setAddName(""); setAddPrice(""); setAddQty(""); setAddLimit("");
+    setAddImage(null); setAddPreview(null); setShowAdd(false);
   }
 
   function startEdit(s: Supply) {
@@ -2622,6 +2651,9 @@ function SuppliesSection({
     setEditPrice(String(s.price));
     setEditQty(String(s.stock));
     setEditLimit(s.loanLimitPerHectare != null ? String(s.loanLimitPerHectare) : "");
+    setEditImage(null);
+    setEditPreview(null);
+    setEditRemoveImage(false);
   }
 
   return (
@@ -2641,7 +2673,17 @@ function SuppliesSection({
     >
       {showAdd && (
         <div className="mb-3 rounded-xl border border-orange-200 bg-orange-50 p-3 space-y-2">
-          <input value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="Product name" className="w-full rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={() => addFileRef.current?.click()} className="shrink-0 h-14 w-14 rounded-lg border-2 border-dashed border-orange-300 bg-white flex items-center justify-center overflow-hidden hover:border-orange-400 transition">
+              {addPreview ? (
+                <img src={addPreview} alt="Preview" className="h-full w-full object-cover" />
+              ) : (
+                <ImagePlus size={18} className="text-orange-400" />
+              )}
+            </button>
+            <input ref={addFileRef} type="file" accept="image/*" className="hidden" onChange={handleAddImage} />
+            <input value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="Product name" className="flex-1 rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
+          </div>
           <div className="flex gap-2">
             <input value={addPrice} onChange={(e) => setAddPrice(e.target.value)} type="number" min="0" step="0.01" placeholder="Price" className="w-1/2 rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
             <input value={addQty} onChange={(e) => setAddQty(e.target.value)} type="number" min="0" placeholder="Stock" className="w-1/2 rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
@@ -2649,7 +2691,7 @@ function SuppliesSection({
           <input value={addLimit} onChange={(e) => setAddLimit(e.target.value)} type="number" min="0" placeholder="Loan limit per hectare (optional)" className="w-full rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
           <div className="flex gap-2">
             <button onClick={handleAdd} className="rounded-lg bg-orange-600 px-3 py-1 text-[11px] font-bold text-white hover:bg-orange-700">Add</button>
-            <button onClick={() => setShowAdd(false)} className="rounded-lg border border-gray-200 px-3 py-1 text-[11px] font-bold text-gray-500">Cancel</button>
+            <button onClick={() => { setShowAdd(false); setAddImage(null); setAddPreview(null); }} className="rounded-lg border border-gray-200 px-3 py-1 text-[11px] font-bold text-gray-500">Cancel</button>
           </div>
         </div>
       )}
@@ -2658,20 +2700,50 @@ function SuppliesSection({
           <div key={supply.id} className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3">
             {editingId === supply.id ? (
               <div className="space-y-2">
-                <input value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={() => editFileRef.current?.click()} className="shrink-0 h-14 w-14 rounded-lg border-2 border-dashed border-[#dce5d9] bg-white flex items-center justify-center overflow-hidden hover:border-orange-300 transition">
+                    {editPreview ? (
+                      <img src={editPreview} alt="Preview" className="h-full w-full object-cover" />
+                    ) : !editRemoveImage && supply.imageUrl ? (
+                      <img src={supply.imageUrl} alt={supply.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <ImagePlus size={18} className="text-gray-400" />
+                    )}
+                  </button>
+                  <input ref={editFileRef} type="file" accept="image/*" className="hidden" onChange={handleEditImage} />
+                  {!editRemoveImage && (editImage || supply.imageUrl) && (
+                    <button type="button" onClick={() => { setEditImage(null); setEditPreview(null); setEditRemoveImage(true); }} className="text-[10px] text-red-500 font-medium">Remove</button>
+                  )}
+                  <input value={editName} onChange={(e) => setEditName(e.target.value)} className="flex-1 rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
+                </div>
                 <div className="flex gap-2">
                   <input value={editPrice} onChange={(e) => setEditPrice(e.target.value)} type="number" min="0" step="0.01" className="w-1/2 rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
                   <input value={editQty} onChange={(e) => setEditQty(e.target.value)} type="number" min="0" className="w-1/2 rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
                 </div>
                 <input value={editLimit} onChange={(e) => setEditLimit(e.target.value)} type="number" min="0" placeholder="Loan limit per hectare (optional)" className="w-full rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
                 <div className="flex gap-2">
-                  <button disabled={busy === supply.id} onClick={() => { onUpdateSupply(supply.id, { productName: editName, price: Number(editPrice), quantity: Number(editQty), loanLimitPerHectare: editLimit ? Number(editLimit) : null }); setEditingId(null); }} className="rounded-lg bg-orange-600 px-3 py-1 text-[11px] font-bold text-white disabled:opacity-50">Save</button>
+                  <button disabled={busy === supply.id} onClick={() => {
+                    const fd = new FormData();
+                    fd.append("productName", editName);
+                    fd.append("price", editPrice);
+                    fd.append("quantity", editQty);
+                    if (editLimit) fd.append("loanLimitPerHectare", editLimit);
+                    if (editImage) fd.append("image", editImage);
+                    if (editRemoveImage) fd.append("removeImage", "true");
+                    onUpdateSupply(supply.id, fd);
+                    setEditingId(null);
+                  }} className="rounded-lg bg-orange-600 px-3 py-1 text-[11px] font-bold text-white disabled:opacity-50">Save</button>
                   <button onClick={() => setEditingId(null)} className="rounded-lg border border-gray-200 px-3 py-1 text-[11px] font-bold text-gray-500">Cancel</button>
                 </div>
               </div>
             ) : (
               <>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={supply.imageUrl || "/supplyPlaceholder.png"}
+                    alt={supply.name}
+                    className="h-14 w-14 shrink-0 rounded-lg object-cover border border-[#eef2e8]"
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-[#173a2b] truncate">{supply.name}</p>
                     <p className="text-xs text-[#718176]"><Money value={supply.price} /> per unit</p>
@@ -2702,7 +2774,7 @@ function SuppliesSection({
                             </>
                           )}
                           {t.status === "APPROVED" && (
-                            <button disabled={busy === t.id} onClick={() => onActionRequest(t.id, "complete")} className="rounded-md bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white disabled:opacity-50">Complete</button>
+                            <button disabled={busy === t.id} onClick={() => onActionRequest(t.id, "complete")} className="rounded-md bg-[#1b5e3b] px-2 py-0.5 text-[10px] font-bold text-white disabled:opacity-50">Picked Up</button>
                           )}
                         </div>
                       </div>
@@ -3554,19 +3626,19 @@ export default function OfficerDashboard({
     } catch { alert("Failed to update member"); } finally { setBusy(null); }
   }
 
-  async function handleAddSupply(d: { productName: string; price: number; quantity: number; loanLimitPerHectare: number | null }) {
+  async function handleAddSupply(fd: FormData) {
     setBusy("supply-add");
     try {
-      const res = await fetch("/api/admin/supplies", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(d) });
+      const res = await fetch("/api/admin/supplies", { method: "POST", body: fd });
       const result = await res.json();
       if (res.ok) { await fetchData(); } else { alert(result.error || "Failed to add supply"); }
     } catch { alert("Failed to add supply"); } finally { setBusy(null); }
   }
 
-  async function handleUpdateSupply(supplyId: string, d: { productName: string; price: number; quantity: number; loanLimitPerHectare: number | null }) {
+  async function handleUpdateSupply(supplyId: string, fd: FormData) {
     setBusy(supplyId);
     try {
-      const res = await fetch(`/api/admin/supplies/${supplyId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(d) });
+      const res = await fetch(`/api/admin/supplies/${supplyId}`, { method: "PATCH", body: fd });
       const result = await res.json();
       if (res.ok) { await fetchData(); } else { alert(result.error || "Failed to update supply"); }
     } catch { alert("Failed to update supply"); } finally { setBusy(null); }

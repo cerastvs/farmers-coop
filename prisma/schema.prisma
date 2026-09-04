@@ -208,6 +208,7 @@ model Supply {
   productName             String
   price                   Decimal             @db.Decimal(10, 2)
   quantity                Int
+  imageUrl                String?
   loanLimitPerHectare     Int?
   createdAt               DateTime            @default(now())
   transactions            SupplyTransaction[]

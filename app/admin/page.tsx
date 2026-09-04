@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { ImagePlus } from "lucide-react";
 import { ImageModal } from "@/components/ImageModal";
 import { ReportModal } from "@/components/ReportModal";
 import { runAdminMutation } from "@/lib/admin-mutation";
@@ -59,6 +60,7 @@ interface Supply {
   productName: string;
   price: number;
   quantity: number;
+  imageUrl: string | null;
   loanLimitPerHectare: number | null;
   transactions: SupplyRequest[];
 }
@@ -269,6 +271,13 @@ export default function AdminPage() {
   const [onsiteProof, setOnsiteProof] = useState<File | null>(null);
   const [onsiteRemarks, setOnsiteRemarks] = useState("");
   const onsiteInputRef = useRef<HTMLInputElement>(null);
+  const [addSupplyImage, setAddSupplyImage] = useState<File | null>(null);
+  const [addSupplyPreview, setAddSupplyPreview] = useState<string | null>(null);
+  const addSupplyFileRef = useRef<HTMLInputElement>(null);
+  const [editSupplyImage, setEditSupplyImage] = useState<Record<string, File | null>>({});
+  const [editSupplyPreview, setEditSupplyPreview] = useState<Record<string, string | null>>({});
+  const [editSupplyRemoveImage, setEditSupplyRemoveImage] = useState<Record<string, boolean>>({});
+  const editSupplyFileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const tabs = useMemo(() => {
     if (!user) return [] as Tab[];
@@ -366,6 +375,21 @@ export default function AdminPage() {
 
   function rejectReason() {
     return window.prompt("Enter the reason for rejection:");
+  }
+
+  async function mutateSupply(key: string, url: string, fd: FormData, success: string, method = "PATCH") {
+    setBusy(key);
+    setNotice(null);
+    try {
+      await runAdminMutation({
+        request: () => requestJson(url, { method, body: fd }),
+        refresh: () => loadTab(tab),
+        onSuccess: () => setNotice({ kind: "success", text: success }),
+        onError: (error) => setNotice({ kind: "error", text: error instanceof Error ? error.message : "Action failed" }),
+      });
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function recordOnsite() {
@@ -730,49 +754,103 @@ export default function AdminPage() {
 
             {tab === "supplies" && (
               <AdminSection title="Supply Inventory" description="Maintain stock and process member requests.">
-                <form
-                  className="mb-5 grid gap-3 rounded-2xl border border-[#dce5d9] bg-[#f7faf5] p-4 sm:grid-cols-[2fr_1fr_1fr_auto]"
-                  onSubmit={async (event: FormEvent<HTMLFormElement>) => {
-                    event.preventDefault();
-                    const formElement = event.currentTarget;
-                    const form = new FormData(formElement);
-                    await mutate("new-supply", "/api/admin/supplies", {
-                      productName: form.get("productName"),
-                      price: Number(form.get("price")),
-                      quantity: Number(form.get("quantity")),
-                      loanLimitPerHectare: form.get("loanLimitPerHectare") ? Number(form.get("loanLimitPerHectare")) : null,
-                    }, "Supply added.", "POST");
-                    formElement.reset();
-                  }}
-                >
-                  <input className={fieldClass} name="productName" required minLength={2} placeholder="Product name" />
-                  <input className={fieldClass} name="price" required type="number" min="0" step="0.01" placeholder="Price" />
-                  <input className={fieldClass} name="quantity" required type="number" min="0" placeholder="Stock" />
-                  <input className={fieldClass} name="loanLimitPerHectare" type="number" min="0" placeholder="Loan limit per hectare (optional)" />
-                  <button disabled={busy === "new-supply"} className={buttonClass}>Add item</button>
-                </form>
+                <div className="mb-5 rounded-2xl border border-[#dce5d9] bg-[#f7faf5] p-4">
+                  <form
+                    className="grid gap-3 sm:grid-cols-[auto_2fr_1fr_1fr_auto]"
+                    onSubmit={async (event: FormEvent<HTMLFormElement>) => {
+                      event.preventDefault();
+                      const formElement = event.currentTarget;
+                      const form = new FormData(formElement);
+                      const fd = new FormData();
+                      fd.append("productName", form.get("productName") as string);
+                      fd.append("price", form.get("price") as string);
+                      fd.append("quantity", form.get("quantity") as string);
+                      if (form.get("loanLimitPerHectare")) fd.append("loanLimitPerHectare", form.get("loanLimitPerHectare") as string);
+                      if (addSupplyImage) fd.append("image", addSupplyImage);
+                      await mutateSupply("new-supply", "/api/admin/supplies", fd, "Supply added.", "POST");
+                      formElement.reset();
+                      setAddSupplyImage(null);
+                      setAddSupplyPreview(null);
+                      if (addSupplyFileRef.current) addSupplyFileRef.current.value = "";
+                    }}
+                  >
+                    <button type="button" onClick={() => addSupplyFileRef.current?.click()} className="h-14 w-14 shrink-0 rounded-lg border-2 border-dashed border-[#dce5d9] bg-white flex items-center justify-center overflow-hidden hover:border-orange-300 transition">
+                      {addSupplyPreview ? (
+                        <img src={addSupplyPreview} alt="Preview" className="h-full w-full object-cover" />
+                      ) : (
+                        <ImagePlus size={18} className="text-gray-400" />
+                      )}
+                    </button>
+                    <input ref={addSupplyFileRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setAddSupplyImage(file);
+                      const reader = new FileReader();
+                      reader.onloadend = () => setAddSupplyPreview(reader.result as string);
+                      reader.readAsDataURL(file);
+                    }} />
+                    <input className={fieldClass} name="productName" required minLength={2} placeholder="Product name" />
+                    <input className={fieldClass} name="price" required type="number" min="0" step="0.01" placeholder="Price" />
+                    <input className={fieldClass} name="quantity" required type="number" min="0" placeholder="Stock" />
+                    <input className={fieldClass} name="loanLimitPerHectare" type="number" min="0" placeholder="Loan limit per hectare (optional)" />
+                    <button disabled={busy === "new-supply"} className={buttonClass}>Add item</button>
+                  </form>
+                </div>
                 <RecordList empty="No inventory found.">
                   {supplies.map((supply) => (
-                    <Record key={supply.id} title={supply.productName} meta={`₱${supply.price.toLocaleString()} · ${supply.quantity} in stock${supply.loanLimitPerHectare != null ? ` · limit ${supply.loanLimitPerHectare}/ha` : ""}`}>
-                      <form
-                        className="flex flex-wrap gap-2"
-                        onSubmit={(event: FormEvent<HTMLFormElement>) => {
-                          event.preventDefault();
-                          const form = new FormData(event.currentTarget);
-                          void mutate(supply.id, `/api/admin/supplies/${supply.id}`, {
-                            productName: form.get("productName"),
-                            price: Number(form.get("price")),
-                            quantity: Number(form.get("quantity")),
-                            loanLimitPerHectare: form.get("loanLimitPerHectare") ? Number(form.get("loanLimitPerHectare")) : null,
-                          }, "Inventory updated.");
-                        }}
-                      >
-                        <input className={`${fieldClass} min-w-44 flex-1`} name="productName" defaultValue={supply.productName} required />
-                        <input aria-label="Price" className={`${fieldClass} w-28`} name="price" type="number" min="0" step="0.01" defaultValue={supply.price} required />
-                        <input aria-label="Quantity" className={`${fieldClass} w-24`} name="quantity" type="number" min="0" defaultValue={supply.quantity} required />
-                        <input aria-label="Loan limit per hectare" className={`${fieldClass} w-40`} name="loanLimitPerHectare" type="number" min="0" defaultValue={supply.loanLimitPerHectare ?? ""} placeholder="Limit/ha" />
-                        <button disabled={busy === supply.id} className={secondaryButton}>Update</button>
-                      </form>
+                    <Record
+                      key={supply.id}
+                      title={supply.productName}
+                      meta={`₱${supply.price.toLocaleString()} · ${supply.quantity} in stock${supply.loanLimitPerHectare != null ? ` · limit ${supply.loanLimitPerHectare}/ha` : ""}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <img
+                          src={editSupplyImage[supply.id] ? editSupplyPreview[supply.id] || "" : supply.imageUrl || "/supplyPlaceholder.png"}
+                          alt={supply.productName}
+                          className="h-16 w-16 shrink-0 rounded-lg object-cover border border-[#eef2e8]"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <form
+                            className="flex flex-wrap gap-2"
+                            onSubmit={(event: FormEvent<HTMLFormElement>) => {
+                              event.preventDefault();
+                              const form = new FormData(event.currentTarget);
+                              const fd = new FormData();
+                              fd.append("productName", form.get("productName") as string);
+                              fd.append("price", form.get("price") as string);
+                              fd.append("quantity", form.get("quantity") as string);
+                              if (form.get("loanLimitPerHectare")) fd.append("loanLimitPerHectare", form.get("loanLimitPerHectare") as string);
+                              const img = editSupplyImage[supply.id];
+                              if (img) fd.append("image", img);
+                              if (editSupplyRemoveImage[supply.id]) fd.append("removeImage", "true");
+                              void mutateSupply(supply.id, `/api/admin/supplies/${supply.id}`, fd, "Inventory updated.");
+                            }}
+                          >
+                            <input className={`${fieldClass} min-w-44 flex-1`} name="productName" defaultValue={supply.productName} required />
+                            <input aria-label="Price" className={`${fieldClass} w-28`} name="price" type="number" min="0" step="0.01" defaultValue={supply.price} required />
+                            <input aria-label="Quantity" className={`${fieldClass} w-24`} name="quantity" type="number" min="0" defaultValue={supply.quantity} required />
+                            <input aria-label="Loan limit per hectare" className={`${fieldClass} w-40`} name="loanLimitPerHectare" type="number" min="0" defaultValue={supply.loanLimitPerHectare ?? ""} placeholder="Limit/ha" />
+                            <button disabled={busy === supply.id} className={secondaryButton}>Update</button>
+                          </form>
+                          <div className="mt-1 flex items-center gap-2">
+                            <button type="button" onClick={() => editSupplyFileRefs.current[supply.id]?.click()} className="text-[10px] text-orange-600 font-medium hover:underline">
+                              {supply.imageUrl || editSupplyImage[supply.id] ? "Change image" : "Add image"}
+                            </button>
+                            <input ref={(el) => { editSupplyFileRefs.current[supply.id] = el; }} type="file" accept="image/*" className="hidden" onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setEditSupplyImage((prev) => ({ ...prev, [supply.id]: file }));
+                              setEditSupplyRemoveImage((prev) => ({ ...prev, [supply.id]: false }));
+                              const reader = new FileReader();
+                              reader.onloadend = () => setEditSupplyPreview((prev) => ({ ...prev, [supply.id]: reader.result as string }));
+                              reader.readAsDataURL(file);
+                            }} />
+                            {(editSupplyImage[supply.id] || supply.imageUrl) && !editSupplyRemoveImage[supply.id] && (
+                              <button type="button" onClick={() => { setEditSupplyImage((prev) => ({ ...prev, [supply.id]: null })); setEditSupplyPreview((prev) => ({ ...prev, [supply.id]: null })); setEditSupplyRemoveImage((prev) => ({ ...prev, [supply.id]: true })); }} className="text-[10px] text-red-500 font-medium hover:underline">Remove</button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                       {supply.transactions.filter((request) => ["PENDING", "APPROVED"].includes(request.status)).map((request) => (
                         <div key={request.id} className="mt-2 rounded-xl bg-[#f7faf5] p-3 text-sm">
                           <div className="flex flex-wrap items-center justify-between gap-2">

@@ -2,20 +2,23 @@ import { writeAudit } from "@/lib/activity";
 import {
   apiErrorResponse,
   ApiError,
-  readJsonBody,
   requireUser,
 } from "@/lib/api";
 import prisma from "@/lib/client";
 import { SUPPLY_REVIEW_ROLES } from "@/lib/permissions";
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 
-const SupplySchema = z.object({
-  productName: z.string().trim().min(2).max(100),
-  price: z.number().nonnegative().max(99_999_999.99).multipleOf(0.01),
-  quantity: z.number().int().nonnegative().max(2_147_483_647),
-  loanLimitPerHectare: z.number().int().nonnegative().max(10_000).nullable().optional(),
-}).strict();
+async function uploadToImgbb(file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append("image", file);
+  const res = await fetch(
+    `https://api.imgbb.com/1/upload?key=${process.env.IMGBB_API}`,
+    { method: "POST", body: formData },
+  );
+  const data = await res.json();
+  if (!data.success) throw new Error("Image upload failed");
+  return data.data.url;
+}
 
 export async function GET() {
   try {
@@ -50,19 +53,41 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const actor = await requireUser(SUPPLY_REVIEW_ROLES);
-    const result = SupplySchema.safeParse(await readJsonBody(req));
-    if (!result.success) {
-      throw new ApiError(400, result.error.issues[0].message);
+    const formData = await req.formData();
+
+    const productName = (formData.get("productName") as string)?.trim();
+    const price = Number(formData.get("price"));
+    const quantity = Number(formData.get("quantity"));
+    const loanLimitRaw = formData.get("loanLimitPerHectare");
+    const loanLimitPerHectare =
+      loanLimitRaw && loanLimitRaw !== "" ? Number(loanLimitRaw) : null;
+    const image = formData.get("image") as File | null;
+
+    if (!productName || productName.length < 2) {
+      throw new ApiError(400, "Product name is required (min 2 chars)");
+    }
+    if (isNaN(price) || price < 0) {
+      throw new ApiError(400, "Price must be a non-negative number");
+    }
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      throw new ApiError(400, "Quantity must be a non-negative integer");
+    }
+
+    let imageUrl: string | null = null;
+    if (image && image.size > 0) {
+      imageUrl = await uploadToImgbb(image);
     }
 
     const supply = await prisma.$transaction(async (tx) => {
-      const created = await tx.supply.create({ data: result.data });
+      const created = await tx.supply.create({
+        data: { productName, price, quantity, imageUrl, loanLimitPerHectare },
+      });
       await writeAudit(tx, {
         userId: actor.userId,
         action: "SUPPLY_CREATED",
         entity: "Supply",
         entityId: created.id,
-        metadata: result.data,
+        metadata: { productName, price, quantity, loanLimitPerHectare },
       });
       return created;
     });

@@ -2,7 +2,7 @@ import React from "react";
 
 interface SummaryCardProps {
   label: string;
-  value: string;
+  value: React.ReactNode;
   icon: React.ReactNode;
   iconBg: string;
   iconColor: string;

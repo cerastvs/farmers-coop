@@ -7,6 +7,7 @@ import { SummaryCard } from "./components/SummaryCard";
 import { QuickActionButton } from "./components/QuickActionButton";
 import { ActiveLoanCard } from "./components/ActiveLoanCard";
 import { RecentTransactions } from "./components/RecentTransactions";
+import { Money } from "@/components/Money";
 import { quickActions } from "./data";
 import { useUser } from "../hooks/useUser";
 import {
@@ -107,7 +108,7 @@ export default function Dashboard() {
     },
     {
       label: "Current Balance",
-      value: `₱${stats?.totalDebt.toLocaleString() || "0"}`,
+      value: <Money value={stats?.totalDebt || 0} />,
       icon: <IconBalance />,
       iconBg: "bg-orange-100",
       iconColor: "text-orange-500",
@@ -201,8 +202,8 @@ export default function Dashboard() {
                   name={loan.name}
                   status={loan.displayStatus}
                   type={loan.type}
-                  loanAmount={`₱${loan.loanAmount.toLocaleString()}`}
-                  remainingBalance={`₱${loan.remainingBalance.toLocaleString()}`}
+                  loanAmount={<Money value={loan.loanAmount} />}
+                  remainingBalance={<Money value={loan.remainingBalance} />}
                   nextPayment={new Date(loan.nextPayment).toLocaleDateString(
                     "en-US",
                     { month: "long", day: "numeric", year: "numeric" },
@@ -221,13 +222,13 @@ export default function Dashboard() {
               <span className="rounded-xl bg-white border border-[#e2e7dc] px-4 py-2">
                 <span className="text-[#718176]">Cash debt: </span>
                 <span className="font-bold text-[#173a2b]">
-                  ₱{stats.cashDebt.toLocaleString()}
+                  <Money value={stats.cashDebt} />
                 </span>
               </span>
               <span className="rounded-xl bg-white border border-[#e2e7dc] px-4 py-2">
                 <span className="text-[#718176]">Fertilizer / supply debt: </span>
                 <span className="font-bold text-[#173a2b]">
-                  ₱{stats.supplyDebt.toLocaleString()}
+                  <Money value={stats.supplyDebt} />
                 </span>
               </span>
             </div>
@@ -238,7 +239,7 @@ export default function Dashboard() {
           transactions={
             stats?.recentTransactions.map((t) => ({
               ...t,
-              amount: `₱${t.amount.toLocaleString()}`,
+              amount: <Money value={t.amount} />,
               date: new Date(t.date).toLocaleDateString("en-US", {
                 month: "short",
                 day: "2-digit",

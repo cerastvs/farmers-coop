@@ -23,6 +23,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { logout } from "../../login/actions";
+import { Money } from "@/components/Money";
 
 type Tab = "overview" | "loans" | "payments" | "overdue";
 type LoanType = "SUPPLY" | "MONEY";
@@ -123,7 +124,7 @@ function StatCard({
   delay,
 }: {
   label: string;
-  value: string | number;
+  value: React.ReactNode;
   sub?: string;
   accent: string;
   icon: React.ElementType;
@@ -590,7 +591,7 @@ export default function TreasurerPage() {
             />
             <StatCard
               label="Outstanding"
-              value={`₱${stats.outstanding.toLocaleString()}`}
+              value={<Money value={stats.outstanding} />}
               sub="Remaining balance"
               accent="bg-blue-500"
               icon={Banknote}
@@ -614,7 +615,7 @@ export default function TreasurerPage() {
             />
             <StatCard
               label="Payments received"
-              value={`₱${stats.totalReceived.toLocaleString()}`}
+              value={<Money value={stats.totalReceived} />}
               sub={`${stats.totalPayments} total`}
               accent="bg-emerald-500"
               icon={Banknote}
@@ -697,7 +698,7 @@ export default function TreasurerPage() {
                               {loan.borrower.name}
                             </p>
                             <p className="text-xs text-[#5a7267]">
-                              {loan.name} · ₱{loan.amount.toLocaleString()}
+                              {loan.name} · <Money value={loan.amount} />
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
@@ -781,7 +782,7 @@ export default function TreasurerPage() {
                                 {payment.user.name}
                               </p>
                               <p className="text-xs text-[#5a7267]">
-                                ₱{payment.amount.toLocaleString()} ·{" "}
+                                <Money value={payment.amount} /> ·{" "}
                                 {payment.loan?.name ?? "Payment"}
                               </p>
                             </div>
@@ -853,7 +854,7 @@ export default function TreasurerPage() {
                                 {loan.borrower.name}
                               </p>
                               <p className="text-xs text-red-600">
-                                {loan.name} · ₱{loan.amount.toLocaleString()}
+                              {loan.name} · <Money value={loan.amount} />
                               </p>
                             </div>
                             <span
@@ -974,13 +975,13 @@ export default function TreasurerPage() {
                               className="px-5 py-3 text-right font-semibold text-[#0f2318]"
                               style={{ fontFamily: "var(--font-mono)" }}
                             >
-                              ₱{loan.amount.toLocaleString()}
+                              <Money value={loan.amount} />
                             </td>
                             <td
                               className="px-5 py-3 text-right text-[#5a7267]"
                               style={{ fontFamily: "var(--font-mono)" }}
                             >
-                              ₱{loan.remainingBalance.toLocaleString()}
+                              <Money value={loan.remainingBalance} />
                             </td>
                             <td className="px-5 py-3 text-[#5a7267]">
                               {loan.termMonths}mo
@@ -1134,7 +1135,7 @@ export default function TreasurerPage() {
                                 className="px-5 py-3 text-right font-semibold text-[#0f2318]"
                                 style={{ fontFamily: "var(--font-mono)" }}
                               >
-                                ₱{payment.amount.toLocaleString()}
+                                <Money value={payment.amount} />
                               </td>
                               <td className="px-5 py-3 text-[#5a7267]">
                                 {new Date(payment.createdAt).toLocaleDateString()}
@@ -1273,13 +1274,13 @@ export default function TreasurerPage() {
                                 className="px-5 py-3 text-right font-semibold text-[#0f2318]"
                                 style={{ fontFamily: "var(--font-mono)" }}
                               >
-                                ₱{loan.amount.toLocaleString()}
+                                <Money value={loan.amount} />
                               </td>
                               <td
                                 className="px-5 py-3 text-right text-red-600"
                                 style={{ fontFamily: "var(--font-mono)" }}
                               >
-                                ₱{loan.remainingBalance.toLocaleString()}
+                                <Money value={loan.remainingBalance} />
                               </td>
                               <td className="px-5 py-3 text-[#5a7267]">
                                 {new Date(loan.due!).toLocaleDateString()}
@@ -1362,9 +1363,7 @@ export default function TreasurerPage() {
                           className="text-sm font-bold text-red-600"
                           style={{ fontFamily: "var(--font-mono)" }}
                         >
-                          ₱{overdueLoans
-                            .reduce((s, l) => s + l.remainingBalance, 0)
-                            .toLocaleString()}
+                          <Money value={overdueLoans.reduce((s, l) => s + l.remainingBalance, 0)} />
                         </span>
                       </div>
                     )}

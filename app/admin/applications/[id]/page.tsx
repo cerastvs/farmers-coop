@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ImageModal } from "@/components/ImageModal";
 import { APPLICATION_DENIAL_REASONS } from "@/lib/application-fee";
+import { Money } from "@/components/Money";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -426,7 +427,7 @@ export default function ApplicationReviewPage() {
               <dl className="grid gap-3 text-sm sm:grid-cols-2">
                 <Field
                   label="Application fee"
-                  value={`₱${latestPayment.amount.toLocaleString()}`}
+                  value={<Money value={latestPayment.amount} />}
                 />
                 <Field
                   label="Payment method"
@@ -607,7 +608,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-[#eef2e8] bg-[#fafdf7] px-3 py-2">
       <dt className="text-[10px] font-bold uppercase tracking-wider text-[#8fa594]">

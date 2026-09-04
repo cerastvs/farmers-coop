@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { DashboardHeader } from "../components/DashboardHeader";
 import { IconChevronLeft } from "@/components/icons";
+import { Money } from "@/components/Money";
 
 interface Supply {
   id: string;
@@ -113,7 +114,7 @@ export default function SuppliesPage() {
                         <p className="text-xs text-orange-600 font-medium">Loan limit: {supply.loanLimitPerHectare} per hectare</p>
                       )}
                     </div>
-                    <p className="font-bold text-green-700">₱{supply.price.toLocaleString()}</p>
+                    <p className="font-bold text-green-700"><Money value={supply.price} /></p>
                   </div>
                   <form onSubmit={(event) => requestSupply(event, supply.id)} className="mt-4 grid grid-cols-[1fr_1fr_auto] gap-2">
                     <input aria-label="Quantity" name="quantity" type="number" min="1" max={supply.quantity} defaultValue="1" required className="min-w-0 rounded-xl border border-gray-200 px-3 py-2 text-sm" />
@@ -140,7 +141,7 @@ export default function SuppliesPage() {
               <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 p-4 last:border-0">
                 <div>
                   <p className="text-sm font-bold text-gray-800">{request.supply.productName} × {request.quantity}</p>
-                  <p className="text-xs text-gray-500">{request.type} · ₱{request.totalPrice.toLocaleString()} · {new Date(request.createdAt).toLocaleDateString()}</p>
+                  <p className="text-xs text-gray-500">{request.type} · <Money value={request.totalPrice} /> · {new Date(request.createdAt).toLocaleDateString()}</p>
                   {request.rejectionReason && <p className="mt-1 text-xs text-red-600">{request.rejectionReason}</p>}
                 </div>
                 <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-700">{request.status}</span>

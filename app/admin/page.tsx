@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ImageModal } from "@/components/ImageModal";
 import { ReportModal } from "@/components/ReportModal";
 import { runAdminMutation } from "@/lib/admin-mutation";
+import { Money } from "@/components/Money";
 
 type Role = "APPLICANT" | "MEMBER" | "TREASURER" | "PRESIDENT" | "SECRETARY";
 type Tab =
@@ -893,7 +894,7 @@ export default function AdminPage() {
               <p><b>Applicant:</b> {onsiteTarget.fullName}</p>
               <p><b>Application ID:</b> #{onsiteTarget.id}</p>
               <p><b>Application date:</b> {new Date(onsiteTarget.createdAt).toLocaleDateString("en-PH")}</p>
-              <p><b>Application fee:</b> ₱{feeAmount.toLocaleString()}</p>
+              <p><b>Application fee:</b> <Money value={feeAmount} /></p>
               <p><b>Payment Method:</b> On-Site</p>
             </div>
             <div className="mt-4">

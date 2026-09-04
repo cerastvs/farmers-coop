@@ -5,8 +5,8 @@ interface ActiveLoanCardProps {
   name: string;
   status: string;
   type?: string;
-  loanAmount: string;
-  remainingBalance?: string;
+  loanAmount: React.ReactNode;
+  remainingBalance?: React.ReactNode;
   nextPayment: string;
 }
 

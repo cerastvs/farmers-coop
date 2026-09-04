@@ -7,6 +7,7 @@ import { ImageModal } from "@/components/ImageModal";
 import { ReportModal, ReportContent } from "@/components/ReportModal";
 import { logout } from "../../login/actions";
 import AdminActionsPanel from "../secretary/AdminActionsPanel";
+import { Money } from "@/components/Money";
 import {
   FileText,
   Users,
@@ -2415,7 +2416,7 @@ function LoansSection({
                   </span>
                 </div>
                 <p className="text-xs text-[#718176] mt-0.5">
-                  {loan.name} · ₱{loan.amount.toLocaleString()}
+                  {loan.name} · <Money value={loan.amount} />
                   {loan.due &&
                     ` · Due ${new Date(loan.due).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
                 </p>
@@ -2671,7 +2672,7 @@ function SuppliesSection({
                 <div className="flex items-center justify-between">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-[#173a2b] truncate">{supply.name}</p>
-                    <p className="text-xs text-[#718176]">₱{supply.price.toLocaleString()} per unit</p>
+                    <p className="text-xs text-[#718176]"><Money value={supply.price} /> per unit</p>
                     {supply.loanLimitPerHectare != null && (
                       <p className="text-[11px] text-orange-600 font-medium mt-0.5">Loan limit: {supply.loanLimitPerHectare} per ha</p>
                     )}
@@ -2761,7 +2762,7 @@ function PaymentsSection({
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-[#173a2b] truncate">{payment.user.name}</p>
-                  <p className="text-xs text-[#718176]">₱{payment.amount.toLocaleString()} · {payment.loan?.name ?? "Loan payment"} · {new Date(payment.createdAt).toLocaleDateString()}</p>
+                  <p className="text-xs text-[#718176]"><Money value={payment.amount} /> · {payment.loan?.name ?? "Loan payment"} · {new Date(payment.createdAt).toLocaleDateString()}</p>
                 </div>
                 <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${payment.status === "VERIFIED" ? "bg-green-100 text-green-700" : payment.status === "REJECTED" ? "bg-red-100 text-red-600" : "bg-yellow-100 text-yellow-700"}`}>{payment.status}</span>
               </div>
@@ -3195,7 +3196,7 @@ function OverdueSection({
                 <p className="text-xs text-[#718176]">{item.entity}</p>
                 <p className="text-[10px] text-[#718176]">
                   Due {new Date(item.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                  {item.remaining != null && ` · ₱${item.remaining.toLocaleString()} remaining`}
+                  {item.remaining != null && (<span> · <Money value={item.remaining} /> remaining</span>)}
                 </p>
               </div>
               <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-600">{item.daysOverdue}d overdue</span>
@@ -3736,7 +3737,7 @@ export default function OfficerDashboard({
                     <div className="space-y-2">
                       {data.payments.filter((p) => p.status === "PENDING").slice(0, 5).map((p) => (
                         <div key={p.id} className="flex items-center justify-between rounded-lg border border-[#e2ebe6] bg-[#fafdf9] px-3.5 py-2.5">
-                          <div className="min-w-0 flex-1"><p className="text-sm font-medium text-[#0f2318] truncate">{p.user.name}</p><p className="text-[11px] text-[#5a7267]">₱{p.amount.toLocaleString()} · {p.loan?.name ?? "Payment"}</p></div>
+                          <div className="min-w-0 flex-1"><p className="text-sm font-medium text-[#0f2318] truncate">{p.user.name}</p><p className="text-[11px] text-[#5a7267]"><Money value={p.amount} /> · {p.loan?.name ?? "Payment"}</p></div>
                           <span className="ml-2 shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">Verify</span>
                         </div>
                       ))}

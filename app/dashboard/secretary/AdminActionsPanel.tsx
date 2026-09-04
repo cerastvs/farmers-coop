@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Money } from "@/components/Money";
 import {
   AlertTriangle,
   Banknote,
@@ -591,7 +592,7 @@ function SupplyModal({
       </div>
       {selected && Number(quantity) > 0 && (
         <p className="rounded-lg bg-[#f0f7eb] px-3.5 py-2 text-xs font-semibold text-[#1b5e3b]">
-          Total: ₱{(selected.price * Number(quantity)).toLocaleString()}
+          Total: <Money value={selected.price * Number(quantity)} />
         </p>
       )}
       <ContextFields value={context} onChange={setContext} />
@@ -1141,7 +1142,7 @@ export default function AdminActionsPanel({ onDone }: { onDone?: () => void }) {
                     <div key={l.id} className="flex items-center justify-between rounded-lg border border-[#eef2e8] bg-[#fafdf7] px-3.5 py-2.5">
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-semibold text-[#173a2b]">{l.name}</p>
-                        <p className="text-[11px] text-[#718176]">₱{l.amount.toLocaleString()} · {l.remainingBalance.toLocaleString()} remaining</p>
+                        <p className="text-[11px] text-[#718176]"><Money value={l.amount} /> · <Money value={l.remainingBalance} /> remaining</p>
                       </div>
                       <span className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${STATUS_STYLE[l.status] ?? "bg-gray-100 text-gray-600"}`}>{l.status}</span>
                     </div>
@@ -1170,7 +1171,7 @@ export default function AdminActionsPanel({ onDone }: { onDone?: () => void }) {
                   ))}
                   {selected.payments.slice(0, 3).map((p) => (
                     <div key={p.id} className="flex items-center justify-between gap-2 rounded-lg border border-[#eef2e8] bg-[#fafdf7] px-3.5 py-2">
-                      <p className="min-w-0 flex-1 truncate text-xs font-medium text-[#173a2b]"><Wallet size={11} className="mr-1.5 inline text-[#5a7267]" />₱{p.amount.toLocaleString()} · {p.type.replace("_", " ").toLowerCase()}</p>
+                      <p className="min-w-0 flex-1 truncate text-xs font-medium text-[#173a2b]"><Wallet size={11} className="mr-1.5 inline text-[#5a7267]" /><Money value={p.amount} /> · {p.type.replace("_", " ").toLowerCase()}</p>
                       <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${STATUS_STYLE[p.status] ?? "bg-gray-100 text-gray-600"}`}>{p.status}</span>
                     </div>
                   ))}

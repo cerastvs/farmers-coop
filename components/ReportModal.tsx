@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useMemo, isValidElement, type ReactNode } from "react";
 import { X } from "lucide-react";
+import { Money } from "@/components/Money";
 
 type ReportData = Record<string, unknown>;
 
@@ -113,6 +114,7 @@ function statCards(
 
 function renderValue(v: unknown): ReactNode {
   if (v === null || v === undefined || v === "") return "—";
+  if (isValidElement(v)) return v;
   return String(v);
 }
 
@@ -137,13 +139,7 @@ function kvCard(label: string, value: unknown) {
 
 function money(n: unknown) {
   const num = Number(n);
-  return Number.isFinite(num)
-    ? num.toLocaleString("en-PH", {
-        style: "currency",
-        currency: "PHP",
-        minimumFractionDigits: 2,
-      })
-    : "—";
+  return Number.isFinite(num) ? <Money value={num} /> : "—";
 }
 
 function Table({

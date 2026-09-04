@@ -5,6 +5,7 @@ import Link from "next/link";
 import { DashboardHeader } from "../components/DashboardHeader";
 import { ApplyLoanCard } from "./components/ApplyLoanCard";
 import { IconChevronLeft, IconInfoCircle } from "@/components/icons";
+import { Money } from "@/components/Money";
 
 export default function ApplyLoanPage() {
   const [totalDebt, setTotalDebt] = useState<number | null>(null);
@@ -55,7 +56,7 @@ export default function ApplyLoanPage() {
                 Outstanding Balance Detected
               </p>
               <p className="text-xs text-amber-700 mt-1 leading-relaxed">
-                You still have an outstanding balance of <span className="font-bold">₱{totalDebt.toLocaleString()}</span>. 
+                You still have an outstanding balance of <span className="font-bold"><Money value={totalDebt} /></span>. 
                 Please note that new loan applications may not be approved until your current balance is fully settled.
               </p>
             </div>

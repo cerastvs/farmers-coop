@@ -7,6 +7,7 @@ import { DashboardHeader } from "../components/DashboardHeader";
 import { LoanCard } from "./components/LoanCard";
 import { PaymentHistoryTable } from "./components/PaymentHistoryTable";
 import { IconChevronLeft } from "@/components/icons";
+import { Money } from "@/components/Money";
 
 interface LoanData {
   id: string;
@@ -157,8 +158,8 @@ export default function ViewLoanPage() {
                 key={loan.id} 
                 loan={{
                   ...loan,
-                  amount: `₱${loan.amount.toLocaleString()}`,
-                  remainingBalance: `₱${loan.remainingBalance.toLocaleString()}`,
+                  amount: <Money value={loan.amount} />,
+                  remainingBalance: <Money value={loan.remainingBalance} />,
                   due: new Date(loan.due).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
                 }} 
               />
@@ -227,7 +228,7 @@ export default function ViewLoanPage() {
               return (
                 <div key={payment.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 last:border-0">
                   <div>
-                    <p className="text-sm font-semibold text-gray-800">{payment.loan?.name ?? "Loan payment"} · ₱{payment.amount.toLocaleString()}</p>
+                    <p className="text-sm font-semibold text-gray-800">{payment.loan?.name ?? "Loan payment"} · <Money value={payment.amount} /></p>
                     <p className="text-xs text-gray-500">{new Date(payment.createdAt).toLocaleDateString()}</p>
                     {proofUrl ? (
                       <button
@@ -260,7 +261,7 @@ export default function ViewLoanPage() {
         <PaymentHistoryTable 
           records={paymentHistory.map(p => ({
             ...p,
-            amount: `₱${p.amount.toLocaleString()}`,
+            amount: <Money value={p.amount} />,
             paidAt: new Date(p.paidAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
           }))} 
         />

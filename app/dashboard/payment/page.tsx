@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DashboardHeader } from "../components/DashboardHeader";
+import { Money } from "@/components/Money";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -277,7 +278,7 @@ function PaymentDetailsCard({
               Application fee
             </p>
             <p className="mt-1 text-3xl font-black text-[#173a2b]">
-              ₱{fee.amount.toLocaleString()}
+              <Money value={fee.amount} />
             </p>
           </div>
           <div className="flex items-center gap-2 rounded-xl bg-[#edf5df] px-3 py-2 text-sm font-bold text-[#39733e]">
@@ -301,7 +302,7 @@ function PaymentDetailsCard({
             </div>
             <ol className="list-decimal space-y-1.5 pl-4 text-sm text-[#315646]">
               <li>Scan the QR code with your e-wallet or bank app.</li>
-              <li>Enter the exact amount of ₱{fee.amount.toLocaleString()}.</li>
+              <li>Enter the exact amount of <Money value={fee.amount} />.</li>
               <li>Use your full name as the payment reference.</li>
               <li>Save the confirmation, then upload it as your proof.</li>
             </ol>
@@ -477,8 +478,8 @@ function PendingApproval({ data }: { data: ApplicationFeeData }) {
       </p>
       {latest && (
         <p className="mt-3 text-xs font-semibold text-orange-700">
-          Submitted {formatDate(latest.createdAt)} · ₱
-          {latest.amount.toLocaleString()}
+          Submitted {formatDate(latest.createdAt)} ·{" "}
+          <Money value={latest.amount} />
           {latest.referenceNo ? ` · Ref ${latest.referenceNo}` : ""}
         </p>
       )}
@@ -705,7 +706,7 @@ function PaymentHistoryCard({ history }: { history: PaymentRecord[] }) {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-bold text-[#173a2b]">
-                  ₱{record.amount.toLocaleString()}
+                  <Money value={record.amount} />
                   <span className="ml-2 text-xs font-semibold text-[#718176]">
                     {record.paymentMethod === "ON_SITE" ? "On-site" : "Online"}
                   </span>

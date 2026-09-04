@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { Money } from "@/components/Money";
 
 interface ApplyLoanCardProps {
   currentBalance: number | null;
@@ -65,7 +66,7 @@ export function ApplyLoanCard({ currentBalance, isLoading }: ApplyLoanCardProps)
           <div className="bg-blue-100/60 rounded-xl p-4">
             <p className="text-sm text-gray-600">Current Loan Balance</p>
             <p className="text-2xl font-bold text-blue-700">
-              {isLoading ? "..." : `₱${(currentBalance || 0).toLocaleString()}`}
+              {isLoading ? "..." : <Money value={currentBalance || 0} />}
             </p>
           </div>
         </div>

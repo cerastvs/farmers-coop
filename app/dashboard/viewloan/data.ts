@@ -1,16 +1,18 @@
+import React from "react";
+
 export interface Loan {
   id: string;
   name: string; // Loan type label, e.g. "Cash Loan"
   status: "PENDING" | "APPROVED" | "REJECTED" | "ACTIVE" | "PAID";
-  amount: string;
-  remainingBalance: string;
+  amount: React.ReactNode;
+  remainingBalance: React.ReactNode;
   due: string; // next payment date
 }
 
 export interface PaymentRecord {
   receiptNo: string | null; // nullable - matches schema
   paidAt: string;
-  amount: string;
+  amount: React.ReactNode;
 }
 
 export const loans: Loan[] = [

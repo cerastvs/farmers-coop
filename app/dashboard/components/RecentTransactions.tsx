@@ -4,7 +4,7 @@ import { IconChevronRight } from "../../../components/icons";
 interface Transaction {
   type: string;
   date: string;
-  amount: string;
+  amount: React.ReactNode;
   debit: boolean;
 }
 

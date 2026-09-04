@@ -396,6 +396,7 @@ export default function AdminPage() {
           </div>
           <nav className="flex items-center gap-2 text-sm font-bold">
             {user.role === "SECRETARY" && <Link href="/dashboard/secretary" className="rounded-lg px-3 py-2 hover:bg-white/10">Applications</Link>}
+            {user.role === "PRESIDENT" && <Link href="/dashboard/president" className="rounded-lg px-3 py-2 hover:bg-white/10">President Dashboard</Link>}
             <Link href="/dashboard" className="rounded-lg bg-white/10 px-3 py-2 hover:bg-white/20">Member dashboard</Link>
           </nav>
         </div>

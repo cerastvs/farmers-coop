@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/client";
-import { getSession } from "@/lib/session";
+import { apiErrorResponse, requireUser } from "@/lib/api";
 import { Role } from "@/app/generated/prisma";
 import { writeAudit } from "@/lib/activity";
 
@@ -24,19 +24,9 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getSession();
-
-  if (!session) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
-
-  if (session.userRole !== Role.SECRETARY) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const { id } = await params;
-
   try {
+    const actor = await requireUser([Role.SECRETARY, Role.PRESIDENT]);
     const existing = await prisma.machine.findUnique({ where: { id } });
     if (!existing) {
       return NextResponse.json(
@@ -75,7 +65,7 @@ export async function PUT(
         },
       });
       await writeAudit(tx, {
-        userId: session.userId,
+        userId: actor.userId,
         action: "MACHINE_UPDATED",
         entity: "Machine",
         entityId: id,
@@ -98,10 +88,7 @@ export async function PUT(
     });
   } catch (error) {
     console.error("Update machine error:", error);
-    return NextResponse.json(
-      { error: "Failed to update machine" },
-      { status: 500 },
-    );
+    return apiErrorResponse(error, "Failed to update machine");
   }
 }
 
@@ -109,19 +96,9 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getSession();
-
-  if (!session) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
-
-  if (session.userRole !== Role.SECRETARY) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const { id } = await params;
-
   try {
+    const actor = await requireUser([Role.SECRETARY, Role.PRESIDENT]);
     const existing = await prisma.machine.findUnique({
       where: { id },
       include: {
@@ -150,7 +127,7 @@ export async function DELETE(
     await prisma.$transaction(async (tx) => {
       await tx.machine.delete({ where: { id } });
       await writeAudit(tx, {
-        userId: session.userId,
+        userId: actor.userId,
         action: "MACHINE_DELETED",
         entity: "Machine",
         entityId: id,
@@ -161,9 +138,6 @@ export async function DELETE(
     return NextResponse.json({ message: "Machine deleted successfully" });
   } catch (error) {
     console.error("Delete machine error:", error);
-    return NextResponse.json(
-      { error: "Failed to delete machine" },
-      { status: 500 },
-    );
+    return apiErrorResponse(error, "Failed to delete machine");
   }
 }

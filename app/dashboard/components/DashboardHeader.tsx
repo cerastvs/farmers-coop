@@ -83,6 +83,15 @@ export function DashboardHeader() {
               Secretary Dashboard
             </Link>
           )}
+          {userRole === "PRESIDENT" && (
+            <Link
+              href="/dashboard/president"
+              onClick={() => setMenuOpen(false)}
+              className="block w-full px-4 py-3 text-left text-sm font-semibold text-[#315646] transition-colors hover:bg-[#f0f7eb]"
+            >
+              President Dashboard
+            </Link>
+          )}
           {userRole === "TREASURER" && (
             <Link
               href="/dashboard/treasurer"

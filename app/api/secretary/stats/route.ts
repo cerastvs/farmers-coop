@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/client";
-import { getSession } from "@/lib/session";
+import { apiErrorResponse, requireUser } from "@/lib/api";
 import {
   Role,
   ApplicationStatus,
@@ -36,17 +36,8 @@ function isCurrentlyInUse(request: {
 }
 
 export async function GET() {
-  const session = await getSession();
-
-  if (!session) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
-
-  if (session.userRole !== Role.SECRETARY) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   try {
+    await requireUser([Role.SECRETARY, Role.PRESIDENT]);
     const [
       applications,
       members,
@@ -292,9 +283,6 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Secretary stats error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch secretary data" },
-      { status: 500 },
-    );
+    return apiErrorResponse(error, "Failed to fetch secretary data");
   }
 }

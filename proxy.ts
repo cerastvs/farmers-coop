@@ -39,7 +39,7 @@ export async function proxy(req: NextRequest) {
     const role = session.userRole;
     if (role === "SECRETARY") return NextResponse.redirect(new URL("/dashboard/secretary", req.url));
     if (role === "TREASURER") return NextResponse.redirect(new URL("/dashboard/treasurer", req.url));
-    if (role === "PRESIDENT") return NextResponse.redirect(new URL("/admin", req.url));
+    if (role === "PRESIDENT") return NextResponse.redirect(new URL("/dashboard/president", req.url));
     return NextResponse.redirect(dashboardUrl);
   }
 
@@ -74,10 +74,10 @@ export async function proxy(req: NextRequest) {
       return NextResponse.redirect(
         session.userRole === "SECRETARY"
           ? new URL("/dashboard/secretary", req.url)
-          : session.userRole === "TREASURER"
+          :         session.userRole === "TREASURER"
             ? new URL("/dashboard/treasurer", req.url)
             : session.userRole === "PRESIDENT"
-              ? new URL("/admin", req.url)
+              ? new URL("/dashboard/president", req.url)
               : dashboardUrl,
       );
     }

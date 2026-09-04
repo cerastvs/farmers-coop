@@ -110,7 +110,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const actor = await requireUser([Role.SECRETARY]);
+    const actor = await requireUser([Role.SECRETARY, Role.PRESIDENT]);
     const formData = await req.formData();
     const name = formData.get("name") as string;
     const description = (formData.get("description") as string) || null;
@@ -157,9 +157,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("Create machine error:", error);
-    return NextResponse.json(
-      { error: "Failed to create machine" },
-      { status: 500 },
-    );
+    return apiErrorResponse(error, "Failed to create machine");
   }
 }

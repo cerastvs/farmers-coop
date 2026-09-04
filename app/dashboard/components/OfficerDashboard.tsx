@@ -3298,6 +3298,7 @@ export default function OfficerDashboard({
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [unreadCount, setUnreadCount] = useState(0);
   const [notice, setNotice] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
   const [detailMachine, setDetailMachine] = useState<Machine | null>(null);
@@ -3335,6 +3336,33 @@ export default function OfficerDashboard({
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await fetch("/api/notifications");
+      if (res.ok) {
+        const data = await res.json();
+        setUnreadCount(
+          (Array.isArray(data) ? data : []).filter(
+            (n: { read: boolean }) => !n.read,
+          ).length,
+        );
+      }
+    } catch {
+      console.error("Failed to fetch notifications");
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+    const id = setInterval(fetchNotifications, 30000);
+    const onFocus = () => fetchNotifications();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [fetchNotifications]);
 
   useEffect(() => {
     const id = setInterval(() => { fetchData(); }, 30000);
@@ -3610,7 +3638,7 @@ export default function OfficerDashboard({
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
               <input type="text" placeholder="Search members, loans…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-8 w-48 rounded-lg border border-white/20 bg-white/10 pl-9 pr-3 text-xs text-white placeholder-white/40 outline-none transition-all focus:w-56 focus:border-white/40 focus:bg-white/15" />
             </div>
-            <Link href="/dashboard/notifications" className="relative rounded-lg p-2 transition-colors hover:bg-white/15" aria-label="Notifications"><Bell size={18} /></Link>
+            <Link href="/dashboard/notifications" className="relative rounded-lg p-2 transition-colors hover:bg-white/15" aria-label="Notifications"><Bell size={18} />{unreadCount > 0 && (<span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{unreadCount > 99 ? "99+" : unreadCount}</span>)}</Link>
             <div className="relative">
               <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/15">
                 <div className="grid h-7 w-7 place-items-center rounded-full bg-[#2d8a56] text-[10px] font-bold text-white">{avatarLetter}</div>

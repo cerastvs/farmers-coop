@@ -195,6 +195,23 @@ export default function TreasurerPage() {
   const [proofModalUrl, setProofModalUrl] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await fetch("/api/notifications");
+      if (res.ok) {
+        const data = await res.json();
+        setUnreadCount(
+          (Array.isArray(data) ? data : []).filter(
+            (n: { read: boolean }) => !n.read,
+          ).length,
+        );
+      }
+    } catch {
+      console.error("Failed to fetch notifications");
+    }
+  }, []);
 
   // Loans sub-state
   const [loanType, setLoanType] = useState<LoanType>("MONEY");
@@ -215,6 +232,17 @@ export default function TreasurerPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    fetchNotifications();
+    const id = setInterval(fetchNotifications, 30000);
+    const onFocus = () => fetchNotifications();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [fetchNotifications]);
 
   async function mutate(
     key: string,
@@ -454,6 +482,11 @@ export default function TreasurerPage() {
               aria-label="Notifications"
             >
               <Bell size={18} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
             </Link>
 
             <div className="relative">
@@ -610,6 +643,11 @@ export default function TreasurerPage() {
               {item === "payments" && <Banknote size={13} />}
               {item === "overdue" && <AlertTriangle size={13} />}
               {item}
+              {item === "payments" && pendingPayments.length > 0 && (
+                <span className="ml-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                  {pendingPayments.length}
+                </span>
+              )}
               {item === "overdue" && overdueLoans.length > 0 && (
                 <span className="ml-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
                   {overdueLoans.length}

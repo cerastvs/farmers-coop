@@ -54,6 +54,9 @@ interface ApplicationDetail {
   farmSize: number;
   cropType: string;
   yearsFarming: number;
+  farmOwnership: string | null;
+  farmMachinery: string | null;
+  guarantor: { name?: string; contact?: string; relationship?: string } | null;
   validIdUrl: string;
   proofOfFarmUrl: string;
   status: string;
@@ -370,7 +373,32 @@ export default function ApplicationReviewPage() {
             <Field label="Farm size" value={`${application.farmSize} hectares`} />
             <Field label="Crop type" value={application.cropType} />
             <Field label="Years farming" value={`${application.yearsFarming} years`} />
+            <Field
+              label="Farm ownership status"
+              value={
+                application.farmOwnership === "FARM_OWNER"
+                  ? "Farm owner"
+                  : application.farmOwnership === "FARM_WORKER"
+                    ? "Farm worker / tenant"
+                    : application.farmOwnership === "OTHERS"
+                      ? "Others"
+                      : application.farmOwnership || "—"
+              }
+            />
+            <Field label="Farm machinery" value={application.farmMachinery || "None"} />
           </dl>
+        </Section>
+
+        <Section title="Guarantor">
+          {application.guarantor ? (
+            <dl className="grid gap-3 sm:grid-cols-3">
+              <Field label="Guarantor name" value={application.guarantor.name || "—"} />
+              <Field label="Guarantor contact" value={application.guarantor.contact || "—"} />
+              <Field label="Relationship" value={application.guarantor.relationship || "—"} />
+            </dl>
+          ) : (
+            <p className="text-sm text-[#718176]">No guarantor provided.</p>
+          )}
         </Section>
 
         <Section title="Uploaded Documents">

@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ImageModal } from "@/components/ImageModal";
+import { ReportModal } from "@/components/ReportModal";
 import { runAdminMutation } from "@/lib/admin-mutation";
 
 type Role = "APPLICANT" | "MEMBER" | "TREASURER" | "PRESIDENT" | "SECRETARY";
@@ -76,6 +77,7 @@ interface Report {
   title: string;
   type: string;
   createdAt: string;
+  data: Record<string, unknown> | null;
 }
 
 interface Post {
@@ -231,6 +233,7 @@ export default function AdminPage() {
   const [feeAmount, setFeeAmount] = useState(0);
   const [memFilter, setMemFilter] = useState("PENDING_APPLICATION_REVIEW");
   const [proofModalUrl, setProofModalUrl] = useState<string | null>(null);
+  const [viewReport, setViewReport] = useState<Report | null>(null);
   const [feeSearch, setFeeSearch] = useState("");
   const [feeStatus, setFeeStatus] = useState("");
   const [onsiteTarget, setOnsiteTarget] = useState<ApplicationAwaitingPayment | null>(null);
@@ -809,9 +812,25 @@ export default function AdminPage() {
                   <input className={`${fieldClass} min-w-56 flex-1`} name="title" placeholder="Optional report title" />
                   <button disabled={busy === "report"} className={buttonClass}>Generate report</button>
                 </form>
-                <RecordList empty="No generated reports found.">
-                  {reports.map((report) => <Record key={report.id} title={report.title} meta={`${report.type} · ${new Date(report.createdAt).toLocaleString()}`} />)}
-                </RecordList>
+                {reports.length > 0 ? (
+                  <div className="space-y-3">
+                    {reports.map((report) => (
+                      <button
+                        key={report.id}
+                        onClick={() => setViewReport(report)}
+                        className="flex w-full items-center justify-between rounded-2xl border border-[#e3e9e0] bg-white p-4 text-left transition hover:border-indigo-300 hover:bg-indigo-50"
+                      >
+                        <div>
+                          <h3 className="font-extrabold text-[#173a2b]">{report.title}</h3>
+                          <p className="text-xs text-[#718176]">{report.type} · {new Date(report.createdAt).toLocaleString()}</p>
+                        </div>
+                        <span className="ml-3 shrink-0 rounded-lg bg-indigo-600 px-2.5 py-1 text-[10px] font-bold text-white">View</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <RecordList empty="No generated reports found.">{null}</RecordList>
+                )}
               </AdminSection>
             )}
 
@@ -856,6 +875,10 @@ export default function AdminPage() {
           alt="Proof of payment"
           onClose={() => setProofModalUrl(null)}
         />
+      )}
+
+      {viewReport && (
+        <ReportModal report={viewReport} onClose={() => setViewReport(null)} />
       )}
 
       {onsiteTarget && (
@@ -946,7 +969,7 @@ function Record({ title, meta, status, children }: { title: string; meta: string
 
 function Status({ value }: { value: string }) {
   const positive = ["ACTIVE", "APPROVED", "VERIFIED", "COMPLETED", "PAID", "PUBLISHED"].includes(value);
-  const negative = ["REJECTED", "INACTIVE", "DECLINED"].includes(value);
+  const negative = ["REJECTED", "INACTIVE", "DECLINED", "OVERDUE"].includes(value);
   return <span className={`rounded-full px-2.5 py-1 text-[11px] font-black ${positive ? "bg-green-100 text-green-700" : negative ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>{value}</span>;
 }
 

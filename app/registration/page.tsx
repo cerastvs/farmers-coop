@@ -21,6 +21,15 @@ function InputLabel({ children, optional }: { children: React.ReactNode; optiona
   );
 }
 
+const machineryOptions = [
+  "Hand tractor",
+  "Rice thresher",
+  "Corn sheller",
+  "Water pump",
+  "Tricycle",
+  "Truck",
+];
+
 export default function Registration() {
   const [loading, setLoading] = useState(false);
   const [application, setApplication] = useState<Application | null>(null);
@@ -247,6 +256,121 @@ export default function Registration() {
                 />
                 <FieldError error={errors.cropType} />
               </div>
+
+              <div>
+                <InputLabel>Farm ownership status</InputLabel>
+                <select
+                  name="farmOwnership"
+                  defaultValue={application?.farmOwnership || ""}
+                  className={`w-full rounded-xl border bg-[#fafcf8] px-3 py-2.5 text-sm text-[#173a2b] outline-none transition placeholder:text-[#9aa89e] focus:border-[#4f7e38] focus:ring-4 focus:ring-[#b9db9e]/35 ${
+                    errors.farmOwnership ? "border-red-400" : "border-[#dbe5d7]"
+                  }`}
+                >
+                  <option value="">Select</option>
+                  <option value="FARM_OWNER">Farm owner</option>
+                  <option value="FARM_WORKER">Farm worker / tenant</option>
+                  <option value="OTHERS">Others</option>
+                </select>
+                <FieldError error={errors.farmOwnership} />
+              </div>
+
+              <div>
+                <InputLabel optional>Farm machinery owned/accessible</InputLabel>
+                <div className="grid grid-cols-2 gap-2">
+                  {machineryOptions.map((option) => {
+                    const claimed = String(
+                      application?.farmMachinery || "",
+                    ).includes(option);
+                    return (
+                      <label
+                        key={option}
+                        className="flex items-center gap-2 rounded-lg border border-[#dbe5d7] bg-[#fafcf8] px-3 py-2 text-xs text-[#173a2b] cursor-pointer transition hover:border-[#4f7e38]"
+                      >
+                        <input
+                          type="checkbox"
+                          name="farmMachinery"
+                          value={option}
+                          defaultChecked={claimed}
+                          className="accent-[#4f7e38]"
+                        />
+                        {option}
+                      </label>
+                    );
+                  })}
+                </div>
+                <FieldError error={errors.farmMachinery} />
+              </div>
+            </div>
+
+            {/* Guarantor */}
+            <SectionHeader label="Guarantor" />
+
+            <div className="space-y-4">
+              <p className="text-xs text-[#718176]">
+                Provide a guarantor who can vouch for you and be contacted by
+                the cooperative if needed.
+              </p>
+              <div>
+                <InputLabel>Full name</InputLabel>
+                <TextInput
+                  name="guarantorName"
+                  placeholder="Maria Santos"
+                  defaultValue={
+                    typeof application?.guarantor === "object" &&
+                    application?.guarantor !== null
+                      ? String(
+                          (application.guarantor as { name?: string }).name ||
+                            "",
+                        )
+                      : ""
+                  }
+                  error={errors.guarantor}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <InputLabel>Contact number</InputLabel>
+                  <TextInput
+                    name="guarantorContact"
+                    type="tel"
+                    placeholder="09171234567"
+                    defaultValue={
+                      typeof application?.guarantor === "object" &&
+                      application?.guarantor !== null
+                        ? String(
+                            (
+                              application.guarantor as {
+                                contact?: string;
+                              }
+                            ).contact || "",
+                          )
+                        : ""
+                    }
+                    error={errors.guarantor}
+                  />
+                </div>
+                <div>
+                  <InputLabel>Relationship</InputLabel>
+                  <TextInput
+                    name="guarantorRelationship"
+                    placeholder="Relative"
+                    defaultValue={
+                      typeof application?.guarantor === "object" &&
+                      application?.guarantor !== null
+                        ? String(
+                            (
+                              application.guarantor as {
+                                relationship?: string;
+                              }
+                            ).relationship || "",
+                          )
+                        : ""
+                    }
+                    error={errors.guarantor}
+                  />
+                </div>
+              </div>
+              <FieldError error={errors.guarantor} />
             </div>
 
             {/* Requirements */}

@@ -19,6 +19,11 @@ import { z } from "zod";
 const GenerateReportSchema = z.object({
   type: z.nativeEnum(ReportType),
   title: z.string().trim().min(3).max(150).optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  memberId: z.string().optional(),
+  statuses: z.array(z.string()).optional(),
+  preview: z.boolean().optional(),
 });
 
 const DEFAULT_TITLES: Record<ReportType, string> = {
@@ -47,9 +52,55 @@ function jsonData(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
-async function generateMembersReport() {
+type ReportFilters = {
+  from?: string;
+  to?: string;
+  memberId?: string;
+  statuses?: string[];
+};
+
+function dateRangePrisma(filters: ReportFilters) {
+  const range: Record<string, Date> = {};
+  if (filters.from) {
+    const from = new Date(filters.from);
+    if (!isNaN(from.getTime())) range.gte = from;
+  }
+  if (filters.to) {
+    const to = new Date(filters.to);
+    if (!isNaN(to.getTime())) range.lte = to;
+  }
+  return range;
+}
+
+function isInDateRange(date: Date | null | undefined, filters: ReportFilters) {
+  if (!date) return true;
+  if (filters.from) {
+    const from = new Date(filters.from);
+    if (!isNaN(from.getTime()) && date < from) return false;
+  }
+  if (filters.to) {
+    const to = new Date(filters.to);
+    if (!isNaN(to.getTime()) && date > to) return false;
+  }
+  return true;
+}
+
+const whereFromFilters = (filters: ReportFilters): Prisma.UserWhereInput => ({
+  ...(filters.memberId ? { id: filters.memberId } : {}),
+});
+
+async function generateMembersReport(filters: ReportFilters = {}) {
   const [users, applications] = await Promise.all([
     prisma.user.findMany({
+      where: {
+        ...whereFromFilters(filters),
+        ...(filters.statuses && filters.statuses.length
+          ? { role: { in: filters.statuses as Role[] } }
+          : {}),
+        ...(filters.from || filters.to
+          ? { createdAt: dateRangePrisma(filters) }
+          : {}),
+      },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -62,6 +113,15 @@ async function generateMembersReport() {
     }),
     prisma.application.findMany({
       orderBy: { createdAt: "desc" },
+      where: {
+        ...(filters.memberId ? { userId: filters.memberId } : {}),
+        ...(filters.statuses && filters.statuses.length
+          ? { status: { in: filters.statuses as ApplicationStatus[] } }
+          : {}),
+        ...(filters.from || filters.to
+          ? { createdAt: dateRangePrisma(filters) }
+          : {}),
+      },
       include: {
         reviewedByUser: {
           select: { id: true, name: true, username: true, role: true },
@@ -127,8 +187,23 @@ async function generateMembersReport() {
   };
 }
 
-async function generateLoansReport() {
+async function generateLoansReport(filters: ReportFilters = {}) {
+  const hasRange = Boolean(filters.from || filters.to);
   const loans = await prisma.loan.findMany({
+    where: {
+      ...(filters.memberId ? { userId: filters.memberId } : {}),
+      ...(filters.statuses && filters.statuses.length
+        ? { status: { in: filters.statuses as LoanStatus[] } }
+        : {}),
+      ...(hasRange
+        ? {
+            OR: [
+              { createdAt: dateRangePrisma(filters) },
+              { payments: { some: { paidAt: dateRangePrisma(filters) } } },
+            ],
+          }
+        : {}),
+    },
     orderBy: { createdAt: "desc" },
     include: {
       user: { select: { id: true, name: true, username: true } },
@@ -137,7 +212,16 @@ async function generateLoansReport() {
   });
 
   const records = loans.map((loan) => {
-    const paid = loan.payments.reduce(
+    const totalPaid = loan.payments.reduce(
+      (sum, payment) => sum + Number(payment.amount),
+      0,
+    );
+    const inRangePayments = hasRange
+      ? loan.payments.filter((payment) =>
+          isInDateRange(payment.paidAt, filters),
+        )
+      : loan.payments;
+    const paidInRange = inRangePayments.reduce(
       (sum, payment) => sum + Number(payment.amount),
       0,
     );
@@ -146,12 +230,12 @@ async function generateLoansReport() {
       borrower: loan.user,
       name: loan.name,
       amount: Number(loan.amount),
-      amountPaid: paid,
-      outstandingBalance: Math.max(Number(loan.amount) - paid, 0),
+      amountPaid: paidInRange,
+      outstandingBalance: Math.max(Number(loan.amount) - totalPaid, 0),
       status: loan.status,
       due: loan.due.toISOString(),
       createdAt: loan.createdAt.toISOString(),
-      payments: loan.payments.map((payment) => ({
+      payments: inRangePayments.map((payment) => ({
         ...payment,
         amount: Number(payment.amount),
         paidAt: payment.paidAt.toISOString(),
@@ -178,8 +262,17 @@ async function generateLoansReport() {
   };
 }
 
-async function generatePaymentsReport() {
+async function generatePaymentsReport(filters: ReportFilters = {}) {
   const payments = await prisma.payment.findMany({
+    where: {
+      ...(filters.memberId ? { userId: filters.memberId } : {}),
+      ...(filters.statuses && filters.statuses.length
+        ? { status: { in: filters.statuses as PaymentStatus[] } }
+        : {}),
+      ...(filters.from || filters.to
+        ? { createdAt: dateRangePrisma(filters) }
+        : {}),
+    },
     orderBy: { createdAt: "desc" },
     include: {
       user: { select: { id: true, name: true, username: true } },
@@ -259,12 +352,21 @@ async function generatePaymentsReport() {
   };
 }
 
-async function generateSuppliesReport() {
+async function generateSuppliesReport(filters: ReportFilters = {}) {
   const supplies = await prisma.supply.findMany({
     orderBy: { productName: "asc" },
     include: {
       transactions: {
         orderBy: { createdAt: "desc" },
+        where: {
+          ...(filters.memberId ? { userId: filters.memberId } : {}),
+          ...(filters.statuses && filters.statuses.length
+            ? { status: { in: filters.statuses as TransactionStatus[] } }
+            : {}),
+          ...(filters.from || filters.to
+            ? { createdAt: dateRangePrisma(filters) }
+            : {}),
+        },
         include: {
           user: { select: { id: true, name: true, username: true } },
         },
@@ -308,12 +410,21 @@ async function generateSuppliesReport() {
   };
 }
 
-async function generateMachinesReport() {
+async function generateMachinesReport(filters: ReportFilters = {}) {
   const machines = await prisma.machine.findMany({
     orderBy: { name: "asc" },
     include: {
       requests: {
         orderBy: { requestDate: "desc" },
+        where: {
+          ...(filters.memberId ? { userId: filters.memberId } : {}),
+          ...(filters.statuses && filters.statuses.length
+            ? { status: { in: filters.statuses as MachineStatus[] } }
+            : {}),
+          ...(filters.from || filters.to
+            ? { requestDate: dateRangePrisma(filters) }
+            : {}),
+        },
         include: {
           user: { select: { id: true, name: true, username: true } },
         },
@@ -377,14 +488,24 @@ async function generateAuditReport() {
   };
 }
 
-async function generateSummaryReport() {
+async function generateSummaryReport(filters: ReportFilters = {}) {
   const [users, loans, payments, supplies, supplyRequests, machines, requests, audits] =
     await Promise.all([
       prisma.user.count(),
       prisma.loan.findMany({
         select: { amount: true, status: true, payments: { select: { amount: true } } },
       }),
-      prisma.payment.findMany({ select: { amount: true, status: true } }),
+      prisma.payment.findMany({
+        where:
+          filters.from || filters.to
+            ? { createdAt: dateRangePrisma(filters) }
+            : {},
+        orderBy: { createdAt: "desc" },
+        include: {
+          user: { select: { id: true, name: true, username: true } },
+          application: { select: { id: true, fullName: true, status: true } },
+        },
+      }),
       prisma.supply.findMany({ select: { price: true, quantity: true } }),
       prisma.supplyTransaction.count(),
       prisma.machine.count(),
@@ -424,6 +545,22 @@ async function generateSummaryReport() {
         Object.values(PaymentStatus),
       ),
     },
+    transactions: payments.map((payment) => ({
+      id: payment.id,
+      applicant: payment.application
+        ? {
+            fullName: payment.application.fullName,
+            applicationStatus: payment.application.status,
+          }
+        : null,
+      user: payment.user,
+      type: payment.type,
+      amount: Number(payment.amount),
+      paymentMethod: payment.paymentMethod,
+      status: payment.status,
+      referenceNo: payment.referenceNo,
+      createdAt: payment.createdAt.toISOString(),
+    })),
     supplies: {
       products: supplies.length,
       requests: supplyRequests,
@@ -448,22 +585,22 @@ async function generateSummaryReport() {
   };
 }
 
-async function generateReportData(type: ReportType) {
+async function generateReportData(type: ReportType, filters: ReportFilters = {}) {
   switch (type) {
     case ReportType.MEMBERS:
-      return generateMembersReport();
+      return generateMembersReport(filters);
     case ReportType.LOANS:
-      return generateLoansReport();
+      return generateLoansReport(filters);
     case ReportType.PAYMENTS:
-      return generatePaymentsReport();
+      return generatePaymentsReport(filters);
     case ReportType.SUPPLIES:
-      return generateSuppliesReport();
+      return generateSuppliesReport(filters);
     case ReportType.MACHINES:
-      return generateMachinesReport();
+      return generateMachinesReport(filters);
     case ReportType.AUDIT:
       return generateAuditReport();
     case ReportType.SUMMARY:
-      return generateSummaryReport();
+      return generateSummaryReport(filters);
   }
 }
 
@@ -488,7 +625,18 @@ export async function POST(req: NextRequest) {
       throw new ApiError(400, result.error.issues[0].message);
     }
 
-    const data = await generateReportData(result.data.type);
+    const data = await generateReportData(result.data.type, result.data);
+
+    if (result.data.preview) {
+      return NextResponse.json({
+        id: "preview",
+        title: result.data.title ?? DEFAULT_TITLES[result.data.type],
+        type: result.data.type,
+        createdAt: new Date().toISOString(),
+        data: JSON.parse(JSON.stringify(data)) as Record<string, unknown>,
+      });
+    }
+
     const report = await prisma.$transaction(async (tx) => {
       const created = await tx.report.create({
         data: {
@@ -500,10 +648,20 @@ export async function POST(req: NextRequest) {
       });
       await writeAudit(tx, {
         userId: actor.userId,
+        userRole: actor.userRole,
         action: "REPORT_GENERATED",
         entity: "Report",
         entityId: created.id,
-        metadata: { type: created.type, title: created.title },
+        metadata: {
+          type: created.type,
+          title: created.title,
+          filters: {
+            from: result.data.from ?? null,
+            to: result.data.to ?? null,
+            memberId: result.data.memberId ?? null,
+            statuses: result.data.statuses ?? null,
+          },
+        },
       });
       return created;
     });

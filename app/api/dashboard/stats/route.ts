@@ -17,10 +17,19 @@ export async function GET() {
   const userId = session.userId;
 
   try {
+    const OPEN_STATUSES = [LoanStatus.ACTIVE, LoanStatus.OVERDUE];
+
     const activeLoansCount = await prisma.loan.count({
       where: {
         userId,
-        status: LoanStatus.ACTIVE,
+        status: { in: OPEN_STATUSES },
+      },
+    });
+
+    const overdueLoansCount = await prisma.loan.count({
+      where: {
+        userId,
+        status: LoanStatus.OVERDUE,
       },
     });
 
@@ -34,30 +43,31 @@ export async function GET() {
     const activeLoans = await prisma.loan.findMany({
       where: {
         userId,
-        status: LoanStatus.ACTIVE,
+        status: { in: OPEN_STATUSES },
       },
       include: {
         payments: true,
       },
+      orderBy: { due: "asc" },
     });
 
+    let cashDebt = 0;
+    let supplyDebt = 0;
     const totalDebt = activeLoans.reduce((acc, loan) => {
       const paidAmount = loan.payments.reduce(
         (pAcc, p) => pAcc + Number(p.amount),
         0,
       );
-      return acc + (Number(loan.amount) - paidAmount);
+      const balance = Number(loan.amount) - paidAmount;
+      if (loan.type === "SUPPLY") {
+        supplyDebt += balance;
+      } else {
+        cashDebt += balance;
+      }
+      return acc + balance;
     }, 0);
 
-    const nextLoan = await prisma.loan.findFirst({
-      where: {
-        userId,
-        status: LoanStatus.ACTIVE,
-      },
-      orderBy: {
-        due: "asc",
-      },
-    });
+    const nextLoan = activeLoans.find((l) => l.status !== LoanStatus.PAID) || null;
 
     const loanPayments = await prisma.loanPayment.findMany({
       where: {
@@ -75,6 +85,7 @@ export async function GET() {
         loan: {
           select: {
             name: true,
+            type: true,
           },
         },
       },
@@ -113,13 +124,29 @@ export async function GET() {
 
     return NextResponse.json({
       activeLoansCount,
+      overdueLoansCount,
       borrowedMachinesCount,
       totalDebt,
+      cashDebt,
+      supplyDebt,
       nextPaymentDue: nextLoan?.due || null,
       activeLoans: activeLoans.map((l) => ({
+        id: l.id,
         name: l.name,
-        status: "Active",
+        type: l.type,
+        status: l.status,
+        displayStatus:
+          l.status === LoanStatus.OVERDUE
+            ? "Overdue"
+            : l.status === LoanStatus.ACTIVE
+              ? "Active"
+              : l.status,
         loanAmount: Number(l.amount),
+        remainingBalance: Math.max(
+          Number(l.amount) -
+            l.payments.reduce((s, p) => s + Number(p.amount), 0),
+          0,
+        ),
         nextPayment: l.due,
       })),
       recentTransactions: allTransactions,

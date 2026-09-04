@@ -44,6 +44,30 @@ test("loan lifecycle accepts review and repayment transitions", () => {
       "Loan",
     ),
   );
+  assert.doesNotThrow(() =>
+    assertTransition(
+      loanTransitions,
+      LoanStatus.ACTIVE,
+      LoanStatus.OVERDUE,
+      "Loan",
+    ),
+  );
+  assert.doesNotThrow(() =>
+    assertTransition(
+      loanTransitions,
+      LoanStatus.OVERDUE,
+      LoanStatus.PAID,
+      "Loan",
+    ),
+  );
+  assert.doesNotThrow(() =>
+    assertTransition(
+      loanTransitions,
+      LoanStatus.OVERDUE,
+      LoanStatus.ACTIVE,
+      "Loan",
+    ),
+  );
 });
 
 test("terminal workflow states reject further transitions", () => {

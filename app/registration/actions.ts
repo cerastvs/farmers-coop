@@ -14,6 +14,33 @@ export async function handleSubmit(
   setLoading(true);
   setErrors({});
   const formData = new FormData(form);
+
+  const guarantorName = String(formData.get("guarantorName") || "").trim();
+  const guarantorContact = String(formData.get("guarantorContact") || "").trim();
+  const guarantorRelationship = String(
+    formData.get("guarantorRelationship") || "",
+  ).trim();
+
+  if (guarantorName || guarantorContact || guarantorRelationship) {
+    formData.set(
+      "guarantor",
+      JSON.stringify({
+        name: guarantorName,
+        contact: guarantorContact,
+        relationship: guarantorRelationship,
+      }),
+    );
+  }
+
+  const farmMachinery = formData.getAll("farmMachinery");
+  if (farmMachinery.length > 0) {
+    formData.set("farmMachinery", farmMachinery.join(", "));
+  }
+
+  if (!formData.get("farmOwnership")) {
+    formData.set("farmOwnership", "FARM_OWNER");
+  }
+
   const formValues = Object.fromEntries(formData.entries());
 
   const result = ApplicationSchema.safeParse(formValues);

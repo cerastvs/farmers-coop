@@ -20,4 +20,19 @@ export const RECORDS_ROLES = [
 export const SUPPLY_REVIEW_ROLES = [
   Role.SECRETARY,
   Role.TREASURER,
+  Role.PRESIDENT,
+] as const;
+
+export const SMS_ROLES = [Role.SECRETARY, Role.PRESIDENT] as const;
+
+export const OFFICER_ROLES = [
+  Role.SECRETARY,
+  Role.TREASURER,
+  Role.PRESIDENT,
+] as const;
+
+export const MACHINE_REVIEW_ROLES = [
+  Role.SECRETARY,
+  Role.TREASURER,
+  Role.PRESIDENT,
 ] as const;

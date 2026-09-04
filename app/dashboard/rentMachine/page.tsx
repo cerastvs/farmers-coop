@@ -49,6 +49,8 @@ export default function RentMachinePage() {
   const [returning, setReturning] = useState<string | null>(null);
   const [returnConfirm, setReturnConfirm] = useState<string | null>(null);
   const [imageModal, setImageModal] = useState<{ src: string; alt: string } | null>(null);
+  const [farmSize, setFarmSize] = useState<number>(1);
+  const [allowedDurationDays, setAllowedDurationDays] = useState<number>(1);
 
   useEffect(() => {
     fetchMachines();
@@ -60,6 +62,9 @@ export default function RentMachinePage() {
       if (res.ok) {
         const data = await res.json();
         setMachines(data.machines);
+        if (typeof data.farmSize === "number") setFarmSize(data.farmSize);
+        if (typeof data.allowedDurationDays === "number")
+          setAllowedDurationDays(data.allowedDurationDays);
       }
     } catch (error) {
       console.error("Failed to fetch machines:", error);
@@ -67,6 +72,16 @@ export default function RentMachinePage() {
       setLoading(false);
     }
   }
+
+  function selectedDurationDays() {
+    if (!startDate || !endDate) return null;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  }
+
+  const exceedsAllowedDuration =
+    selectedDurationDays() !== null && selectedDurationDays()! > allowedDurationDays;
 
   function openBorrowForm(machineId: string) {
     setFormMachineId(machineId);
@@ -89,6 +104,15 @@ export default function RentMachinePage() {
 
     if (endDate < startDate) {
       setMessage({ type: "error", text: "End date must be on or after start date" });
+      return;
+    }
+
+    const days = selectedDurationDays();
+    if (days !== null && days > allowedDurationDays) {
+      setMessage({
+        type: "error",
+        text: `Your ${farmSize} ha farm allows at most ${allowedDurationDays} day(s) of machine use (1 day per hectare).`,
+      });
       return;
     }
 
@@ -356,6 +380,40 @@ export default function RentMachinePage() {
                           </div>
                         </div>
 
+                        <p className="text-xs text-[#718176]">
+                          Based on your{" "}
+                          <span className="font-semibold text-[#173a2b]">
+                            {farmSize} ha
+                          </span>{" "}
+                          farm, you may borrow a machine for at most{" "}
+                          <span className="font-semibold text-[#39733e]">
+                            {allowedDurationDays} day
+                            {allowedDurationDays > 1 ? "s" : ""}
+                          </span>{" "}
+                          (1 day per hectare).
+                          {selectedDurationDays() !== null && (
+                            <span className="block mt-1">
+                              Selected:{" "}
+                              <span
+                                className={`font-semibold ${
+                                  exceedsAllowedDuration
+                                    ? "text-red-600"
+                                    : "text-[#39733e]"
+                                }`}
+                              >
+                                {selectedDurationDays()} day
+                                {selectedDurationDays()! > 1 ? "s" : ""}
+                              </span>
+                            </span>
+                          )}
+                        </p>
+                        {exceedsAllowedDuration && (
+                          <p className="text-xs font-semibold text-red-600">
+                            This exceeds your allowed duration. Shorten the
+                            booking or the request will be rejected.
+                          </p>
+                        )}
+
                         <div className="flex justify-end gap-2">
                           <button
                             onClick={closeBorrowForm}
@@ -365,20 +423,24 @@ export default function RentMachinePage() {
                           </button>
                           <button
                             onClick={() => handleBorrow(machine.id)}
-                            disabled={borrowing === machine.id || !startDate || !endDate || hasDateConflict}
+                            disabled={borrowing === machine.id || !startDate || !endDate || hasDateConflict || exceedsAllowedDuration}
                             className={`rounded-xl px-5 py-2 text-sm font-bold transition-colors ${
                               borrowing === machine.id || !startDate || !endDate
                                 ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                                 : hasDateConflict
                                   ? "bg-red-100 text-red-600 border border-red-300 cursor-not-allowed"
-                                  : "bg-[#174b36] text-white hover:bg-[#1a5c42]"
+                                  : exceedsAllowedDuration
+                                    ? "bg-red-100 text-red-600 border border-red-300 cursor-not-allowed"
+                                    : "bg-[#174b36] text-white hover:bg-[#1a5c42]"
                             }`}
                           >
                             {borrowing === machine.id
                               ? "Requesting..."
                               : hasDateConflict
                                 ? "Dates conflict with existing booking"
-                                : "Submit Request"}
+                                : exceedsAllowedDuration
+                                  ? "Exceeds allowed duration"
+                                  : "Submit Request"}
                           </button>
                         </div>
                       </div>

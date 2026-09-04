@@ -1,4 +1,9 @@
-import { ApplicationStatus, Prisma, Role } from "@/app/generated/prisma";
+import {
+  ApplicationStatus,
+  NotificationType,
+  Prisma,
+  Role,
+} from "@/app/generated/prisma";
 import { NextRequest } from "next/server";
 import { imgbbUpload } from "sdk-imagebb";
 
@@ -37,6 +42,17 @@ const uploadImage = async (file: File) => {
     throw new Error("Image upload failed");
   }
 };
+
+function parseGuarantor(value: FormDataEntryValue | null) {
+  if (!value || typeof value !== "string" || !value.trim()) return undefined;
+  try {
+    const parsed = JSON.parse(value);
+    return typeof parsed === "object" && parsed !== null ? parsed : undefined;
+  } catch {
+    return value;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const actor = await requireUser([Role.APPLICANT]);
@@ -54,6 +70,9 @@ export async function POST(req: NextRequest) {
       farmSize: formData.get("farmSize"),
       cropType: formData.get("cropType"),
       yearsFarming: formData.get("yearsFarming"),
+      farmOwnership: formData.get("farmOwnership"),
+      farmMachinery: formData.get("farmMachinery"),
+      guarantor: parseGuarantor(formData.get("guarantor")),
       proofOfFarm: formData.get("proofOfFarm"),
       validId: formData.get("validId"),
     };
@@ -84,6 +103,9 @@ export async function POST(req: NextRequest) {
       farmSize,
       cropType,
       yearsFarming,
+      farmOwnership,
+      farmMachinery,
+      guarantor,
       proofOfFarm,
       validId,
     } = result.data;
@@ -109,6 +131,12 @@ export async function POST(req: NextRequest) {
           farmSize,
           cropType,
           yearsFarming,
+          farmOwnership,
+          farmMachinery:
+            farmMachinery && farmMachinery.length > 0 ? farmMachinery : null,
+          guarantor: guarantor && Object.keys(guarantor).length
+            ? (guarantor as Prisma.InputJsonValue)
+            : undefined,
           proofOfFarmUrl: farmImgUrl!,
           validIdUrl: validIdImgUrl!,
           status: ApplicationStatus.PENDING_PAYMENT,
@@ -120,12 +148,16 @@ export async function POST(req: NextRequest) {
       });
       await writeAudit(tx, {
         userId: actor.userId,
+        userRole: actor.userRole,
         action: "MEMBERSHIP_APPLICATION_SUBMITTED",
         entity: "Application",
         entityId: created.id,
+        newStatus: ApplicationStatus.PENDING_PAYMENT,
       });
       await notifyUser(tx, {
         userId: actor.userId,
+        type: NotificationType.SYSTEM,
+        link: "/registration",
         title: "Application submitted",
         message:
           "Your membership application was received. Please pay the application fee to continue.",
@@ -187,6 +219,9 @@ export async function PATCH(req: NextRequest) {
       farmSize: formData.get("farmSize"),
       cropType: formData.get("cropType"),
       yearsFarming: formData.get("yearsFarming"),
+      farmOwnership: formData.get("farmOwnership"),
+      farmMachinery: formData.get("farmMachinery"),
+      guarantor: parseGuarantor(formData.get("guarantor")),
       proofOfFarm: formData.get("proofOfFarm"),
       validId: formData.get("validId"),
     };
@@ -220,6 +255,9 @@ export async function PATCH(req: NextRequest) {
       farmSize,
       cropType,
       yearsFarming,
+      farmOwnership,
+      farmMachinery,
+      guarantor,
     } = result.data;
 
     const fullname = composeFullName(firstName, middleName, lastName, extensionName);
@@ -262,6 +300,15 @@ export async function PATCH(req: NextRequest) {
           farmSize,
           cropType,
           yearsFarming,
+          farmOwnership,
+          farmMachinery:
+            farmMachinery && farmMachinery.length > 0
+              ? farmMachinery
+              : null,
+          guarantor:
+            guarantor && Object.keys(guarantor).length
+              ? (guarantor as Prisma.InputJsonValue)
+              : undefined,
           proofOfFarmUrl: farmImgUrl,
           validIdUrl: validIdImgUrl,
         },
@@ -272,12 +319,15 @@ export async function PATCH(req: NextRequest) {
       });
       await writeAudit(tx, {
         userId: actor.userId,
+        userRole: actor.userRole,
         action: "MEMBERSHIP_PROFILE_UPDATED",
         entity: "Application",
         entityId: existingApplication.id,
       });
       await notifyUser(tx, {
         userId: actor.userId,
+        type: NotificationType.SYSTEM,
+        link: "/registration",
         title: "Membership profile updated",
         message: "Your membership profile changes were saved.",
       });

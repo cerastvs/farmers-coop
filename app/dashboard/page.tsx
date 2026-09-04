@@ -26,13 +26,20 @@ import {
 
 interface DashboardStats {
   activeLoansCount: number;
+  overdueLoansCount: number;
   borrowedMachinesCount: number;
   totalDebt: number;
+  cashDebt: number;
+  supplyDebt: number;
   nextPaymentDue: string | null;
   activeLoans: Array<{
+    id: string;
     name: string;
+    type: string;
     status: string;
+    displayStatus: string;
     loanAmount: number;
+    remainingBalance: number;
     nextPayment: string;
   }>;
   recentTransactions: Array<{
@@ -165,16 +172,37 @@ export default function Dashboard() {
 
         <section>
           <h2 className="mb-3 text-base font-extrabold text-[#173a2b]">
-            Active Loans
+            Active Loans &amp; Debts
           </h2>
+
+          {stats && stats.overdueLoansCount > 0 && (
+            <div className="mb-3 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
+              <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-red-100 text-red-700">
+                <Clock size={14} />
+              </span>
+              <div>
+                <p className="text-sm font-bold text-red-700">
+                  You have {stats.overdueLoansCount} overdue loan
+                  {stats.overdueLoansCount > 1 ? "s" : ""}
+                </p>
+                <p className="text-xs text-red-600">
+                  Please settle outstanding balances as soon as possible to
+                  avoid additional charges.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-3">
             {stats?.activeLoans && stats.activeLoans.length > 0 ? (
               stats.activeLoans.map((loan) => (
                 <ActiveLoanCard
-                  key={loan.name}
+                  key={loan.id}
                   name={loan.name}
-                  status={loan.status}
+                  status={loan.displayStatus}
+                  type={loan.type}
                   loanAmount={`₱${loan.loanAmount.toLocaleString()}`}
+                  remainingBalance={`₱${loan.remainingBalance.toLocaleString()}`}
                   nextPayment={new Date(loan.nextPayment).toLocaleDateString(
                     "en-US",
                     { month: "long", day: "numeric", year: "numeric" },
@@ -187,6 +215,23 @@ export default function Dashboard() {
               </div>
             )}
           </div>
+
+          {stats && stats.totalDebt > 0 && (
+            <div className="mt-3 flex flex-wrap gap-3 text-sm">
+              <span className="rounded-xl bg-white border border-[#e2e7dc] px-4 py-2">
+                <span className="text-[#718176]">Cash debt: </span>
+                <span className="font-bold text-[#173a2b]">
+                  ₱{stats.cashDebt.toLocaleString()}
+                </span>
+              </span>
+              <span className="rounded-xl bg-white border border-[#e2e7dc] px-4 py-2">
+                <span className="text-[#718176]">Fertilizer / supply debt: </span>
+                <span className="font-bold text-[#173a2b]">
+                  ₱{stats.supplyDebt.toLocaleString()}
+                </span>
+              </span>
+            </div>
+          )}
         </section>
 
         <RecentTransactions

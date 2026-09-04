@@ -32,6 +32,16 @@ async function uploadToImgbb(file: File): Promise<string> {
 export async function GET() {
   try {
     const { userId } = await requireUser(MEMBER_ROLES);
+    const application = await prisma.application.findFirst({
+      where: { userId },
+      select: { farmSize: true },
+    });
+    const farmSize = application?.farmSize ?? 1;
+    const allowedDurationDays = Math.max(
+      1,
+      Math.ceil(Number.isFinite(farmSize) ? farmSize : 1),
+    );
+
     const machines = await prisma.machine.findMany({
       orderBy: { name: "asc" },
       include: {
@@ -88,7 +98,11 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({ machines: result });
+    return NextResponse.json({
+      machines: result,
+      farmSize,
+      allowedDurationDays,
+    });
   } catch (error) {
     return apiErrorResponse(error, "Failed to fetch machines");
   }

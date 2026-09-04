@@ -91,6 +91,7 @@ const STATUS_STYLE: Record<string, string> = {
   APPROVED: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
   REJECTED: "bg-red-50 text-red-700 ring-1 ring-red-200",
   ACTIVE: "bg-blue-50 text-blue-700 ring-1 ring-blue-200",
+  OVERDUE: "bg-red-50 text-red-700 ring-2 ring-red-300",
   PAID: "bg-gray-100 text-gray-600 ring-1 ring-gray-200",
   VERIFIED: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
   COMPLETED: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
@@ -103,6 +104,13 @@ function StatusBadge({ status }: { status: string }) {
     >
       {status}
     </span>
+  );
+}
+
+function isOverdueLoan(l: Pick<Loan, "status" | "due">, now: Date) {
+  return (
+    l.status === "OVERDUE" ||
+    (l.status === "ACTIVE" && !!l.due && new Date(l.due) < now)
   );
 }
 
@@ -252,9 +260,8 @@ export default function TreasurerPage() {
       (sum, l) => sum + l.remainingBalance,
       0,
     );
-    const overdueLoans = data.loans.filter(
-      (l) =>
-        l.status === "ACTIVE" && l.due && new Date(l.due) < now,
+    const overdueLoans = data.loans.filter((l) =>
+      isOverdueLoan(l, now),
     );
     const pendingPayments = data.payments.filter(
       (p) => p.status === "PENDING",
@@ -293,11 +300,7 @@ export default function TreasurerPage() {
     [filteredLoans],
   );
   const loanOverdue = useMemo(
-    () =>
-      filteredLoans.filter(
-        (l) =>
-          l.status === "ACTIVE" && l.due && new Date(l.due) < now,
-      ),
+    () => filteredLoans.filter((l) => isOverdueLoan(l, now)),
     [filteredLoans, now],
   );
 
@@ -321,11 +324,7 @@ export default function TreasurerPage() {
 
   // ── Overdue (all types) ──
   const overdueLoans = useMemo(
-    () =>
-      data?.loans.filter(
-        (l) =>
-          l.status === "ACTIVE" && l.due && new Date(l.due) < now,
-      ) ?? [],
+    () => data?.loans.filter((l) => isOverdueLoan(l, now)) ?? [],
     [data, now],
   );
 

@@ -12,7 +12,8 @@ export const loanTransitions: TransitionMap<LoanStatus> = {
   PENDING: [LoanStatus.APPROVED, LoanStatus.REJECTED],
   APPROVED: [LoanStatus.ACTIVE, LoanStatus.REJECTED],
   REJECTED: [],
-  ACTIVE: [LoanStatus.PAID],
+  ACTIVE: [LoanStatus.PAID, LoanStatus.OVERDUE],
+  OVERDUE: [LoanStatus.PAID, LoanStatus.ACTIVE],
   PAID: [],
 };
 

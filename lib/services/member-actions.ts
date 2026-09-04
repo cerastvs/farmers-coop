@@ -2,7 +2,9 @@ import { z } from "zod";
 
 import {
   LoanStatus,
+  LoanType,
   MachineStatus,
+  NotificationType,
   PaymentStatus,
   PaymentType,
   Prisma,
@@ -23,6 +25,7 @@ import {
   applyVerifiedLoanPayment,
   generateReceiptNo,
 } from "@/lib/services/loan-payments";
+import { requiredDurationDays } from "@/lib/services/overdue";
 
 export const LoanRequestSchema = z
   .object({
@@ -109,17 +112,20 @@ export async function submitLoanRequest({
     async (tx) => {
       await requireActiveMember(tx, memberId);
 
+      const isSupply = input.type === "SUPPLY";
       const existing = await tx.loan.findFirst({
         where: {
           userId: memberId,
           status: { in: ACTIVE_LOAN_STATUSES },
+          ...(isSupply ? { type: LoanType.SUPPLY } : {}),
         },
-        select: { id: true },
+        select: { id: true, type: true },
       });
       if (existing) {
+        const kind = existing.type === LoanType.SUPPLY ? "supply" : "cash";
         throw new ApiError(
           409,
-          "Member already has a pending or active loan account",
+          `Member already has a pending or active ${kind} loan account`,
         );
       }
 
@@ -128,6 +134,7 @@ export async function submitLoanRequest({
       const created = await tx.loan.create({
         data: {
           userId: memberId,
+          name: input.type === LoanType.SUPPLY ? "Farm Supply Loan" : "Cash Loan",
           amount: input.amount,
           termMonths: input.termMonths,
           purpose: input.purpose,
@@ -143,9 +150,11 @@ export async function submitLoanRequest({
 
       const audit = await writeAudit(tx, {
         userId: actor.userId,
+        userRole: actor.userRole,
         action: "LOAN_REQUESTED",
         entity: "Loan",
         entityId: created.id,
+        newStatus: LoanStatus.PENDING,
         metadata: auditMetadata(context, {
           memberId,
           amount: input.amount,
@@ -169,6 +178,8 @@ export async function submitLoanRequest({
         reviewers.map((reviewer) =>
           notifyUser(tx, {
             userId: reviewer.id,
+            type: input.type === LoanType.SUPPLY ? "SUPPLY_REQUEST" : "LOAN_APPROVAL",
+            link: "/dashboard/treasurer?section=loans",
             title: "New loan request",
             message: `A ₱${input.amount.toLocaleString()} ${input.type === "SUPPLY" ? "supply" : "cash"}-loan request is ready for review.`,
           }),
@@ -217,6 +228,13 @@ export async function submitMachineRequest({
     async (tx) => {
       await requireActiveMember(tx, memberId);
 
+      const application = await tx.application.findFirst({
+        where: { userId: memberId },
+        select: { farmSize: true },
+      });
+      const farmSize = application?.farmSize ?? 1;
+      const requiredDays = requiredDurationDays(farmSize);
+
       const machine = await tx.machine.findUnique({
         where: { id: machineId },
         include: {
@@ -239,10 +257,22 @@ export async function submitMachineRequest({
         );
       }
 
+      const requestedDays =
+        Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) +
+        1;
+      if (requestedDays > requiredDays) {
+        throw new ApiError(
+          400,
+          `A ${farmSize} ha farm allows at most ${requiredDays} day(s) of machine use (1 day per hectare)`,
+        );
+      }
+
       const created = await tx.machineRequest.create({
         data: {
           userId: memberId,
           machineId,
+          farmSize,
+          durationDays: requestedDays,
           status: MachineStatus.QUEUED,
           startDate: start,
           endDate: end,
@@ -252,12 +282,16 @@ export async function submitMachineRequest({
 
       const audit = await writeAudit(tx, {
         userId: actor.userId,
+        userRole: actor.userRole,
         action: "MACHINE_REQUESTED",
         entity: "MachineRequest",
         entityId: created.id,
+        newStatus: MachineStatus.QUEUED,
         metadata: auditMetadata(context, {
           memberId,
           machineId,
+          farmSize,
+          durationDays: requestedDays,
           startDate,
           endDate,
         }),
@@ -275,6 +309,8 @@ export async function submitMachineRequest({
         reviewers.map((reviewer) =>
           notifyUser(tx, {
             userId: reviewer.id,
+            type: NotificationType.MACHINE_REQUEST,
+            link: "/dashboard/secretary?section=machines",
             title: "New machine request",
             message: `A request for ${machine.name} is ready for review.`,
           }),
@@ -393,9 +429,11 @@ export async function submitSupplyTransaction({
 
       const audit = await writeAudit(tx, {
         userId: actor.userId,
+        userRole: actor.userRole,
         action: "SUPPLY_REQUESTED",
         entity: "SupplyTransaction",
         entityId: created.id,
+        newStatus: TransactionStatus.PENDING,
         metadata: auditMetadata(context, {
           memberId,
           supplyId: supply.id,
@@ -419,6 +457,8 @@ export async function submitSupplyTransaction({
         reviewers.map((reviewer) =>
           notifyUser(tx, {
             userId: reviewer.id,
+            type: NotificationType.SUPPLY_REQUEST,
+            link: "/dashboard/secretary?section=supplies",
             title: "New supply request",
             message: `A request for ${quantity} ${supply.productName} is ready for review.`,
           }),
@@ -463,7 +503,10 @@ export async function recordManualPayment({
           where: { id: loanId, userId: memberId },
         });
         if (!loan) throw new ApiError(404, "Loan not found");
-        if (loan.status !== LoanStatus.ACTIVE) {
+        if (
+          loan.status !== LoanStatus.ACTIVE &&
+          loan.status !== LoanStatus.OVERDUE
+        ) {
           throw new ApiError(409, "Only active loans can receive payments");
         }
 
@@ -493,9 +536,11 @@ export async function recordManualPayment({
 
         const audit = await writeAudit(tx, {
           userId: actor.userId,
+          userRole: actor.userRole,
           action: "PAYMENT_RECORDED_MANUAL",
           entity: "Payment",
           entityId: payment.id,
+          newStatus: PaymentStatus.VERIFIED,
           metadata: auditMetadata(context, {
             memberId,
             loanId,
@@ -511,6 +556,8 @@ export async function recordManualPayment({
 
         await notifyUser(tx, {
           userId: memberId,
+          type: NotificationType.LOAN_PAYMENT_RECEIVED,
+          link: "/dashboard",
           title: "Payment received",
           message: `Your ₱${amount.toLocaleString()} loan payment was recorded in the office and applied to your account.`,
         });
@@ -534,9 +581,11 @@ export async function recordManualPayment({
 
       const audit = await writeAudit(tx, {
         userId: actor.userId,
+        userRole: actor.userRole,
         action: "PAYMENT_RECORDED_MANUAL",
         entity: "Payment",
         entityId: payment.id,
+        newStatus: PaymentStatus.VERIFIED,
         metadata: auditMetadata(context, {
           memberId,
           type,
@@ -552,6 +601,8 @@ export async function recordManualPayment({
 
       await notifyUser(tx, {
         userId: memberId,
+        type: NotificationType.PAYMENT_RECEIVED,
+        link: "/dashboard",
         title: "Payment received",
         message: `Your ₱${amount.toLocaleString()} ${type.replace("_", " ").toLowerCase()} was recorded in the office.`,
       });

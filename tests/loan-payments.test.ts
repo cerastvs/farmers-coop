@@ -160,3 +160,28 @@ test("loan payments that fully settle are paid regardless of their own status", 
 
   assert.deepEqual(events, ["ledger:loan-1:1000", "loan:paid", "history:PAID"]);
 });
+
+test("accepts a payment on an OVERDUE loan", async () => {
+  const events: string[] = [];
+
+  await applyVerifiedLoanPayment(
+    txClient(events),
+    payment({ loan: { status: LoanStatus.OVERDUE } }),
+  );
+
+  assert.deepEqual(events, ["ledger:loan-1:100"]);
+});
+
+test("fully settles an OVERDUE loan to PAID", async () => {
+  const events: string[] = [];
+
+  await applyVerifiedLoanPayment(
+    txClient(events),
+    payment({
+      amount: "400",
+      loan: { status: LoanStatus.OVERDUE, amount: "1000", payments: [{ amount: "600" }] },
+    }),
+  );
+
+  assert.deepEqual(events, ["ledger:loan-1:400", "loan:paid", "history:PAID"]);
+});

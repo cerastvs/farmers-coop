@@ -1,4 +1,4 @@
-import { Prisma, TransactionStatus } from "@/app/generated/prisma";
+import { NotificationType, Prisma, TransactionStatus } from "@/app/generated/prisma";
 import { notifyUser, writeAudit } from "@/lib/activity";
 import {
   apiErrorResponse,
@@ -89,6 +89,13 @@ export async function PATCH(
 
         await notifyUser(tx, {
           userId: request.userId,
+          type:
+            nextStatus === TransactionStatus.APPROVED
+              ? NotificationType.SUPPLY_APPROVED
+              : nextStatus === TransactionStatus.COMPLETED
+                ? NotificationType.SUPPLY_COMPLETED
+                : NotificationType.SUPPLY_REQUEST,
+          link: "/dashboard",
           title: `Supply request ${nextStatus.toLowerCase()}`,
           message:
             nextStatus === TransactionStatus.REJECTED
@@ -97,9 +104,12 @@ export async function PATCH(
         });
         await writeAudit(tx, {
           userId: actor.userId,
+          userRole: actor.userRole,
           action: `SUPPLY_${nextStatus}`,
           entity: "SupplyTransaction",
           entityId: id,
+          previousStatus: request.status,
+          newStatus: nextStatus,
           metadata: result.data.reason
             ? { reason: result.data.reason }
             : undefined,

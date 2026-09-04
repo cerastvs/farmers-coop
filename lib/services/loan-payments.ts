@@ -44,7 +44,10 @@ export async function applyVerifiedLoanPayment(
       "Payment owner does not match the loan borrower",
     );
   }
-  if (payment.loan.status !== LoanStatus.ACTIVE) {
+  if (
+    payment.loan.status !== LoanStatus.ACTIVE &&
+    payment.loan.status !== LoanStatus.OVERDUE
+  ) {
     throw new ApiError(409, "The linked loan is not active");
   }
 

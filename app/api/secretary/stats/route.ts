@@ -281,6 +281,7 @@ export async function GET() {
         title: r.title,
         type: String(r.type),
         createdAt: r.createdAt.toISOString(),
+        data: r.data ? (JSON.parse(JSON.stringify(r.data)) as Record<string, unknown>) : null,
       })),
       posts: posts.map((p) => ({
         id: p.id,

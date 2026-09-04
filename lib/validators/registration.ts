@@ -47,6 +47,26 @@ export const ApplicationSchema = z.object({
     .min(0, "Cannot be negative")
     .max(80, "Too high"),
 
+  farmOwnership: z
+    .enum(["FARM_OWNER", "FARM_WORKER", "OTHERS"])
+    .default("FARM_OWNER"),
+
+  farmMachinery: z.string().optional().transform((val) => (val ? sanitizeSql(val.trim()) : "")),
+
+  guarantor: z
+    .object({
+      name: z.string().min(1, "Guarantor name is required").transform(sanitizeSql),
+      contact: z
+        .string()
+        .min(10, "Guarantor contact is too short")
+        .max(15, "Guarantor contact is too long")
+        .regex(/^[0-9]+$/, "Guarantor contact must be numbers only")
+        .transform(sanitizeSql),
+      relationship: z.string().min(1, "Relationship is required").transform(sanitizeSql),
+    })
+    .partial()
+    .optional(),
+
   validId: z
     .any()
     .refine((val) => val instanceof File && val.size > 0, {

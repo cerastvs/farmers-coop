@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
 import { IconLeaf, IconLoan, IconMachine } from "@/components/icons";
 import { ImageModal } from "@/components/ImageModal";
+import { ReportModal, ReportContent } from "@/components/ReportModal";
 import { logout } from "../../login/actions";
 import AdminActionsPanel from "./AdminActionsPanel";
 import {
@@ -38,6 +39,7 @@ import {
   XCircle,
   TrendingUp,
   HandHelping,
+  MessageSquare,
 } from "lucide-react";
 
 interface Application {
@@ -50,6 +52,9 @@ interface Application {
   farmSize: number;
   cropType: string;
   yearsFarming: number;
+  farmOwnership: string | null;
+  farmMachinery: string | null;
+  guarantor: { name?: string; contact?: string; relationship?: string } | null;
   validIdUrl: string;
   proofOfFarmUrl: string;
   status: string;
@@ -153,6 +158,7 @@ interface ReportRecord {
   title: string;
   type: string;
   createdAt: string;
+  data: Record<string, unknown> | null;
 }
 
 interface PostRecord {
@@ -202,6 +208,8 @@ const SECTIONS = [
   "supplies",
   "reports",
   "announcements",
+  "sms",
+  "overdue",
 ] as const;
 type Section = (typeof SECTIONS)[number];
 type MachineRequestAction =
@@ -270,6 +278,18 @@ const SECTION_META: Record<
     icon: Megaphone,
     accent: "border-l-pink-400",
     iconBg: "bg-pink-100 text-pink-600",
+  },
+  sms: {
+    label: "SMS / Notifications",
+    icon: MessageSquare,
+    accent: "border-l-cyan-400",
+    iconBg: "bg-cyan-100 text-cyan-600",
+  },
+  overdue: {
+    label: "Overdue",
+    icon: AlertTriangle,
+    accent: "border-l-red-400",
+    iconBg: "bg-red-100 text-red-600",
   },
 };
 
@@ -1971,7 +1991,50 @@ function ApplicationDetailModal({
                 label="Years Farming"
                 value={`${application.yearsFarming} years`}
               />
+              <DetailField
+                label="Farm Ownership"
+                value={
+                  application.farmOwnership === "FARM_OWNER"
+                    ? "Farm owner"
+                    : application.farmOwnership === "FARM_WORKER"
+                      ? "Farm worker / tenant"
+                      : application.farmOwnership === "OTHERS"
+                        ? "Others"
+                        : application.farmOwnership || "—"
+                }
+              />
+              <DetailField
+                label="Farm Machinery"
+                value={application.farmMachinery || "None"}
+              />
             </div>
+          </div>
+
+          {/* Guarantor */}
+          <div>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+              Guarantor
+            </p>
+            {application.guarantor ? (
+              <div className="grid grid-cols-3 gap-3">
+                <DetailField
+                  label="Name"
+                  value={application.guarantor.name || "—"}
+                />
+                <DetailField
+                  label="Contact"
+                  value={application.guarantor.contact || "—"}
+                />
+                <DetailField
+                  label="Relationship"
+                  value={application.guarantor.relationship || "—"}
+                />
+              </div>
+            ) : (
+              <div className="rounded-xl border border-[#eef2e8] bg-[#fafdf7] px-4 py-3 text-sm text-[#718176]">
+                No guarantor provided
+              </div>
+            )}
           </div>
 
           {/* Documents */}
@@ -2734,25 +2797,68 @@ function ReportsSection({
   expanded,
   onToggle,
   onGenerate,
+  onPreview,
   busy,
 }: {
   items: ReportRecord[];
   expanded: boolean;
   onToggle: () => void;
-  onGenerate: (type: string, title?: string) => void;
+  onGenerate: (type: string, title?: string, filters?: { from?: string; to?: string; memberId?: string; statuses?: string[] }) => Promise<ReportRecord | null>;
+  onPreview: (type: string, filters?: { from?: string; to?: string; memberId?: string; statuses?: string[] }) => Promise<ReportRecord | null>;
   busy: string | null;
 }) {
   const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
   const [reportType, setReportType] = useState("SUMMARY");
   const [reportTitle, setReportTitle] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [statuses, setStatuses] = useState("");
+  const [viewReport, setViewReport] = useState<ReportRecord | null>(null);
+  const [liveReport, setLiveReport] = useState<ReportRecord | null>(null);
+  const firstMount = useRef(true);
+
+  function buildFilters() {
+    const filters: { from?: string; to?: string; statuses?: string[] } = {};
+    if (from) filters.from = from;
+    if (to) filters.to = to;
+    if (statuses.trim()) {
+      filters.statuses = statuses
+        .split(",")
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean);
+    }
+    return filters;
+  }
+
+  useEffect(() => {
+    if (firstMount.current) {
+      firstMount.current = false;
+      return;
+    }
+    const t = setTimeout(() => {
+      onPreview(reportType, buildFilters()).then((r) => {
+        if (r) setLiveReport(r);
+      });
+    }, 600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportType, from, to, statuses]);
+
+  function generate() {
+    onGenerate(reportType, reportTitle.trim() || undefined, buildFilters()).then((r) => {
+      if (r) setLiveReport(r);
+    });
+    setReportTitle(""); setFrom(""); setTo(""); setStatuses("");
+  }
 
   return (
-    <SectionCard
-      section="reports"
-      count={items.length}
-      expanded={expanded}
-      onToggle={onToggle}
-    >
+    <>
+      <SectionCard
+        section="reports"
+        count={items.length}
+        expanded={expanded}
+        onToggle={onToggle}
+      >
       <div className="mb-3 rounded-xl border border-indigo-200 bg-indigo-50 p-3 space-y-2">
         <div className="flex gap-2">
           <select value={reportType} onChange={(e) => setReportType(e.target.value)} className="rounded-lg border border-[#dce5d9] bg-white px-2 py-1.5 text-xs font-semibold outline-none">
@@ -2760,21 +2866,50 @@ function ReportsSection({
           </select>
           <input value={reportTitle} onChange={(e) => setReportTitle(e.target.value)} placeholder="Optional title" className="flex-1 rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
         </div>
-        <button disabled={busy === "report"} onClick={() => { onGenerate(reportType, reportTitle.trim() || undefined); setReportTitle(""); }} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700 transition disabled:opacity-50">Generate Report</button>
+        <div className="flex flex-wrap gap-2">
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="From date" className="rounded-lg border border-[#dce5d9] bg-white px-2 py-1.5 text-xs outline-none" />
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="To date" className="rounded-lg border border-[#dce5d9] bg-white px-2 py-1.5 text-xs outline-none" />
+          <input value={statuses} onChange={(e) => setStatuses(e.target.value)} placeholder="Status filters, e.g. ACTIVE, OVERDUE" className="flex-1 min-w-[180px] rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-xs outline-none" />
+        </div>
+        <button disabled={busy === "report"} onClick={generate} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700 transition disabled:opacity-50">Generate Report</button>
       </div>
+      {liveReport && liveReport.data && (
+        <div className="mb-3 rounded-2xl border border-indigo-200 bg-white p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-indigo-600">{liveReport.type} Report</p>
+              <h3 className="text-sm font-bold text-[#173a2b]">{liveReport.title}</h3>
+              {liveReport.createdAt && (
+                <p className="text-xs text-[#718176]">Updated {new Date(liveReport.createdAt).toLocaleString("en-PH")}</p>
+              )}
+            </div>
+            <button onClick={() => setLiveReport(null)} className="rounded-lg border border-gray-200 px-2.5 py-1 text-[10px] font-bold text-gray-500 hover:bg-gray-50">Dismiss</button>
+          </div>
+          <ReportContent type={liveReport.type} data={liveReport.data} />
+        </div>
+      )}
       {visible.length > 0 ? (
         visible.map((report) => (
-          <div key={report.id} className="flex items-center justify-between rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3">
+          <button
+            key={report.id}
+            onClick={() => setViewReport(report)}
+            className="flex w-full items-center justify-between rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3 text-left transition hover:border-indigo-300 hover:bg-indigo-50"
+          >
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-[#173a2b] truncate">{report.title}</p>
               <p className="text-xs text-[#718176]">{report.type} · {new Date(report.createdAt).toLocaleDateString()}</p>
             </div>
-          </div>
+            <span className="ml-3 shrink-0 rounded-lg bg-indigo-600 px-2.5 py-1 text-[10px] font-bold text-white">View</span>
+          </button>
         ))
       ) : (
         <EmptyState text="No reports generated yet" />
       )}
     </SectionCard>
+    {viewReport && (
+      <ReportModal report={viewReport} onClose={() => setViewReport(null)} />
+    )}
+    </>
   );
 }
 
@@ -2851,6 +2986,227 @@ function AnnouncementsSection({
         ))
       ) : (
         <EmptyState text="No announcements found" />
+      )}
+    </SectionCard>
+  );
+}
+
+interface SmsMessage {
+  id: string;
+  recipient: string;
+  message: string;
+  status: string;
+  sentByUser: { name: string; username: string; role: string } | null;
+  sentBy: string | null;
+  sentAt: string | null;
+  error: string | null;
+  createdAt: string;
+}
+
+function SmsSection({
+  expanded,
+  onToggle,
+}: {
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const [recipient, setRecipient] = useState("");
+  const [contact, setContact] = useState("");
+  const [msgBody, setMsgBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [localMessages, setLocalMessages] = useState<SmsMessage[]>([]);
+  const [expandedList, setExpandedList] = useState(false);
+
+  const fetchMessages = useCallback(async () => {
+    try {
+      const res = await fetch("/api/secretary/sms");
+      if (res.ok) {
+        const data = await res.json();
+        setLocalMessages(data.messages || []);
+      }
+    } catch {
+      console.error("Failed to fetch SMS messages");
+    }
+  }, []);
+
+  useEffect(() => { fetchMessages(); }, [fetchMessages]);
+
+  const pendingCount = localMessages.filter((m) => m.status === "PENDING").length;
+  const visible = expandedList ? localMessages : localMessages.slice(0, VISIBLE_COUNT);
+
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault();
+    if (!recipient.trim() || !msgBody.trim()) return;
+    setSending(true);
+    try {
+      const res = await fetch("/api/secretary/sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipient: recipient.trim(), message: msgBody.trim(), contact: contact.trim() || undefined }),
+      });
+      if (res.ok) {
+        setRecipient(""); setContact(""); setMsgBody("");
+        await fetchMessages();
+      }
+    } finally { setSending(false); }
+  }
+
+  async function handlePatch(id: string, action: "send" | "fail") {
+    if (action === "fail") {
+      const error = window.prompt("Failure reason (optional):");
+      if (error === null) return;
+      setBusy(id);
+      try {
+        const res = await fetch(`/api/secretary/sms/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "fail", error: error || undefined }),
+        });
+        if (res.ok) await fetchMessages();
+      } finally { setBusy(null); }
+    } else {
+      setBusy(id);
+      try {
+        const res = await fetch(`/api/secretary/sms/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "send" }),
+        });
+        if (res.ok) await fetchMessages();
+      } finally { setBusy(null); }
+    }
+  }
+
+  return (
+    <SectionCard
+      section="sms"
+      count={pendingCount}
+      expanded={expanded}
+      onToggle={onToggle}
+    >
+      <form onSubmit={handleSend} className="mb-3 rounded-xl border border-cyan-200 bg-cyan-50 p-3 space-y-2">
+        <input value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder="Recipient name" className="w-full rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
+        <input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="Phone number (optional)" className="w-full rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
+        <textarea value={msgBody} onChange={(e) => setMsgBody(e.target.value)} placeholder="Message body..." rows={2} className="w-full rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none resize-none" />
+        <button type="submit" disabled={sending || !recipient.trim() || !msgBody.trim()} className="rounded-lg bg-cyan-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-cyan-700 transition disabled:opacity-50">{sending ? "Sending..." : "Queue SMS"}</button>
+      </form>
+      {visible.length > 0 ? (
+        visible.map((sms) => (
+          <div key={sms.id} className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-[#173a2b] truncate">{sms.recipient}</p>
+                <p className="text-xs text-[#718176] line-clamp-2">{sms.message}</p>
+                <p className="text-[10px] text-[#718176] mt-0.5">
+                  {sms.sentByUser?.name ?? "System"} · {new Date(sms.createdAt).toLocaleDateString()}
+                </p>
+              </div>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${sms.status === "SENT" ? "bg-green-100 text-green-700" : sms.status === "FAILED" ? "bg-red-100 text-red-600" : "bg-yellow-100 text-yellow-700"}`}>{sms.status}</span>
+            </div>
+            {sms.error && <p className="text-[10px] text-red-600 mt-1">Error: {sms.error}</p>}
+            {sms.status === "PENDING" && (
+              <div className="flex gap-2 mt-2">
+                <button disabled={busy === sms.id} onClick={() => handlePatch(sms.id, "send")} className="rounded-lg bg-green-600 px-3 py-1 text-[11px] font-bold text-white hover:bg-green-700 disabled:opacity-50">Mark sent</button>
+                <button disabled={busy === sms.id} onClick={() => handlePatch(sms.id, "fail")} className="rounded-lg border border-red-200 px-3 py-1 text-[11px] font-bold text-red-600 hover:bg-red-50 disabled:opacity-50">Mark failed</button>
+              </div>
+            )}
+          </div>
+        ))
+      ) : (
+        <EmptyState text="No SMS messages yet" />
+      )}
+      {!expandedList && localMessages.length > VISIBLE_COUNT && (
+        <button onClick={() => setExpandedList(true)} className="mt-2 text-xs text-cyan-600 font-semibold hover:underline">Show all {localMessages.length}</button>
+      )}
+    </SectionCard>
+  );
+}
+
+interface OverdueItem {
+  kind: "loan" | "machine";
+  id: string;
+  member: string;
+  amount?: number;
+  remaining?: number;
+  dueDate: string;
+  daysOverdue: number;
+  entity: string;
+}
+
+function OverdueSection({
+  expanded,
+  onToggle,
+}: {
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const [overdueItems, setOverdueItems] = useState<OverdueItem[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [expandedList, setExpandedList] = useState(false);
+
+  const fetchOverdue = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/overdue");
+      if (res.ok) {
+        const data = await res.json();
+        setOverdueItems(data.overdue || []);
+      }
+    } catch {
+      console.error("Failed to fetch overdue items");
+    }
+  }, []);
+
+  useEffect(() => { fetchOverdue(); }, [fetchOverdue]);
+
+  const visible = expandedList ? overdueItems : overdueItems.slice(0, VISIBLE_COUNT);
+
+  async function handleScan() {
+    setScanning(true);
+    try {
+      const res = await fetch("/api/admin/overdue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ autoMark: true }),
+      });
+      if (res.ok) await fetchOverdue();
+    } finally { setScanning(false); }
+  }
+
+  return (
+    <SectionCard
+      section="overdue"
+      count={overdueItems.length}
+      expanded={expanded}
+      onToggle={onToggle}
+    >
+      <div className="mb-3">
+        <button disabled={scanning} onClick={handleScan} className="rounded-lg bg-red-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-red-700 transition disabled:opacity-50">{scanning ? "Scanning..." : "Run overdue scan"}</button>
+      </div>
+      {visible.length > 0 ? (
+        visible.map((item) => (
+          <div key={`${item.kind}-${item.id}`} className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-[#173a2b] truncate">{item.member}</p>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${item.kind === "loan" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>{item.kind === "loan" ? "Loan" : "Machine"}</span>
+                </div>
+                <p className="text-xs text-[#718176]">{item.entity}</p>
+                <p className="text-[10px] text-[#718176]">
+                  Due {new Date(item.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  {item.remaining != null && ` · ₱${item.remaining.toLocaleString()} remaining`}
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-600">{item.daysOverdue}d overdue</span>
+            </div>
+          </div>
+        ))
+      ) : (
+        <EmptyState text="No overdue items" />
+      )}
+      {!expandedList && overdueItems.length > VISIBLE_COUNT && (
+        <button onClick={() => setExpandedList(true)} className="mt-2 text-xs text-red-600 font-semibold hover:underline">Show all {overdueItems.length}</button>
       )}
     </SectionCard>
   );
@@ -2955,6 +3311,8 @@ export default function SecretaryDashboard() {
     supplies: false,
     reports: false,
     announcements: false,
+    sms: false,
+    overdue: false,
   });
 
   const fetchData = useCallback(async () => {
@@ -3013,6 +3371,8 @@ export default function SecretaryDashboard() {
         supplies: 0,
         reports: 0,
         announcements: 0,
+        sms: 0,
+        overdue: 0,
       };
     }
     const machinePending = data.machines.reduce(
@@ -3034,6 +3394,8 @@ export default function SecretaryDashboard() {
       supplies: supplyPending,
       reports: 0,
       announcements: data.posts.filter((p) => !p.published).length,
+      sms: 0,
+      overdue: 0,
     };
   }, [data]);
 
@@ -3158,13 +3520,29 @@ export default function SecretaryDashboard() {
     } catch { alert(`Failed to ${action} request`); } finally { setBusy(null); }
   }
 
-  async function handleGenerateReport(type: string, title?: string) {
+  async function handleGenerateReport(type: string, title?: string, filters?: { from?: string; to?: string; memberId?: string; statuses?: string[] }) {
     setBusy("report");
     try {
-      const res = await fetch("/api/admin/reports", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, title }) });
+      const res = await fetch("/api/admin/reports", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, title, ...(filters ?? {}) }) });
       const result = await res.json();
-      if (res.ok) { await fetchData(); } else { alert(result.error || "Failed to generate report"); }
+      if (res.ok) { await fetchData(); return result as ReportRecord; } else { alert(result.error || "Failed to generate report"); }
     } catch { alert("Failed to generate report"); } finally { setBusy(null); }
+    return null;
+  }
+
+  async function handlePreviewReport(type: string, filters?: { from?: string; to?: string; memberId?: string; statuses?: string[] }) {
+    try {
+      const res = await fetch("/api/admin/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, preview: true, ...(filters ?? {}) }),
+      });
+      const result = await res.json();
+      if (res.ok) return result as ReportRecord;
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   async function handleCreatePost(title: string, content: string, published: boolean) {
@@ -3431,7 +3809,7 @@ export default function SecretaryDashboard() {
               <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
                 <div className="border-b border-[#e2ebe6] px-5 py-4"><h3 className="text-sm font-bold text-[#0f2318]">Reports & Analytics</h3><p className="text-[11px] text-[#5a7267]">{data.reports.length} reports generated</p></div>
                 <div className="p-4">
-                  <ReportsSection items={data.reports} expanded={true} onToggle={() => {}} onGenerate={handleGenerateReport} busy={busy} />
+                  <ReportsSection items={data.reports} expanded={true} onToggle={() => {}} onGenerate={handleGenerateReport} onPreview={handlePreviewReport} busy={busy} />
                 </div>
               </div>
             )}
@@ -3444,6 +3822,24 @@ export default function SecretaryDashboard() {
                 </div>
                 <div className="p-4">
                   <AnnouncementsSection items={pendingFilter.announcements ? data.posts.filter((p) => !p.published) : data.posts} expanded={true} onToggle={() => {}} onCreate={handleCreatePost} onTogglePublish={handleTogglePublish} onDelete={handleDeletePost} busy={busy} />
+                </div>
+              </div>
+            )}
+
+            {activeTab === "sms" && (
+              <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
+                <div className="border-b border-[#e2ebe6] px-5 py-4"><h3 className="text-sm font-bold text-[#0f2318]">SMS / Notifications</h3><p className="text-[11px] text-[#5a7267]">Send and track SMS notifications</p></div>
+                <div className="p-4">
+                  <SmsSection expanded={true} onToggle={() => {}} />
+                </div>
+              </div>
+            )}
+
+            {activeTab === "overdue" && (
+              <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
+                <div className="border-b border-[#e2ebe6] px-5 py-4"><h3 className="text-sm font-bold text-[#0f2318]">Overdue Obligations</h3><p className="text-[11px] text-[#5a7267]">Loans and machines past their due dates</p></div>
+                <div className="p-4">
+                  <OverdueSection expanded={true} onToggle={() => {}} />
                 </div>
               </div>
             )}

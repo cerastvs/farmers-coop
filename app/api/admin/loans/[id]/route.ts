@@ -1,4 +1,4 @@
-import { LoanStatus, Prisma } from "@/app/generated/prisma";
+import { LoanStatus, NotificationType, Prisma } from "@/app/generated/prisma";
 import { notifyUser, writeAudit } from "@/lib/activity";
 import {
   apiErrorResponse,
@@ -86,6 +86,11 @@ export async function PATCH(
 
         await notifyUser(tx, {
           userId: loan.userId,
+          type:
+            finalStatus === LoanStatus.ACTIVE
+              ? NotificationType.LOAN_APPROVAL
+              : NotificationType.LOAN_REJECTION,
+          link: "/dashboard",
           title:
             finalStatus === LoanStatus.ACTIVE
               ? "Loan approved"
@@ -97,12 +102,15 @@ export async function PATCH(
         });
         await writeAudit(tx, {
           userId: actor.userId,
+          userRole: actor.userRole,
           action:
             finalStatus === LoanStatus.ACTIVE
               ? "LOAN_APPROVED"
               : "LOAN_REJECTED",
           entity: "Loan",
           entityId: id,
+          previousStatus: loan.status,
+          newStatus: finalStatus,
           metadata: result.data.reason
             ? { reason: result.data.reason }
             : undefined,

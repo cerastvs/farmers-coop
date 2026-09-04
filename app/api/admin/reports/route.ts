@@ -632,6 +632,8 @@ export async function POST(req: NextRequest) {
         id: "preview",
         title: result.data.title ?? DEFAULT_TITLES[result.data.type],
         type: result.data.type,
+        from: result.data.from ?? null,
+        to: result.data.to ?? null,
         createdAt: new Date().toISOString(),
         data: JSON.parse(JSON.stringify(data)) as Record<string, unknown>,
       });
@@ -642,6 +644,8 @@ export async function POST(req: NextRequest) {
         data: {
           title: result.data.title ?? DEFAULT_TITLES[result.data.type],
           type: result.data.type,
+          from: result.data.from ? new Date(result.data.from) : null,
+          to: result.data.to ? new Date(result.data.to) : null,
           data: jsonData(data),
           generatedBy: actor.userId,
         },

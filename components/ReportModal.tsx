@@ -14,12 +14,14 @@ export function ReportModal({
     id: string;
     title: string;
     type: string;
+    from?: string | null;
+    to?: string | null;
     createdAt: string;
     data: ReportData | null;
   };
   onClose: () => void;
 }) {
-  const { title, type, createdAt, data } = report;
+  const { title, type, from, to, createdAt, data } = report;
 
   const summary = useMemo(() => {
     if (!data || typeof data !== "object") return null;
@@ -41,6 +43,11 @@ export function ReportModal({
               {type} Report
             </p>
             <h2 className="text-lg font-bold text-[#173a2b]">{title}</h2>
+            {from || to ? (
+              <p className="mt-0.5 text-xs font-semibold text-indigo-600">
+                {formatDateRange(from ?? null, to ?? null)}
+              </p>
+            ) : null}
             {createdAt && (
               <p className="text-xs text-[#718176]">
                 Generated {new Date(createdAt).toLocaleString("en-PH")}
@@ -140,6 +147,22 @@ function kvCard(label: string, value: unknown) {
 function money(n: unknown) {
   const num = Number(n);
   return Number.isFinite(num) ? <Money value={num} /> : "—";
+}
+
+function formatDateRange(from: string | null, to: string | null): string | null {
+  if (!from && !to) return null;
+  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  const yearOpts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
+  if (from && to) {
+    const d1 = new Date(from);
+    const d2 = new Date(to);
+    if (d1.getFullYear() === d2.getFullYear()) {
+      return `${d1.toLocaleDateString("en-US", opts)} – ${d2.toLocaleDateString("en-US", yearOpts)}`;
+    }
+    return `${d1.toLocaleDateString("en-US", yearOpts)} – ${d2.toLocaleDateString("en-US", yearOpts)}`;
+  }
+  if (from) return `From ${new Date(from).toLocaleDateString("en-US", yearOpts)}`;
+  return `Until ${new Date(to!).toLocaleDateString("en-US", yearOpts)}`;
 }
 
 function Table({

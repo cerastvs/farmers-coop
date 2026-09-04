@@ -158,6 +158,8 @@ interface ReportRecord {
   id: string;
   title: string;
   type: string;
+  from: string | null;
+  to: string | null;
   createdAt: string;
   data: Record<string, unknown> | null;
 }
@@ -2793,6 +2795,22 @@ function PaymentsSection({
   );
 }
 
+function formatReportDateRange(from: string | null, to: string | null): string | null {
+  if (!from && !to) return null;
+  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  const yearOpts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
+  if (from && to) {
+    const d1 = new Date(from);
+    const d2 = new Date(to);
+    if (d1.getFullYear() === d2.getFullYear()) {
+      return `${d1.toLocaleDateString("en-US", opts)} – ${d2.toLocaleDateString("en-US", yearOpts)}`;
+    }
+    return `${d1.toLocaleDateString("en-US", yearOpts)} – ${d2.toLocaleDateString("en-US", yearOpts)}`;
+  }
+  if (from) return `From ${new Date(from).toLocaleDateString("en-US", yearOpts)}`;
+  return `Until ${new Date(to!).toLocaleDateString("en-US", yearOpts)}`;
+}
+
 function ReportsSection({
   items,
   expanded,
@@ -2811,8 +2829,8 @@ function ReportsSection({
   const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
   const [reportType, setReportType] = useState("SUMMARY");
   const [reportTitle, setReportTitle] = useState("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [from, setFrom] = useState(() => new Date().toISOString().slice(0, 10));
+  const [to, setTo] = useState(() => { const d = new Date(); d.setDate(d.getDate() + 5); return d.toISOString().slice(0, 10); });
   const [statuses, setStatuses] = useState("");
   const [viewReport, setViewReport] = useState<ReportRecord | null>(null);
   const [liveReport, setLiveReport] = useState<ReportRecord | null>(null);
@@ -2849,7 +2867,7 @@ function ReportsSection({
     onGenerate(reportType, reportTitle.trim() || undefined, buildFilters()).then((r) => {
       if (r) setLiveReport(r);
     });
-    setReportTitle(""); setFrom(""); setTo(""); setStatuses("");
+    setReportTitle(""); setStatuses("");
   }
 
   return (
@@ -2880,6 +2898,9 @@ function ReportsSection({
             <div>
               <p className="text-xs font-bold uppercase tracking-wide text-indigo-600">{liveReport.type} Report</p>
               <h3 className="text-sm font-bold text-[#173a2b]">{liveReport.title}</h3>
+              {formatReportDateRange(from, to) && (
+                <p className="mt-0.5 text-[11px] font-semibold text-indigo-600">{formatReportDateRange(from, to)}</p>
+              )}
               {liveReport.createdAt && (
                 <p className="text-xs text-[#718176]">Updated {new Date(liveReport.createdAt).toLocaleString("en-PH")}</p>
               )}
@@ -2899,6 +2920,9 @@ function ReportsSection({
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-[#173a2b] truncate">{report.title}</p>
               <p className="text-xs text-[#718176]">{report.type} · {new Date(report.createdAt).toLocaleDateString()}</p>
+              {formatReportDateRange(report.from, report.to) && (
+                <p className="mt-0.5 text-[11px] font-semibold text-indigo-600">{formatReportDateRange(report.from, report.to)}</p>
+              )}
             </div>
             <span className="ml-3 shrink-0 rounded-lg bg-indigo-600 px-2.5 py-1 text-[10px] font-bold text-white">View</span>
           </button>

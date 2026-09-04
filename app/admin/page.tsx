@@ -77,6 +77,8 @@ interface Report {
   id: string;
   title: string;
   type: string;
+  from: string | null;
+  to: string | null;
   createdAt: string;
   data: Record<string, unknown> | null;
 }
@@ -204,6 +206,32 @@ function AuditRow({ label, user, at }: { label: string; user: AuditUser | null; 
       {at ? <span className="text-[#8fa594]"> · {formatAuditDate(at)}</span> : null}
     </p>
   );
+}
+
+function formatDateRange(from: string | null, to: string | null): string | null {
+  if (!from && !to) return null;
+  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  const yearOpts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
+  if (from && to) {
+    const d1 = new Date(from);
+    const d2 = new Date(to);
+    if (d1.getFullYear() === d2.getFullYear()) {
+      return `${d1.toLocaleDateString("en-US", opts)} – ${d2.toLocaleDateString("en-US", yearOpts)}`;
+    }
+    return `${d1.toLocaleDateString("en-US", yearOpts)} – ${d2.toLocaleDateString("en-US", yearOpts)}`;
+  }
+  if (from) return `From ${new Date(from).toLocaleDateString("en-US", yearOpts)}`;
+  return `Until ${new Date(to!).toLocaleDateString("en-US", yearOpts)}`;
+}
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function todayPlusISO(days: number) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 export default function AdminPage() {
@@ -803,15 +831,29 @@ export default function AdminPage() {
             {tab === "reports" && (
               <AdminSection title="Reports" description="Generate a current snapshot for cooperative records.">
                 <form
-                  className="mb-5 flex flex-wrap gap-2 rounded-2xl border border-[#dce5d9] bg-[#f7faf5] p-4"
+                  className="mb-5 flex flex-wrap items-end gap-2 rounded-2xl border border-[#dce5d9] bg-[#f7faf5] p-4"
                   onSubmit={(event: FormEvent<HTMLFormElement>) => {
                     event.preventDefault();
                     const form = new FormData(event.currentTarget);
-                    void mutate("report", "/api/admin/reports", { type: form.get("type"), title: form.get("title") || undefined }, "Report generated.", "POST");
+                    void mutate("report", "/api/admin/reports", { type: form.get("type"), title: form.get("title") || undefined, from: form.get("from") || undefined, to: form.get("to") || undefined }, "Report generated.", "POST");
                   }}
                 >
-                  <select className={fieldClass} name="type">{["SUMMARY", "MEMBERS", "LOANS", "PAYMENTS", "SUPPLIES", "MACHINES", "AUDIT"].map((type) => <option key={type}>{type}</option>)}</select>
-                  <input className={`${fieldClass} min-w-56 flex-1`} name="title" placeholder="Optional report title" />
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wide text-[#718176]">Type</label>
+                    <select className={fieldClass} name="type">{["SUMMARY", "MEMBERS", "LOANS", "PAYMENTS", "SUPPLIES", "MACHINES", "AUDIT"].map((type) => <option key={type}>{type}</option>)}</select>
+                  </div>
+                  <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
+                    <label className="text-[10px] font-bold uppercase tracking-wide text-[#718176]">Title</label>
+                    <input className={`${fieldClass} min-w-56 flex-1`} name="title" placeholder="Optional report title" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wide text-[#718176]">From</label>
+                    <input type="date" name="from" defaultValue={todayISO()} className={fieldClass} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wide text-[#718176]">To</label>
+                    <input type="date" name="to" defaultValue={todayPlusISO(5)} className={fieldClass} />
+                  </div>
                   <button disabled={busy === "report"} className={buttonClass}>Generate report</button>
                 </form>
                 {reports.length > 0 ? (
@@ -825,6 +867,9 @@ export default function AdminPage() {
                         <div>
                           <h3 className="font-extrabold text-[#173a2b]">{report.title}</h3>
                           <p className="text-xs text-[#718176]">{report.type} · {new Date(report.createdAt).toLocaleString()}</p>
+                          {formatDateRange(report.from, report.to) && (
+                            <p className="mt-0.5 text-[11px] font-semibold text-indigo-600">{formatDateRange(report.from, report.to)}</p>
+                          )}
                         </div>
                         <span className="ml-3 shrink-0 rounded-lg bg-indigo-600 px-2.5 py-1 text-[10px] font-bold text-white">View</span>
                       </button>

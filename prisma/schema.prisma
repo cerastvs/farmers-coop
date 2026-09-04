@@ -406,6 +406,8 @@ model Report {
   id          String     @id @default(uuid())
   title       String
   type        ReportType @default(SUMMARY)
+  from        DateTime?
+  to          DateTime?
   data        Json?
   generatedBy String
   createdAt   DateTime   @default(now())

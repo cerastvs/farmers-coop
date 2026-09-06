@@ -3720,10 +3720,10 @@ export default function OfficerDashboard({
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#1b5e3b] text-white shadow-lg shadow-[#0f2318]/10">
         <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-6">
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="flex items-center gap-2.5 transition-opacity hover:opacity-80">
+            <span className="flex items-center gap-2.5">
               <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#d6ed9f] text-[#1b5e3b]"><IconLeaf className="h-4 w-4" /></span>
               <span className="text-sm font-bold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>FarmCoop</span>
-            </Link>
+            </span>
             <div className="hidden h-5 w-px bg-white/20 sm:block" />
             <p className="hidden text-xs font-medium text-white/70 sm:block">{workspaceLabel}</p>
           </div>
@@ -3746,7 +3746,6 @@ export default function OfficerDashboard({
                   <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
                   <div className="absolute right-0 top-full z-50 mt-1 w-48 overflow-hidden rounded-xl border border-[#e2ebe6] bg-white py-1 shadow-2xl">
                     <Link href="/registration" onClick={() => setMenuOpen(false)} className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-[#0f2318] transition-colors hover:bg-[#f0f7eb]">Edit profile</Link>
-                    <Link href="/dashboard" onClick={() => setMenuOpen(false)} className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-[#0f2318] transition-colors hover:bg-[#f0f7eb]">Member dashboard</Link>
                     <div className="my-1 h-px bg-[#e2ebe6]" />
                     <form action={logout}><button type="submit" className="flex w-full items-center gap-2 px-4 py-2.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"><LogOut size={13} />Sign out</button></form>
                   </div>

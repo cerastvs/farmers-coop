@@ -1,6 +1,11 @@
 "use client";
 
-import { useMemo, useState, isValidElement, type ReactNode } from "react";
+import {
+  useMemo,
+  useState,
+  isValidElement,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { Money } from "@/components/Money";
@@ -153,6 +158,12 @@ function money(n: unknown) {
   return Number.isFinite(num) ? <Money value={num} /> : "—";
 }
 
+type Cell = { v: string | number; n: ReactNode };
+
+function cell(raw: unknown, node?: ReactNode): Cell {
+  return { v: (raw as string | number) ?? "", n: node ?? renderValue(raw) };
+}
+
 function unitsCard(label: string, primary: string, secondary: ReactNode) {
   return (
     <div className="rounded-xl border border-[#dce5d9] bg-[#fafdf7] p-3">
@@ -169,9 +180,41 @@ function DetailModal({
   detail,
   onClose,
 }: {
-  detail: { title: string; columns: string[]; rows: (string | ReactNode)[][] };
+  detail: { title: string; columns: string[]; rows: Cell[][] };
   onClose: () => void;
 }) {
+  const [sortCol, setSortCol] = useState<number | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const sortedRows = useMemo(() => {
+    if (sortCol === null) return detail.rows;
+    const rows = [...detail.rows];
+    rows.sort((a, b) => {
+      const av = a[sortCol].v;
+      const bv = b[sortCol].v;
+      if (typeof av === "number" && typeof bv === "number") {
+        return sortDir === "asc" ? av - bv : bv - av;
+      }
+      const as = String(av).toLowerCase();
+      const bs = String(bv).toLowerCase();
+      return sortDir === "asc"
+        ? as.localeCompare(bs, undefined, { numeric: true })
+        : bs.localeCompare(as, undefined, { numeric: true });
+    });
+    return rows;
+  }, [detail.rows, sortCol, sortDir]);
+
+  function toggleSort(i: number) {
+    if (sortCol === i) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortCol(i);
+      setSortDir("asc");
+    }
+  }
+
+  const sortedLabel = sortCol !== null ? detail.columns[sortCol] : null;
+
   return createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
@@ -191,11 +234,52 @@ function DetailModal({
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-4">
-          <Table
-            head={detail.columns}
-            rows={detail.rows}
-            fallback="No records found."
-          />
+          {detail.rows.length === 0 ? (
+            <p className="text-sm text-[#718176]">No records found.</p>
+          ) : (
+            <>
+              <p className="mb-2 text-[11px] font-semibold text-[#496558]">
+                {sortedLabel
+                  ? `Sorted by ${sortedLabel} — ${sortDir === "asc" ? "Ascending" : "Descending"}`
+                  : "Click a column header to sort the table."}
+              </p>
+              <div className="overflow-x-auto rounded-xl border border-[#eef2e8]">
+                <table className="w-full min-w-max text-left text-xs">
+                  <thead className="bg-[#f0f5ec] text-[11px] font-bold uppercase tracking-wide text-[#496558]">
+                    <tr>
+                      {detail.columns.map((h, i) => (
+                        <th key={h} className="px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleSort(i)}
+                            className={`inline-flex items-center gap-1 ${
+                              sortCol === i
+                                ? "text-indigo-700"
+                                : "hover:text-[#315646]"
+                            }`}
+                          >
+                            {h}
+                            {sortCol === i && (
+                              <span>{sortDir === "asc" ? "▲" : "▼"}</span>
+                            )}
+                          </button>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#eef2e8]">
+                    {sortedRows.map((row, i) => (
+                      <tr key={i}>
+                        {row.map((c, j) => (
+                          <td key={j} className="px-3 py-2 text-[#315646]">{c.n}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>,
@@ -225,7 +309,7 @@ function Table({
   fallback,
 }: {
   head: string[];
-  rows: (string | ReactNode)[][];
+  rows: Cell[][];
   fallback: string;
 }) {
   if (rows.length === 0) return <p className="text-sm text-[#718176]">{fallback}</p>;
@@ -242,8 +326,8 @@ function Table({
         <tbody className="divide-y divide-[#eef2e8]">
           {rows.map((row, i) => (
             <tr key={i}>
-              {row.map((cell, j) => (
-                <td key={j} className="px-3 py-2 text-[#315646]">{cell}</td>
+              {row.map((c, j) => (
+                <td key={j} className="px-3 py-2 text-[#315646]">{c.n}</td>
               ))}
             </tr>
           ))}
@@ -274,15 +358,13 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
   const [detail, setDetail] = useState<{
     title: string;
     columns: string[];
-    rows: (string | ReactNode)[][];
+    rows: Cell[][];
   } | null>(null);
+  const [detailKey, setDetailKey] = useState(0);
 
-  function showDetail(
-    title: string,
-    columns: string[],
-    rows: (string | ReactNode)[][],
-  ) {
+  function showDetail(title: string, columns: string[], rows: Cell[][]) {
     setDetail({ title, columns, rows });
+    setDetailKey((k) => k + 1);
   }
 
   const content = (() => {
@@ -306,12 +388,12 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
         const loanRows = loanList.map((l) => {
           const u = (l.user ?? {}) as ReportData;
           return [
-            (u.name as string) ?? "—",
-            money(l.amount),
-            money(l.amountPaid),
-            money(l.outstandingBalance),
-            humanize(l.status),
-            l.due ? new Date(l.due as string).toLocaleDateString("en-PH") : "—",
+            cell(u.name),
+            cell(l.amount, money(l.amount)),
+            cell(l.amountPaid, money(l.amountPaid)),
+            cell(l.outstandingBalance, money(l.outstandingBalance)),
+            cell(l.status, humanize(l.status)),
+            cell(l.due, l.due ? new Date(l.due as string).toLocaleDateString("en-PH") : "—"),
           ];
         });
         const payCols = ["Name", "Type", "Method", "Amount", "Status", "Date"];
@@ -319,36 +401,72 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
           const u = (p.user ?? {}) as ReportData;
           const a = (p.applicant ?? {}) as ReportData;
           return [
-            (u.name as string) ?? (a.fullName as string) ?? "—",
-            humanize(p.type),
-            humanize(p.paymentMethod),
-            money(p.amount),
-            humanize(p.status),
-            p.createdAt ? new Date(p.createdAt as string).toLocaleDateString("en-PH") : "—",
+            cell(u.name, (u.name as string) ?? (a.fullName as string) ?? "—"),
+            cell(p.type, humanize(p.type)),
+            cell(p.paymentMethod, humanize(p.paymentMethod)),
+            cell(p.amount, money(p.amount)),
+            cell(p.status, humanize(p.status)),
+            cell(p.createdAt, p.createdAt ? new Date(p.createdAt as string).toLocaleDateString("en-PH") : "—"),
           ];
         });
         const supplyCols = ["Product", "Price", "Qty", "Inventory Value"];
         const supplyRows = supplyList.map((s) => [
-          (s.productName as string) ?? "—",
-          money(s.price),
-          String(s.quantity ?? "—"),
-          money(s.inventoryValue),
+          cell(s.productName),
+          cell(s.price, money(s.price)),
+          cell(s.quantity),
+          cell(s.inventoryValue, money(s.inventoryValue)),
         ]);
+        const memberDetailRows = memberList.map((m) => [
+          cell(m.name),
+          cell(m.username),
+          cell(m.role, humanize(m.role)),
+          cell(m.active ? 1 : 0, m.active ? "Yes" : "No"),
+        ]);
+        const machineDetailRows = machineList.map((m) => [
+          cell(m.name),
+          cell(m.description),
+        ]);
+        const machineReqDetailRows = machineReqList.map((r) => {
+          const m = (r.machine ?? {}) as ReportData;
+          const u = (r.user ?? {}) as ReportData;
+          return [
+            cell(m.name),
+            cell(u.name),
+            cell(r.status, humanize(r.status)),
+          ];
+        });
+        const auditDetailRows = auditList.map((e) => {
+          const u = (e.user ?? {}) as ReportData;
+          return [
+            cell(u.name),
+            cell(e.action, humanize(e.action)),
+            cell(e.entity),
+            cell(e.createdAt, e.createdAt ? new Date(e.createdAt as string).toLocaleString("en-PH") : "—"),
+          ];
+        });
+        const loanRepayRows = loanList.filter((l) => Number(l.amountPaid) > 0).map((l) => {
+          const u = (l.user ?? {}) as ReportData;
+          return [
+            cell(u.name),
+            cell(l.amountPaid, money(l.amountPaid)),
+            cell(l.status, humanize(l.status)),
+          ];
+        });
         return (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {kvCard("Members", members.users ?? 0, () => showDetail("Members", ["Name", "Username", "Role", "Active"], memberList.map((m) => [(m.name as string) ?? "—", (m.username as string) ?? "—", humanize(m.role), m.active ? "Yes" : "No"])))}
+              {kvCard("Members", members.users ?? 0, () => showDetail("Members", ["Name", "Username", "Role", "Active"], memberDetailRows))}
               {kvCard("Loans", loans.count ?? 0, () => showDetail("Loans", loanCols, loanRows))}
               {kvCard("Loan Principal", money(loans.principal), () => showDetail("Loan Principal", loanCols, loanRows))}
-              {kvCard("Loan Paid", money(loans.amountPaid), () => showDetail("Loan Repayments", ["Name", "Amount Paid", "Status"], loanList.filter((l) => Number(l.amountPaid) > 0).map((l) => { const u = (l.user ?? {}) as ReportData; return [(u.name as string) ?? "—", money(l.amountPaid), humanize(l.status)]; })))}
+              {kvCard("Loan Paid", money(loans.amountPaid), () => showDetail("Loan Repayments", ["Name", "Amount Paid", "Status"], loanRepayRows))}
               {kvCard("Payments", payments.count ?? 0, () => showDetail("Payments", payCols, payRows))}
               {kvCard("Submitted Amount", money(payments.submittedAmount), () => showDetail("Submitted Payments", payCols, payRows))}
               {kvCard("Supply Products", supplies.products ?? 0, () => showDetail("Supply Products", supplyCols, supplyRows))}
               {kvCard("Units in Stock", supplies.unitsInStock ?? 0, () => showDetail("Supply Inventory", supplyCols, supplyRows))}
               {kvCard("Inventory Value", money(supplies.inventoryValue), () => showDetail("Inventory Value", supplyCols, supplyRows))}
-              {kvCard("Machines", machines.count ?? 0, () => showDetail("Machines", ["Machine", "Description"], machineList.map((m) => [(m.name as string) ?? "—", (m.description as string) ?? "—"])))}
-              {kvCard("Machine Requests", machines.requests ?? 0, () => showDetail("Machine Requests", ["Machine", "Member", "Status"], machineReqList.map((r) => { const m = (r.machine ?? {}) as ReportData; const u = (r.user ?? {}) as ReportData; return [(m.name as string) ?? "—", (u.name as string) ?? "—", humanize(r.status)]; })))}
-              {kvCard("Audit Entries", audit.entries ?? 0, () => showDetail("Audit Entries", ["User", "Action", "Entity", "When"], auditList.map((e) => { const u = (e.user ?? {}) as ReportData; return [(u.name as string) ?? "—", humanize(e.action), (e.entity as string) ?? "—", e.createdAt ? new Date(e.createdAt as string).toLocaleString("en-PH") : "—"]; })))}
+              {kvCard("Machines", machines.count ?? 0, () => showDetail("Machines", ["Machine", "Description"], machineDetailRows))}
+              {kvCard("Machine Requests", machines.requests ?? 0, () => showDetail("Machine Requests", ["Machine", "Member", "Status"], machineReqDetailRows))}
+              {kvCard("Audit Entries", audit.entries ?? 0, () => showDetail("Audit Entries", ["User", "Action", "Entity", "When"], auditDetailRows))}
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {unitsCard("Sold", `${((supplies.sold as ReportData)?.units ?? 0)} units`, money((supplies.sold as ReportData)?.amount))}
@@ -371,7 +489,15 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
                     const user = (t.user as ReportData) ?? {};
                     const applicant = (t.applicant as ReportData) ?? {};
                     const name = (user.name as string) ?? (applicant.fullName as string) ?? "—";
-                    return [name, humanize(t.type), humanize(t.paymentMethod), money(t.amount), humanize(t.status), (t.referenceNo as string) || "—", t.createdAt ? new Date(t.createdAt as string).toLocaleDateString("en-PH") : "—"];
+                    return [
+                      cell(name),
+                      cell(t.type, humanize(t.type)),
+                      cell(t.paymentMethod, humanize(t.paymentMethod)),
+                      cell(t.amount, money(t.amount)),
+                      cell(t.status, humanize(t.status)),
+                      cell(t.referenceNo, (t.referenceNo as string) || "—"),
+                      cell(t.createdAt, t.createdAt ? new Date(t.createdAt as string).toLocaleDateString("en-PH") : "—"),
+                    ];
                   })}
                   fallback="No transactions in this period."
                 />
@@ -386,13 +512,33 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
         const members = (data.members ?? []) as ReportData[];
         const applications = (data.applications ?? []) as ReportData[];
         const memberCols = ["Name", "Username", "Role", "Active", "Joined"];
-        const memberRows = members.map((m) => [(m.name as string) ?? "—", (m.username as string) ?? "—", (m.role as string) ?? "—", m.active ? "Yes" : "No", m.createdAt ? new Date(m.createdAt as string).toLocaleDateString("en-PH") : "—"]);
+        const memberRows = members.map((m) => [
+          cell(m.name),
+          cell(m.username),
+          cell(m.role, humanize(m.role)),
+          cell(m.active ? 1 : 0, m.active ? "Yes" : "No"),
+          cell(m.createdAt, m.createdAt ? new Date(m.createdAt as string).toLocaleDateString("en-PH") : "—"),
+        ]);
+        const activeRows = members.filter((m) => m.active).map((m) => [
+          cell(m.name),
+          cell(m.username),
+          cell(m.role, humanize(m.role)),
+          cell(1, "Yes"),
+          cell(m.createdAt, m.createdAt ? new Date(m.createdAt as string).toLocaleDateString("en-PH") : "—"),
+        ]);
+        const inactiveRows = members.filter((m) => !m.active).map((m) => [
+          cell(m.name),
+          cell(m.username),
+          cell(m.role, humanize(m.role)),
+          cell(0, "No"),
+          cell(m.createdAt, m.createdAt ? new Date(m.createdAt as string).toLocaleDateString("en-PH") : "—"),
+        ]);
         return (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {kvCard("Users", totals.users ?? 0, () => showDetail("All Users", memberCols, memberRows))}
-              {kvCard("Active", totals.active ?? 0, () => showDetail("Active Users", memberCols, members.filter((m) => m.active).map((m) => [(m.name as string) ?? "—", (m.username as string) ?? "—", (m.role as string) ?? "—", "Yes", m.createdAt ? new Date(m.createdAt as string).toLocaleDateString("en-PH") : "—"])))}
-              {kvCard("Inactive", totals.inactive ?? 0, () => showDetail("Inactive Users", memberCols, members.filter((m) => !m.active).map((m) => [(m.name as string) ?? "—", (m.username as string) ?? "—", (m.role as string) ?? "—", "No", m.createdAt ? new Date(m.createdAt as string).toLocaleDateString("en-PH") : "—"])))}
+              {kvCard("Active", totals.active ?? 0, () => showDetail("Active Users", memberCols, activeRows))}
+              {kvCard("Inactive", totals.inactive ?? 0, () => showDetail("Inactive Users", memberCols, inactiveRows))}
               {kvCard("Members", members.length, () => showDetail("Members", memberCols, memberRows))}
             </div>
             {statCards([
@@ -403,7 +549,12 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
               <Table head={memberCols} rows={memberRows} fallback="No members." />
             </SummarySection>
             <SummarySection label={`Applications (${applications.length})`}>
-              <Table head={["Applicant", "App Status", "Payment", "Decision"]} rows={applications.map((a) => [(a.applicant as string) ?? "—", humanize(a.applicationStatus), humanize(a.paymentStatus), humanize(a.decision)])} fallback="No applications." />
+              <Table head={["Applicant", "App Status", "Payment", "Decision"]} rows={applications.map((a) => [
+                  cell(a.applicant),
+                  cell(a.applicationStatus, humanize(a.applicationStatus)),
+                  cell(a.paymentStatus, humanize(a.paymentStatus)),
+                  cell(a.decision, humanize(a.decision)),
+                ])} fallback="No applications." />
             </SummarySection>
           </div>
         );
@@ -413,14 +564,43 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
         const totals = (data.totals ?? {}) as ReportData;
         const loans = (data.loans ?? []) as ReportData[];
         const loanCols = ["Borrower", "Type", "Amount", "Paid", "Outstanding", "Status", "Due"];
-        const loanRows = loans.map((l) => { const b = (l.borrower ?? {}) as ReportData; return [(b.name as string) ?? "—", (l.name as string) ?? "—", money(l.amount), money(l.amountPaid), money(l.outstandingBalance), humanize(l.status), l.due ? new Date(l.due as string).toLocaleDateString("en-PH") : "—"]; });
+        const loanRows = loans.map((l) => {
+          const b = (l.borrower ?? {}) as ReportData;
+          return [
+            cell(b.name),
+            cell(l.name),
+            cell(l.amount, money(l.amount)),
+            cell(l.amountPaid, money(l.amountPaid)),
+            cell(l.outstandingBalance, money(l.outstandingBalance)),
+            cell(l.status, humanize(l.status)),
+            cell(l.due, l.due ? new Date(l.due as string).toLocaleDateString("en-PH") : "—"),
+          ];
+        });
+        const repayRows = loans.filter((l) => Number(l.amountPaid) > 0).map((l) => {
+          const b = (l.borrower ?? {}) as ReportData;
+          return [
+            cell(b.name),
+            cell(l.amount, money(l.amount)),
+            cell(l.amountPaid, money(l.amountPaid)),
+            cell(l.status, humanize(l.status)),
+          ];
+        });
+        const outstandingRows = loans.filter((l) => Number(l.outstandingBalance) > 0).map((l) => {
+          const b = (l.borrower ?? {}) as ReportData;
+          return [
+            cell(b.name),
+            cell(l.amount, money(l.amount)),
+            cell(l.outstandingBalance, money(l.outstandingBalance)),
+            cell(l.status, humanize(l.status)),
+          ];
+        });
         return (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {kvCard("Loans", totals.loans ?? 0, () => showDetail("All Loans", loanCols, loanRows))}
               {kvCard("Principal", money(totals.principal), () => showDetail("Loan Principal", loanCols, loanRows))}
-              {kvCard("Paid", money(totals.amountPaid), () => showDetail("Loan Repayments", ["Borrower", "Amount", "Paid", "Status"], loans.filter((l) => Number(l.amountPaid) > 0).map((l) => { const b = (l.borrower ?? {}) as ReportData; return [(b.name as string) ?? "—", money(l.amount), money(l.amountPaid), humanize(l.status)]; })))}
-              {kvCard("Outstanding", money(totals.outstandingBalance), () => showDetail("Outstanding Balances", ["Borrower", "Amount", "Outstanding", "Status"], loans.filter((l) => Number(l.outstandingBalance) > 0).map((l) => { const b = (l.borrower ?? {}) as ReportData; return [(b.name as string) ?? "—", money(l.amount), money(l.outstandingBalance), humanize(l.status)]; })))}
+              {kvCard("Paid", money(totals.amountPaid), () => showDetail("Loan Repayments", ["Borrower", "Amount", "Paid", "Status"], repayRows))}
+              {kvCard("Outstanding", money(totals.outstandingBalance), () => showDetail("Outstanding Balances", ["Borrower", "Amount", "Outstanding", "Status"], outstandingRows))}
             </div>
             {statCards([{ label: "Loans by Status", byStatus: totals.byStatus as Record<string, number> }])}
             <SummarySection label={`Loans (${loans.length})`}>
@@ -434,20 +614,45 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
         const totals = (data.totals ?? {}) as ReportData;
         const payments = (data.payments ?? []) as ReportData[];
         const payCols = ["Name", "Type", "Method", "Amount", "Status", "Reference", "Date"];
-        const payRows = payments.map((p) => { const u = (p.user as ReportData) ?? {}; const a = (p.applicant as ReportData) ?? {}; return [(u.name as string) ?? (a.fullName as string) ?? "—", humanize(p.type), humanize(p.paymentMethod), money(p.amount), humanize(p.status), (p.referenceNo as string) || "—", p.createdAt ? new Date(p.createdAt as string).toLocaleDateString("en-PH") : "—"]; });
+        const payRows = payments.map((p) => {
+          const u = (p.user as ReportData) ?? {};
+          const a = (p.applicant as ReportData) ?? {};
+          return [
+            cell(u.name, (u.name as string) ?? (a.fullName as string) ?? "—"),
+            cell(p.type, humanize(p.type)),
+            cell(p.paymentMethod, humanize(p.paymentMethod)),
+            cell(p.amount, money(p.amount)),
+            cell(p.status, humanize(p.status)),
+            cell(p.referenceNo, (p.referenceNo as string) || "—"),
+            cell(p.createdAt, p.createdAt ? new Date(p.createdAt as string).toLocaleDateString("en-PH") : "—"),
+          ];
+        });
+        const verifiedRows = payments.filter((p) => p.status === "VERIFIED").map((p) => {
+          const u = (p.user as ReportData) ?? {};
+          const a = (p.applicant as ReportData) ?? {};
+          return [
+            cell(u.name, (u.name as string) ?? (a.fullName as string) ?? "—"),
+            cell(p.type, humanize(p.type)),
+            cell(p.paymentMethod, humanize(p.paymentMethod)),
+            cell(p.amount, money(p.amount)),
+            cell("VERIFIED", "Verified"),
+            cell(p.referenceNo, (p.referenceNo as string) || "—"),
+            cell(p.createdAt, p.createdAt ? new Date(p.createdAt as string).toLocaleDateString("en-PH") : "—"),
+          ];
+        });
         return (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {kvCard("Payments", totals.payments ?? 0, () => showDetail("All Payments", payCols, payRows))}
               {kvCard("Submitted", money(totals.submittedAmount), () => showDetail("Submitted Payments", payCols, payRows))}
-              {kvCard("Verified", money(totals.verifiedAmount), () => showDetail("Verified Payments", payCols, payments.filter((p) => p.status === "VERIFIED").map((p) => { const u = (p.user as ReportData) ?? {}; const a = (p.applicant as ReportData) ?? {}; return [(u.name as string) ?? (a.fullName as string) ?? "—", humanize(p.type), humanize(p.paymentMethod), money(p.amount), "Verified", (p.referenceNo as string) || "—", p.createdAt ? new Date(p.createdAt as string).toLocaleDateString("en-PH") : "—"]; })))}
+              {kvCard("Verified", money(totals.verifiedAmount), () => showDetail("Verified Payments", payCols, verifiedRows))}
             </div>
             {statCards([
               { label: "By Status", byStatus: totals.byStatus as Record<string, number> },
               { label: "By Method", byStatus: totals.byMethod as Record<string, number> },
             ])}
             <SummarySection label={`Payments (${payments.length})`}>
-              <Table head={payCols} rows={payRows.map((r) => [...r.slice(0, 4), <span key="st" className="rounded-full bg-indigo-50 px-2 py-0.5 font-bold text-indigo-700">{r[4]}</span>, ...r.slice(5)])} fallback="No payments." />
+              <Table head={payCols} rows={payRows.map((r, i) => [...r.slice(0, 4), cell(payments[i].status, <span key="st" className="rounded-full bg-indigo-50 px-2 py-0.5 font-bold text-indigo-700">{payRows[i][4].n}</span>), ...r.slice(5)])} fallback="No payments." />
             </SummarySection>
           </div>
         );
@@ -460,13 +665,26 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
         const borrowed = (totals.borrowed ?? {}) as ReportData;
         const paidBorrowed = (totals.paidBorrowed ?? {}) as ReportData;
         const supplyCols = ["Product", "Price", "Qty", "Sold", "Borrowed", "Inventory Value"];
-        const supplyRows = supplies.map((s) => [(s.productName as string) ?? "—", money(s.price), String(s.quantity ?? "—"), String(s.soldUnits ?? "—"), String(s.borrowedUnits ?? "—"), money(s.inventoryValue)]);
+        const supplyRows = supplies.map((s) => [
+          cell(s.productName),
+          cell(s.price, money(s.price)),
+          cell(s.quantity),
+          cell(s.soldUnits),
+          cell(s.borrowedUnits),
+          cell(s.inventoryValue, money(s.inventoryValue)),
+        ]);
+        const inventoryValueRows = supplies.map((s) => [
+          cell(s.productName),
+          cell(s.price, money(s.price)),
+          cell(s.quantity),
+          cell(s.inventoryValue, money(s.inventoryValue)),
+        ]);
         return (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {kvCard("Products", totals.products ?? 0, () => showDetail("Supply Products", supplyCols, supplyRows))}
               {kvCard("Units in Stock", totals.unitsInStock ?? 0, () => showDetail("Supply Inventory", supplyCols, supplyRows))}
-              {kvCard("Inventory Value", money(totals.inventoryValue), () => showDetail("Inventory Value", ["Product", "Price", "Qty", "Value"], supplies.map((s) => [(s.productName as string) ?? "—", money(s.price), String(s.quantity ?? "—"), money(s.inventoryValue)])))}
+              {kvCard("Inventory Value", money(totals.inventoryValue), () => showDetail("Inventory Value", ["Product", "Price", "Qty", "Value"], inventoryValueRows))}
               {kvCard("Requests", totals.requests ?? 0, () => showDetail("Supply Requests", supplyCols, supplyRows))}
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -484,11 +702,25 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
       case "MACHINES": {
         const totals = (data.totals ?? {}) as ReportData;
         const machines = (data.machines ?? []) as ReportData[];
+        const machineRows = machines.map((m) => [
+          cell(m.name),
+          cell(m.description),
+        ]);
+        const machineReqRows = machines.flatMap((m) => ((m.requests ?? []) as ReportData[]).map((r) => {
+          const u = (r.user as ReportData) ?? {};
+          return [
+            cell(m.name),
+            cell(u.name),
+            cell(r.status, humanize(r.status)),
+            cell(r.startDate, r.startDate ? new Date(r.startDate as string).toLocaleDateString("en-PH") : "—"),
+            cell(r.endDate, r.endDate ? new Date(r.endDate as string).toLocaleDateString("en-PH") : "—"),
+          ];
+        }));
         return (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {kvCard("Machines", totals.machines ?? 0, () => showDetail("Machines", ["Machine", "Description"], machines.map((m) => [(m.name as string) ?? "—", (m.description as string) ?? "—"])))}
-              {kvCard("Requests", totals.requests ?? 0, () => showDetail("Machine Requests", ["Machine", "Member", "Status", "Start", "End"], machines.flatMap((m) => ((m.requests ?? []) as ReportData[]).map((r) => { const u = (r.user as ReportData) ?? {}; return [(m.name as string) ?? "—", (u.name as string) ?? "—", humanize(r.status), r.startDate ? new Date(r.startDate as string).toLocaleDateString("en-PH") : "—", r.endDate ? new Date(r.endDate as string).toLocaleDateString("en-PH") : "—"]; }))))}
+              {kvCard("Machines", totals.machines ?? 0, () => showDetail("Machines", ["Machine", "Description"], machineRows))}
+              {kvCard("Requests", totals.requests ?? 0, () => showDetail("Machine Requests", ["Machine", "Member", "Status", "Start", "End"], machineReqRows))}
             </div>
             {statCards([{ label: "Requests by Status", byStatus: totals.requestsByStatus as Record<string, number> }])}
             <SummarySection label={`Machines (${machines.length})`}>
@@ -500,7 +732,7 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
                     {(m.description as string) && <p className="text-xs text-[#718176]">{m.description as string}</p>}
                     {requests.length > 0 && (
                       <div className="mt-2">
-                        <Table head={["Member", "Status", "Start", "End"]} rows={requests.map((r) => { const user = (r.user as ReportData) ?? {}; return [(user.name as string) ?? "—", humanize(r.status), r.startDate ? new Date(r.startDate as string).toLocaleDateString("en-PH") : "—", r.endDate ? new Date(r.endDate as string).toLocaleDateString("en-PH") : "—"]; })} fallback="" />
+                        <Table head={["Member", "Status", "Start", "End"]} rows={requests.map((r) => { const user = (r.user as ReportData) ?? {}; return [cell(user.name), cell(r.status, humanize(r.status)), cell(r.startDate, r.startDate ? new Date(r.startDate as string).toLocaleDateString("en-PH") : "—"), cell(r.endDate, r.endDate ? new Date(r.endDate as string).toLocaleDateString("en-PH") : "—")]; })} fallback="" />
                       </div>
                     )}
                   </div>
@@ -515,7 +747,16 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
         const totals = (data.totals ?? {}) as ReportData;
         const entries = (data.entries ?? []) as ReportData[];
         const auditCols = ["User", "Role", "Action", "Entity", "When"];
-        const auditRows = entries.map((e) => { const u = (e.user as ReportData) ?? {}; return [(u.name as string) ?? "—", humanize(u.role), humanize(e.action), (e.entity as string) ?? "—", e.createdAt ? new Date(e.createdAt as string).toLocaleString("en-PH") : "—"]; });
+        const auditRows = entries.map((e) => {
+          const u = (e.user as ReportData) ?? {};
+          return [
+            cell(u.name),
+            cell(u.role, humanize(u.role)),
+            cell(e.action, humanize(e.action)),
+            cell(e.entity),
+            cell(e.createdAt, e.createdAt ? new Date(e.createdAt as string).toLocaleString("en-PH") : "—"),
+          ];
+        });
         return (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -539,7 +780,11 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
     <>
       {content}
       {detail && (
-        <DetailModal detail={detail} onClose={() => setDetail(null)} />
+        <DetailModal
+          key={detailKey}
+          detail={detail}
+          onClose={() => setDetail(null)}
+        />
       )}
     </>
   );

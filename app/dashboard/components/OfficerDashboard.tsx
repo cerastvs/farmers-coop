@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { IconLeaf, IconLoan, IconMachine } from "@/components/icons";
 import { ImageModal } from "@/components/ImageModal";
@@ -2962,8 +2963,10 @@ function ReportsSection({
   const [to, setTo] = useState(() => { const d = new Date(); d.setDate(d.getDate() + 5); return d.toISOString().slice(0, 10); });
   const [statuses, setStatuses] = useState("");
   const [viewReport, setViewReport] = useState<ReportRecord | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [generatorOpen, setGeneratorOpen] = useState(false);
+  const [generated, setGenerated] = useState<ReportRecord | null>(null);
   const [liveReport, setLiveReport] = useState<ReportRecord | null>(null);
-  const firstMount = useRef(true);
 
   function buildFilters() {
     const filters: { from?: string; to?: string; statuses?: string[] } = {};
@@ -2979,10 +2982,7 @@ function ReportsSection({
   }
 
   useEffect(() => {
-    if (firstMount.current) {
-      firstMount.current = false;
-      return;
-    }
+    if (!generatorOpen) return;
     const t = setTimeout(() => {
       onPreview(reportType, buildFilters()).then((r) => {
         if (r) setLiveReport(r);
@@ -2990,11 +2990,17 @@ function ReportsSection({
     }, 600);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportType, from, to, statuses]);
+  }, [reportType, from, to, statuses, generatorOpen, onPreview]);
+
+  function closeGenerator() {
+    setGeneratorOpen(false);
+    setGenerated(null);
+  }
 
   function generate() {
     onGenerate(reportType, reportTitle.trim() || undefined, buildFilters()).then((r) => {
-      if (r) setLiveReport(r);
+      setSuccessMessage(r ? "Report generated successfully." : "Failed to generate report.");
+      if (r) setGenerated(r);
     });
     setReportTitle(""); setStatuses("");
   }
@@ -3006,37 +3012,14 @@ function ReportsSection({
         count={items.length}
         expanded={expanded}
         onToggle={onToggle}
+        headerAction={
+          <button disabled={busy === "report"} onClick={() => setGeneratorOpen(true)} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700 transition disabled:opacity-50">Generate Report</button>
+        }
       >
-      <div className="mb-3 rounded-xl border border-indigo-200 bg-indigo-50 p-3 space-y-2">
-        <div className="flex gap-2">
-          <select value={reportType} onChange={(e) => setReportType(e.target.value)} className="rounded-lg border border-[#dce5d9] bg-white px-2 py-1.5 text-xs font-semibold outline-none">
-            {["SUMMARY", "MEMBERS", "LOANS", "PAYMENTS", "SUPPLIES", "MACHINES", "AUDIT"].map((t) => <option key={t}>{t}</option>)}
-          </select>
-          <input value={reportTitle} onChange={(e) => setReportTitle(e.target.value)} placeholder="Optional title" className="flex-1 rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="From date" className="rounded-lg border border-[#dce5d9] bg-white px-2 py-1.5 text-xs outline-none" />
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="To date" className="rounded-lg border border-[#dce5d9] bg-white px-2 py-1.5 text-xs outline-none" />
-          <input value={statuses} onChange={(e) => setStatuses(e.target.value)} placeholder="Status filters, e.g. ACTIVE, OVERDUE" className="flex-1 min-w-[180px] rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-xs outline-none" />
-        </div>
-        <button disabled={busy === "report"} onClick={generate} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700 transition disabled:opacity-50">Generate Report</button>
-      </div>
-      {liveReport && liveReport.data && (
-        <div className="mb-3 rounded-2xl border border-indigo-200 bg-white p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-indigo-600">{liveReport.type} Report</p>
-              <h3 className="text-sm font-bold text-[#173a2b]">{liveReport.title}</h3>
-              {formatReportDateRange(from, to) && (
-                <p className="mt-0.5 text-[11px] font-semibold text-indigo-600">{formatReportDateRange(from, to)}</p>
-              )}
-              {liveReport.createdAt && (
-                <p className="text-xs text-[#718176]">Updated {new Date(liveReport.createdAt).toLocaleString("en-PH")}</p>
-              )}
-            </div>
-            <button onClick={() => setLiveReport(null)} className="rounded-lg border border-gray-200 px-2.5 py-1 text-[10px] font-bold text-gray-500 hover:bg-gray-50">Dismiss</button>
-          </div>
-          <ReportContent type={liveReport.type} data={liveReport.data} />
+      {successMessage && (
+        <div className="flex items-center justify-between rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs font-bold text-green-700">
+          {successMessage}
+          <button onClick={() => setSuccessMessage(null)} className="rounded-lg border border-green-200 px-2 py-0.5 text-[10px] font-bold text-green-600 hover:bg-green-100">Dismiss</button>
         </div>
       )}
       {visible.length > 0 ? (
@@ -3060,8 +3043,75 @@ function ReportsSection({
         <EmptyState text="No reports generated yet" />
       )}
     </SectionCard>
-    {viewReport && (
-      <ReportModal report={viewReport} onClose={() => setViewReport(null)} />
+    {createPortal(
+      <>
+        {viewReport && (
+          <ReportModal report={viewReport} onClose={() => setViewReport(null)} />
+        )}
+        {generatorOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => { if (busy !== "report") closeGenerator(); }}>
+            <div className="w-full max-w-2xl rounded-2xl border border-[#dce5d9] bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between border-b border-[#eef2e8] bg-[#f7faf5] px-5 py-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-indigo-600">Generate Report</p>
+                  <h3 className="text-sm font-black text-[#173a2b]">{generated ? generated.title : "Report generation"}</h3>
+                </div>
+                <button disabled={busy === "report"} onClick={closeGenerator} aria-label="Close" className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"><X size={18} /></button>
+              </div>
+              {generated ? (
+                <div className="p-5">
+                  <div className="mb-3 flex items-center justify-between rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs font-bold text-green-700">
+                    Report generated successfully.
+                    <button onClick={closeGenerator} className="rounded-lg border border-green-200 px-2 py-0.5 text-[10px] font-bold text-green-600 hover:bg-green-100">Done</button>
+                  </div>
+                  {generated.from || generated.to ? (
+                    <p className="mb-1 text-[11px] font-semibold text-indigo-600">{formatReportDateRange(generated.from, generated.to)}</p>
+                  ) : null}
+                  <p className="mb-3 text-xs text-[#718176]">{generated.type} Report · Generated {new Date(generated.createdAt).toLocaleString("en-PH")}</p>
+                  <div className="max-h-[60vh] overflow-y-auto rounded-xl border border-[#eef2e8] bg-[#fafdf7] p-4">
+                    <ReportContent type={generated.type} data={generated.data ?? {}} />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col max-h-[80vh]">
+                  <div className="space-y-3 p-5">
+                    <div className="flex gap-2">
+                      <select value={reportType} onChange={(e) => setReportType(e.target.value)} className="rounded-lg border border-[#dce5d9] bg-white px-2 py-1.5 text-xs font-semibold outline-none">
+                        {["SUMMARY", "MEMBERS", "LOANS", "PAYMENTS", "SUPPLIES", "MACHINES", "AUDIT"].map((t) => <option key={t}>{t}</option>)}
+                      </select>
+                      <input value={reportTitle} onChange={(e) => setReportTitle(e.target.value)} placeholder="Optional title" className="flex-1 rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="From date" className="rounded-lg border border-[#dce5d9] bg-white px-2 py-1.5 text-xs outline-none" />
+                      <input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="To date" className="rounded-lg border border-[#dce5d9] bg-white px-2 py-1.5 text-xs outline-none" />
+                      <input value={statuses} onChange={(e) => setStatuses(e.target.value)} placeholder="Status filters, e.g. ACTIVE, OVERDUE" className="flex-1 min-w-[180px] rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-xs outline-none" />
+                    </div>
+                  </div>
+                  {liveReport && liveReport.data ? (
+                    <div className="mx-5 mb-5 rounded-xl border border-indigo-200 bg-[#fafdf7] p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-indigo-600">Preview · {liveReport.type} Report</p>
+                        <button onClick={() => setLiveReport(null)} className="text-[10px] font-bold text-gray-500 hover:text-gray-700">Hide</button>
+                      </div>
+                      <div className="max-h-[40vh] overflow-y-auto rounded-lg border border-[#eef2e8] bg-white p-3">
+                        <ReportContent type={liveReport.type} data={liveReport.data} />
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="mx-5 mb-5 text-[11px] font-semibold text-[#8fa594]">Preview will appear here while you adjust the report settings.</p>
+                  )}
+                  <div className="border-t border-[#eef2e8] bg-[#f7faf5] px-5 py-3">
+                    <button disabled={busy === "report"} onClick={generate} className="w-full rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition disabled:opacity-50">
+                      {busy === "report" ? "Generating…" : "Generate Report"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </>,
+      document.body,
     )}
     </>
   );

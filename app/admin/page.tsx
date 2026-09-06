@@ -935,10 +935,29 @@ export default function AdminPage() {
               <AdminSection title="Reports" description="Generate a current snapshot for cooperative records.">
                 <form
                   className="mb-5 flex flex-wrap items-end gap-2 rounded-2xl border border-[#dce5d9] bg-[#f7faf5] p-4"
-                  onSubmit={(event: FormEvent<HTMLFormElement>) => {
+                  onSubmit={async (event: FormEvent<HTMLFormElement>) => {
                     event.preventDefault();
                     const form = new FormData(event.currentTarget);
-                    void mutate("report", "/api/admin/reports", { type: form.get("type"), title: form.get("title") || undefined, from: form.get("from") || undefined, to: form.get("to") || undefined }, "Report generated.", "POST");
+                    setBusy("report");
+                    setNotice(null);
+                    try {
+                      await requestJson("/api/admin/reports", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          type: form.get("type"),
+                          title: form.get("title") || undefined,
+                          from: form.get("from") || undefined,
+                          to: form.get("to") || undefined,
+                        }),
+                      });
+                      setNotice({ kind: "success", text: "Report generated successfully." });
+                      await loadTab(tab);
+                    } catch (error) {
+                      setNotice({ kind: "error", text: error instanceof Error ? error.message : "Failed to generate report" });
+                    } finally {
+                      setBusy(null);
+                    }
                   }}
                 >
                   <div className="flex flex-col gap-1">

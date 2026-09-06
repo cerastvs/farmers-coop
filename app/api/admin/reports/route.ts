@@ -29,6 +29,13 @@ const GenerateReportSchema = z.object({
   preview: z.boolean().optional(),
 });
 
+const FINANCIAL_REPORT_TYPES: readonly ReportType[] = [
+  ReportType.SUMMARY,
+  ReportType.LOANS,
+  ReportType.PAYMENTS,
+  ReportType.SUPPLIES,
+];
+
 const DEFAULT_TITLES: Record<ReportType, string> = {
   SUMMARY: "Cooperative Summary Report",
   MEMBERS: "Member Records Report",
@@ -780,8 +787,12 @@ async function generateReportData(type: ReportType, filters: ReportFilters = {})
 
 export async function GET() {
   try {
-    await requireUser(RECORDS_ROLES);
+    const actor = await requireUser(RECORDS_ROLES);
     const reports = await prisma.report.findMany({
+      where:
+        actor.userRole === Role.TREASURER
+          ? { type: { in: [...FINANCIAL_REPORT_TYPES] } }
+          : {},
       orderBy: { createdAt: "desc" },
       take: 100,
     });
@@ -797,6 +808,13 @@ export async function POST(req: NextRequest) {
     const result = GenerateReportSchema.safeParse(await req.json());
     if (!result.success) {
       throw new ApiError(400, result.error.issues[0].message);
+    }
+
+    if (
+      actor.userRole === Role.TREASURER &&
+      !FINANCIAL_REPORT_TYPES.includes(result.data.type)
+    ) {
+      throw new ApiError(403, "Financial reports only");
     }
 
     const data = await generateReportData(result.data.type, result.data);

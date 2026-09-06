@@ -21,11 +21,15 @@ import {
   ArrowDownRight,
   Calendar,
   LogOut,
+  BarChart3,
 } from "lucide-react";
 import { logout } from "../../login/actions";
 import { Money } from "@/components/Money";
+import ReportsSection, {
+  type ReportRecord,
+} from "@/components/ReportsSection";
 
-type Tab = "overview" | "loans" | "payments" | "overdue";
+type Tab = "overview" | "loans" | "payments" | "overdue" | "reports";
 type LoanType = "SUPPLY" | "MONEY";
 type LoanSubTab = "requests" | "active" | "overdue";
 type PaymentFilter = "ALL" | "PENDING" | "VERIFIED" | "REJECTED";
@@ -197,6 +201,7 @@ export default function TreasurerPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
+  const [reports, setReports] = useState<ReportRecord[]>([]);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -230,9 +235,22 @@ export default function TreasurerPage() {
     }
   }, []);
 
+  const fetchReports = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/reports");
+      if (res.ok) {
+        const data = await res.json();
+        setReports(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      console.error("Failed to fetch reports");
+    }
+  }, []);
+
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    fetchReports();
+  }, [fetchData, fetchReports]);
 
   useEffect(() => {
     fetchNotifications();
@@ -274,6 +292,51 @@ export default function TreasurerPage() {
 
   function rejectReason() {
     return window.prompt("Enter the reason for rejection:");
+  }
+
+  async function handleGenerateReport(
+    type: string,
+    title?: string,
+    filters?: { from?: string; to?: string; memberId?: string; statuses?: string[] },
+  ) {
+    setBusy("report");
+    setNotice(null);
+    try {
+      const res = await fetch("/api/admin/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, title, ...(filters ?? {}) }),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        await fetchReports();
+        return result as ReportRecord;
+      }
+      setNotice({ kind: "error", text: result.error || "Failed to generate report" });
+    } catch {
+      setNotice({ kind: "error", text: "Failed to generate report" });
+    } finally {
+      setBusy(null);
+    }
+    return null;
+  }
+
+  async function handlePreviewReport(
+    type: string,
+    filters?: { from?: string; to?: string; memberId?: string; statuses?: string[] },
+  ) {
+    try {
+      const res = await fetch("/api/admin/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, preview: true, ...(filters ?? {}) }),
+      });
+      const result = await res.json();
+      if (res.ok) return result as ReportRecord;
+    } catch {
+      return null;
+    }
+    return null;
   }
 
   const now = useMemo(() => new Date(), []);
@@ -618,7 +681,7 @@ export default function TreasurerPage() {
 
         {/* ── Navigation tabs ── */}
         <div className="mb-5 flex gap-1 overflow-x-auto rounded-xl border border-[#e2ebe6] bg-white p-1 shadow-sm">
-          {(["overview", "loans", "payments", "overdue"] as const).map((item) => (
+          {(["overview", "loans", "payments", "overdue", "reports"] as const).map((item) => (
             <button
               key={item}
               onClick={() => {
@@ -635,6 +698,7 @@ export default function TreasurerPage() {
               {item === "loans" && <FileText size={13} />}
               {item === "payments" && <Banknote size={13} />}
               {item === "overdue" && <AlertTriangle size={13} />}
+              {item === "reports" && <BarChart3 size={13} />}
               {item}
               {item === "payments" && pendingPayments.length > 0 && (
                 <span className="ml-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
@@ -1301,6 +1365,18 @@ export default function TreasurerPage() {
                   </div>
                 )}
               </section>
+            )}
+
+            {tab === "reports" && (
+              <div className="animate-fadeIn">
+                <ReportsSection
+                  items={reports}
+                  onGenerate={handleGenerateReport}
+                  onPreview={handlePreviewReport}
+                  busy={busy}
+                  role="TREASURER"
+                />
+              </div>
             )}
           </div>
 

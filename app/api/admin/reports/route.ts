@@ -194,18 +194,25 @@ async function generateLoansReport(filters: ReportFilters = {}) {
   const hasRange = Boolean(filters.from || filters.to);
   const loans = await prisma.loan.findMany({
     where: {
-      ...(filters.memberId ? { userId: filters.memberId } : {}),
-      ...(filters.statuses && filters.statuses.length
-        ? { status: { in: filters.statuses as LoanStatus[] } }
-        : {}),
-      ...(hasRange
-        ? {
-            OR: [
-              { createdAt: dateRangePrisma(filters) },
-              { payments: { some: { paidAt: dateRangePrisma(filters) } } },
-            ],
-          }
-        : {}),
+      AND: [
+        ...(filters.memberId ? [{ userId: filters.memberId }] : []),
+        {
+          OR: [
+            // Always include non-PAID loans so outstanding balances are complete.
+            { status: { not: LoanStatus.PAID } },
+            // PAID loans (and any loan) appear if they had activity in range.
+            ...(hasRange
+              ? [
+                  { createdAt: dateRangePrisma(filters) },
+                  { payments: { some: { paidAt: dateRangePrisma(filters) } } },
+                ]
+              : []),
+          ],
+        },
+        ...(filters.statuses && filters.statuses.length
+          ? [{ status: { in: filters.statuses as LoanStatus[] } }]
+          : []),
+      ],
     },
     orderBy: { createdAt: "desc" },
     include: {

@@ -337,18 +337,18 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
         return (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {kvCard("Members", members.users ?? 0, memberList.length ? () => showDetail("Members", ["Name", "Username", "Role", "Active"], memberList.map((m) => [(m.name as string) ?? "—", (m.username as string) ?? "—", humanize(m.role), m.active ? "Yes" : "No"])) : undefined)}
-              {kvCard("Loans", loans.count ?? 0, loanList.length ? () => showDetail("Loans", loanCols, loanRows) : undefined)}
-              {kvCard("Loan Principal", money(loans.principal), loanList.length ? () => showDetail("Loan Principal", loanCols, loanRows) : undefined)}
-              {kvCard("Loan Paid", money(loans.amountPaid), loanList.length ? () => showDetail("Loan Repayments", ["Name", "Amount Paid", "Status"], loanList.filter((l) => Number(l.amountPaid) > 0).map((l) => { const u = (l.user ?? {}) as ReportData; return [(u.name as string) ?? "—", money(l.amountPaid), humanize(l.status)]; })) : undefined)}
-              {kvCard("Payments", payments.count ?? 0, paymentList.length ? () => showDetail("Payments", payCols, payRows) : undefined)}
-              {kvCard("Submitted Amount", money(payments.submittedAmount), paymentList.length ? () => showDetail("Submitted Payments", payCols, payRows) : undefined)}
-              {kvCard("Supply Products", supplies.products ?? 0, supplyList.length ? () => showDetail("Supply Products", supplyCols, supplyRows) : undefined)}
-              {kvCard("Units in Stock", supplies.unitsInStock ?? 0, supplyList.length ? () => showDetail("Supply Inventory", supplyCols, supplyRows) : undefined)}
-              {kvCard("Inventory Value", money(supplies.inventoryValue), supplyList.length ? () => showDetail("Inventory Value", supplyCols, supplyRows) : undefined)}
-              {kvCard("Machines", machines.count ?? 0, machineList.length ? () => showDetail("Machines", ["Machine", "Description"], machineList.map((m) => [(m.name as string) ?? "—", (m.description as string) ?? "—"])) : undefined)}
-              {kvCard("Machine Requests", machines.requests ?? 0, machineReqList.length ? () => showDetail("Machine Requests", ["Machine", "Member", "Status"], machineReqList.map((r) => { const m = (r.machine ?? {}) as ReportData; const u = (r.user ?? {}) as ReportData; return [(m.name as string) ?? "—", (u.name as string) ?? "—", humanize(r.status)]; })) : undefined)}
-              {kvCard("Audit Entries", audit.entries ?? 0, auditList.length ? () => showDetail("Audit Entries", ["User", "Action", "Entity", "When"], auditList.map((e) => { const u = (e.user ?? {}) as ReportData; return [(u.name as string) ?? "—", humanize(e.action), (e.entity as string) ?? "—", e.createdAt ? new Date(e.createdAt as string).toLocaleString("en-PH") : "—"]; })) : undefined)}
+              {kvCard("Members", members.users ?? 0, () => showDetail("Members", ["Name", "Username", "Role", "Active"], memberList.map((m) => [(m.name as string) ?? "—", (m.username as string) ?? "—", humanize(m.role), m.active ? "Yes" : "No"])))}
+              {kvCard("Loans", loans.count ?? 0, () => showDetail("Loans", loanCols, loanRows))}
+              {kvCard("Loan Principal", money(loans.principal), () => showDetail("Loan Principal", loanCols, loanRows))}
+              {kvCard("Loan Paid", money(loans.amountPaid), () => showDetail("Loan Repayments", ["Name", "Amount Paid", "Status"], loanList.filter((l) => Number(l.amountPaid) > 0).map((l) => { const u = (l.user ?? {}) as ReportData; return [(u.name as string) ?? "—", money(l.amountPaid), humanize(l.status)]; })))}
+              {kvCard("Payments", payments.count ?? 0, () => showDetail("Payments", payCols, payRows))}
+              {kvCard("Submitted Amount", money(payments.submittedAmount), () => showDetail("Submitted Payments", payCols, payRows))}
+              {kvCard("Supply Products", supplies.products ?? 0, () => showDetail("Supply Products", supplyCols, supplyRows))}
+              {kvCard("Units in Stock", supplies.unitsInStock ?? 0, () => showDetail("Supply Inventory", supplyCols, supplyRows))}
+              {kvCard("Inventory Value", money(supplies.inventoryValue), () => showDetail("Inventory Value", supplyCols, supplyRows))}
+              {kvCard("Machines", machines.count ?? 0, () => showDetail("Machines", ["Machine", "Description"], machineList.map((m) => [(m.name as string) ?? "—", (m.description as string) ?? "—"])))}
+              {kvCard("Machine Requests", machines.requests ?? 0, () => showDetail("Machine Requests", ["Machine", "Member", "Status"], machineReqList.map((r) => { const m = (r.machine ?? {}) as ReportData; const u = (r.user ?? {}) as ReportData; return [(m.name as string) ?? "—", (u.name as string) ?? "—", humanize(r.status)]; })))}
+              {kvCard("Audit Entries", audit.entries ?? 0, () => showDetail("Audit Entries", ["User", "Action", "Entity", "When"], auditList.map((e) => { const u = (e.user ?? {}) as ReportData; return [(u.name as string) ?? "—", humanize(e.action), (e.entity as string) ?? "—", e.createdAt ? new Date(e.createdAt as string).toLocaleString("en-PH") : "—"]; })))}
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {unitsCard("Sold", `${((supplies.sold as ReportData)?.units ?? 0)} units`, money((supplies.sold as ReportData)?.amount))}

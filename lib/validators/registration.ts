@@ -47,9 +47,12 @@ export const ApplicationSchema = z.object({
     .min(0, "Cannot be negative")
     .max(80, "Too high"),
 
-  farmOwnership: z
-    .enum(["FARM_OWNER", "FARM_WORKER", "OTHERS"])
-    .default("FARM_OWNER"),
+  farmOwnership: z.preprocess(
+    (val) => (val === "" ? undefined : val),
+    z.enum(["FARM_OWNER", "FARM_WORKER", "OTHERS"], {
+      message: "Farm ownership status is required",
+    }),
+  ),
 
   farmMachinery: z.string().optional().transform((val) => (val ? sanitizeSql(val.trim()) : "")),
 

@@ -5,6 +5,7 @@ import { logout } from "../login/actions";
 import { useEffect, useState } from "react";
 import { Application } from "../generated/prisma/client";
 import { handleSubmit } from "./actions";
+import { MembershipProgressSteps } from "@/components/MembershipProgressSteps";
 import { ArrowLeft, FileImage, Sprout } from "lucide-react";
 
 function FieldError({ error }: { error?: string }) {
@@ -25,6 +26,7 @@ export default function Registration() {
   const [loading, setLoading] = useState(false);
   const [application, setApplication] = useState<Application | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isApplicant, setIsApplicant] = useState(false);
 
   useEffect(() => {
     fetch("/api/registration")
@@ -45,6 +47,15 @@ export default function Registration() {
       });
   }, []);
 
+  useEffect(() => {
+    fetch("/api/me")
+      .then((res) => res.json())
+      .then((data) => {
+        setIsApplicant(data?.role === "APPLICANT");
+      })
+      .catch(() => {});
+  }, []);
+
   const isUpdate = !!application;
 
   return (
@@ -52,25 +63,43 @@ export default function Registration() {
       <div className="absolute left-[-10rem] top-[-8rem] h-80 w-80 rounded-full bg-[#badb94]/50 blur-3xl" />
       <div className="absolute bottom-[-12rem] right-[-8rem] h-96 w-96 rounded-full bg-[#86b87b]/35 blur-3xl" />
 
-      <div className="relative w-full max-w-lg">
+      <div className="relative flex w-full max-w-3xl flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#4f7e38] transition hover:text-[#2d6a2d]"
-          >
-            <ArrowLeft size={16} />
-            Back
-          </Link>
-          <div className="flex items-center gap-2">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#174b36] text-[#d6ed9f]">
-              <Sprout size={16} />
-            </span>
-            <span className="text-sm font-bold text-[#174b36] tracking-tight">FarmCoop</span>
+        <div className="mx-auto w-full max-w-lg">
+          <div className="flex items-center justify-between mb-6">
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#4f7e38] transition hover:text-[#2d6a2d]"
+            >
+              <ArrowLeft size={16} />
+              Back
+            </Link>
+            <div className="flex items-center gap-2">
+              <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#174b36] text-[#d6ed9f]">
+                <Sprout size={16} />
+              </span>
+              <span className="text-sm font-bold text-[#174b36] tracking-tight">FarmCoop</span>
+            </div>
           </div>
         </div>
 
+        {isApplicant && (
+          <MembershipProgressSteps
+            currentIndex={
+              !application
+                ? 0
+                : application.status === "APPROVED"
+                  ? 4
+                  : application.status === "REJECTED" ||
+                      application.status === "PENDING_APPLICATION_REVIEW"
+                    ? 3
+                    : 1
+            }
+          />
+        )}
+
         {/* Card */}
+        <div className="mx-auto w-full max-w-lg">
         <div className="bg-white rounded-3xl border border-white/80 shadow-2xl shadow-[#173a2b]/15 backdrop-blur-md overflow-hidden">
           <div className="px-7 pt-7 pb-1">
             <h1 className="text-2xl font-extrabold tracking-tight text-[#173a2b]">
@@ -468,6 +497,7 @@ export default function Registration() {
             </form>
           </div>
         </div>
+        </div>
       </div>
     </div>
   );
@@ -526,6 +556,9 @@ function FileUpload({
   currentUrl?: string;
   error?: string;
 }) {
+  const [preview, setPreview] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string>("");
+
   return (
     <div>
       <InputLabel>
@@ -543,6 +576,13 @@ function FileUpload({
           accept="image/*"
           className="hidden"
           id={name}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              setFileName(file.name);
+              setPreview(URL.createObjectURL(file));
+            }
+          }}
         />
         <label
           htmlFor={name}
@@ -554,10 +594,18 @@ function FileUpload({
         <span className="ml-auto text-xs text-[#b5c4b9]">Image</span>
       </div>
       <FieldError error={error} />
-      {currentUrl && (
-        <p className="text-[10px] text-[#b5c4b9] mt-1 truncate">
-          Current: {currentUrl}
-        </p>
+      {(preview || currentUrl) && (
+        <div className="mt-2 overflow-hidden rounded-xl border border-[#dbe5d7] bg-white p-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={preview ?? currentUrl}
+            alt={`${label} preview`}
+            className="max-h-40 w-full rounded-lg object-contain"
+          />
+          <p className="mt-1 truncate text-[11px] text-[#5b6e62]">
+            {preview ? fileName : "Uploaded — click «Change file» to replace"}
+          </p>
+        </div>
       )}
     </div>
   );

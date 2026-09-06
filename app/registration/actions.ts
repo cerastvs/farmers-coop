@@ -43,10 +43,6 @@ export async function handleSubmit(
     formData.set("farmMachinery", farmMachinery);
   }
 
-  if (!formData.get("farmOwnership")) {
-    formData.set("farmOwnership", "FARM_OWNER");
-  }
-
   const formValues = Object.fromEntries(formData.entries());
 
   const guarantorRaw = formValues.guarantor;

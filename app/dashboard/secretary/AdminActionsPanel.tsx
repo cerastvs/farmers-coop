@@ -609,10 +609,12 @@ function PaymentModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const activeLoans = member.loans.filter((l) => l.status === "ACTIVE");
+  const payableLoans = member.loans.filter(
+    (l) => l.status === "ACTIVE" || l.status === "OVERDUE",
+  );
 
   const [type, setType] = useState("LOAN_PAYMENT");
-  const [loanId, setLoanId] = useState(activeLoans[0]?.id ?? "");
+  const [loanId, setLoanId] = useState(payableLoans[0]?.id ?? "");
   const [amount, setAmount] = useState("");
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofPreview, setProofPreview] = useState<string | null>(null);
@@ -690,15 +692,15 @@ function PaymentModal({
       {isLoanPayment && (
         <div>
           <label className={labelClass}>Loan account</label>
-          {activeLoans.length === 0 ? (
+          {payableLoans.length === 0 ? (
             <p className="flex items-center gap-2 rounded-lg bg-amber-50 px-3.5 py-2.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200">
-              <AlertTriangle size={14} className="shrink-0" />Member has no active loan.
+              <AlertTriangle size={14} className="shrink-0" />Member has no outstanding loan.
             </p>
           ) : (
             <select className={inputClass} value={loanId} onChange={(e) => setLoanId(e.target.value)} required>
-              {activeLoans.map((l) => (
+              {payableLoans.map((l) => (
                 <option key={l.id} value={l.id}>
-                  {l.name} — ₱{l.remainingBalance.toLocaleString()} remaining
+                  {l.type === "SUPPLY" ? "Supply loan" : l.name} — ₱{l.remainingBalance.toLocaleString()} remaining{l.status === "OVERDUE" ? " (OVERDUE)" : ""}
                 </option>
               ))}
             </select>

@@ -30,6 +30,8 @@ export default function SuppliesPage() {
   const [requests, setRequests] = useState<SupplyRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [pickingUpId, setPickingUpId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
   const loadSupplies = useCallback(async () => {
@@ -75,6 +77,38 @@ export default function SuppliesPage() {
       setMessage({ kind: "error", text: error instanceof Error ? error.message : "Unable to submit request" });
     } finally {
       setSubmittingId(null);
+    }
+  }
+
+  async function cancelRequest(requestId: string) {
+    setCancellingId(requestId);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/supplies/${requestId}`, { method: "DELETE" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? data.message ?? "Unable to cancel request");
+      setMessage({ kind: "success", text: data.message ?? "Request cancelled." });
+      await loadSupplies();
+    } catch (error) {
+      setMessage({ kind: "error", text: error instanceof Error ? error.message : "Unable to cancel request" });
+    } finally {
+      setCancellingId(null);
+    }
+  }
+
+  async function pickupRequest(requestId: string) {
+    setPickingUpId(requestId);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/supplies/${requestId}`, { method: "PATCH" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? data.message ?? "Unable to mark as picked up");
+      setMessage({ kind: "success", text: data.message ?? "Request marked as picked up." });
+      await loadSupplies();
+    } catch (error) {
+      setMessage({ kind: "error", text: error instanceof Error ? error.message : "Unable to mark as picked up" });
+    } finally {
+      setPickingUpId(null);
     }
   }
 
@@ -139,12 +173,34 @@ export default function SuppliesPage() {
               <p className="p-8 text-center text-sm text-gray-500">No supply requests yet.</p>
             ) : requests.map((request) => (
               <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 p-4 last:border-0">
-                <div>
-                  <p className="text-sm font-bold text-gray-800">{request.supply.productName} × {request.quantity}</p>
-                  <p className="text-xs text-gray-500">{request.type} · <Money value={request.totalPrice} /> · {new Date(request.createdAt).toLocaleDateString()}</p>
-                  {request.rejectionReason && <p className="mt-1 text-xs text-red-600">{request.rejectionReason}</p>}
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-gray-800">{request.supply.productName} × {request.quantity}</p>
+                    <p className="text-xs text-gray-500">{request.type} · <Money value={request.totalPrice} /> · {new Date(request.createdAt).toLocaleDateString()}</p>
+                    {request.rejectionReason && <p className="mt-1 text-xs text-red-600">{request.rejectionReason}</p>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {request.status === "PENDING" && (
+                      <button
+                        onClick={() => cancelRequest(request.id)}
+                        disabled={cancellingId === request.id}
+                        className="rounded-full border border-gray-200 px-2.5 py-1 text-xs font-bold text-gray-500 hover:border-red-200 hover:text-red-600 disabled:opacity-50"
+                      >
+                        {cancellingId === request.id ? "Cancelling…" : "Cancel"}
+                      </button>
+                    )}
+                    {request.status === "APPROVED" && (
+                      <button
+                        onClick={() => pickupRequest(request.id)}
+                        disabled={pickingUpId === request.id}
+                        className="rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-bold text-green-700 hover:bg-green-100 disabled:opacity-50"
+                      >
+                        {pickingUpId === request.id ? "Picking up…" : "Picked Up"}
+                      </button>
+                    )}
+                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-700">{request.status}</span>
+                  </div>
                 </div>
-                <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-700">{request.status}</span>
               </div>
             ))}
           </div>

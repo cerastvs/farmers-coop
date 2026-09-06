@@ -73,6 +73,16 @@ interface Member {
   active: boolean;
   createdAt: string;
   application?: { contact?: string; cropType?: string; status?: string } | null;
+  loans?: MemberLoan[];
+}
+
+interface MemberLoan {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  amount: number;
+  remainingBalance: number;
 }
 
 interface Report {
@@ -877,6 +887,22 @@ export default function AdminPage() {
                 <RecordList empty="No member records found.">
                   {members.map((member) => (
                     <Record key={member.id} title={member.name ?? member.username} meta={`@${member.username} · Joined ${new Date(member.createdAt).toLocaleDateString()}`} status={member.active ? member.role : "INACTIVE"}>
+                      {member.loans && member.loans.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {member.loans.map((loan) => (
+                            <span
+                              key={loan.id}
+                              className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1 ${loan.type === "SUPPLY" ? "border-[#cfe3b8] bg-[#f1f8e8]" : "border-[#e3e9e0] bg-[#f7faf5]"}`}
+                            >
+                              <span className={`text-xs font-bold ${loan.type === "SUPPLY" ? "text-[#2d6a2d]" : "text-[#173a2b]"}`}>
+                                {loan.type === "SUPPLY" ? "Supply loan" : loan.name}
+                              </span>
+                              <span className="text-xs text-[#718176]">₱{loan.remainingBalance.toLocaleString()} remaining</span>
+                              <Status value={loan.status} />
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       <form
                         className="flex flex-wrap gap-2"
                         onSubmit={(event: FormEvent<HTMLFormElement>) => {

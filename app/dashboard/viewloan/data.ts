@@ -3,7 +3,7 @@ import React from "react";
 export interface Loan {
   id: string;
   name: string; // Loan type label, e.g. "Cash Loan"
-  status: "PENDING" | "APPROVED" | "REJECTED" | "ACTIVE" | "PAID";
+  status: "PENDING" | "APPROVED" | "REJECTED" | "ACTIVE" | "OVERDUE" | "PAID";
   amount: React.ReactNode;
   remainingBalance: React.ReactNode;
   due: string; // next payment date

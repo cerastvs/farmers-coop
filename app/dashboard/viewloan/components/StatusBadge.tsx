@@ -7,6 +7,7 @@ const STATUS_STYLES: Record<Loan["status"], string> = {
   PENDING: "bg-yellow-100 text-yellow-700",
   APPROVED: "bg-green-100 text-green-700",
   REJECTED: "bg-red-100 text-red-600",
+  OVERDUE: "bg-red-100 text-red-700",
 };
 
 const STATUS_LABEL: Record<Loan["status"], string> = {
@@ -15,6 +16,7 @@ const STATUS_LABEL: Record<Loan["status"], string> = {
   PENDING: "Pending",
   APPROVED: "Approved",
   REJECTED: "Rejected",
+  OVERDUE: "Overdue",
 };
 
 export function StatusBadge({ status }: { status: Loan["status"] }) {

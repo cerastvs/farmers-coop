@@ -78,6 +78,14 @@ interface Member {
   active: boolean;
   joined: string;
   farm: string | null;
+  loans?: {
+    id: string;
+    name: string;
+    type: string;
+    status: string;
+    amount: number;
+    remainingBalance: number;
+  }[];
 }
 
 interface Loan {
@@ -2317,6 +2325,38 @@ function MembersSection({
                         </span>
                       )}
                     </div>
+                    {m.loans && m.loans.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {m.loans.map((loan) => (
+                          <span
+                            key={loan.id}
+                            className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-[10px] font-bold ${
+                              loan.type === "SUPPLY"
+                                ? "border-[#cfe3b8] bg-[#f1f8e8] text-[#2d6a2d]"
+                                : "border-[#e3e9e0] bg-[#f7faf5] text-[#173a2b]"
+                            }`}
+                          >
+                            <span>{loan.type === "SUPPLY" ? "Supply loan" : loan.name}</span>
+                            <span className="font-medium text-[#718176]">
+                              ₱{loan.remainingBalance.toLocaleString()} rem.
+                            </span>
+                            {loan.status !== "PAID" && (
+                              <span
+                                className={
+                                  loan.status === "OVERDUE"
+                                    ? "text-red-600"
+                                    : loan.status === "ACTIVE"
+                                      ? "text-[#2d6a2d]"
+                                      : "text-amber-600"
+                                }
+                              >
+                                {loan.status}
+                              </span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <button
                     onClick={() => startEdit(m)}

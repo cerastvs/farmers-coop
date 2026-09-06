@@ -1,12 +1,14 @@
 import {
   ApplicationStatus,
   LoanStatus,
+  LoanType,
   MachineStatus,
   PaymentStatus,
   PaymentType,
   Prisma,
   ReportType,
   Role,
+  SupplyTransactionType,
   TransactionStatus,
 } from "@/app/generated/prisma";
 import { writeAudit } from "@/lib/activity";
@@ -353,27 +355,47 @@ async function generatePaymentsReport(filters: ReportFilters = {}) {
 }
 
 async function generateSuppliesReport(filters: ReportFilters = {}) {
-  const supplies = await prisma.supply.findMany({
-    orderBy: { productName: "asc" },
-    include: {
-      transactions: {
-        orderBy: { createdAt: "desc" },
-        where: {
-          ...(filters.memberId ? { userId: filters.memberId } : {}),
-          ...(filters.statuses && filters.statuses.length
-            ? { status: { in: filters.statuses as TransactionStatus[] } }
-            : {}),
-          ...(filters.from || filters.to
-            ? { createdAt: dateRangePrisma(filters) }
-            : {}),
-        },
-        include: {
-          user: { select: { id: true, name: true, username: true } },
+  const [supplies, repayments] = await Promise.all([
+    prisma.supply.findMany({
+      orderBy: { productName: "asc" },
+      include: {
+        transactions: {
+          orderBy: { createdAt: "desc" },
+          where: {
+            ...(filters.memberId ? { userId: filters.memberId } : {}),
+            ...(filters.statuses && filters.statuses.length
+              ? { status: { in: filters.statuses as TransactionStatus[] } }
+              : {}),
+            ...(filters.from || filters.to
+              ? { createdAt: dateRangePrisma(filters) }
+              : {}),
+          },
+          include: {
+            user: { select: { id: true, name: true, username: true } },
+          },
         },
       },
-    },
-  });
+    }),
+    prisma.loanPayment.findMany({
+      where: {
+        loan: { type: LoanType.SUPPLY },
+        ...(filters.from || filters.to
+          ? { paidAt: dateRangePrisma(filters) }
+          : {}),
+      },
+      select: { amount: true },
+    }),
+  ]);
   const transactions = supplies.flatMap((supply) => supply.transactions);
+  const completed = transactions.filter(
+    (transaction) => transaction.status === TransactionStatus.COMPLETED,
+  );
+  const sold = completed.filter(
+    (transaction) => transaction.type === SupplyTransactionType.PURCHASE,
+  );
+  const borrowed = completed.filter(
+    (transaction) => transaction.type === SupplyTransactionType.LOAN,
+  );
 
   return {
     generatedAt: new Date().toISOString(),
@@ -392,21 +414,46 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
         transactions.map((transaction) => transaction.status),
         Object.values(TransactionStatus),
       ),
+      sold: {
+        units: sold.reduce((sum, t) => sum + t.quantity, 0),
+        amount: sold.reduce((sum, t) => sum + Number(t.totalPrice), 0),
+      },
+      borrowed: {
+        units: borrowed.reduce((sum, t) => sum + t.quantity, 0),
+        amount: borrowed.reduce((sum, t) => sum + Number(t.totalPrice), 0),
+      },
+      paidBorrowed: {
+        repayments: repayments.length,
+        amount: repayments.reduce((sum, p) => sum + Number(p.amount), 0),
+      },
     },
-    supplies: supplies.map((supply) => ({
-      id: supply.id,
-      productName: supply.productName,
-      price: Number(supply.price),
-      quantity: supply.quantity,
-      inventoryValue: Number(supply.price) * supply.quantity,
-      createdAt: supply.createdAt.toISOString(),
-      transactions: supply.transactions.map((transaction) => ({
-        ...transaction,
-        totalPrice: Number(transaction.totalPrice),
-        createdAt: transaction.createdAt.toISOString(),
-        reviewedAt: transaction.reviewedAt?.toISOString() ?? null,
-      })),
-    })),
+    supplies: supplies.map((supply) => {
+      const completedTxs = supply.transactions.filter(
+        (t) => t.status === TransactionStatus.COMPLETED,
+      );
+      const soldUnits = completedTxs
+        .filter((t) => t.type === SupplyTransactionType.PURCHASE)
+        .reduce((sum, t) => sum + t.quantity, 0);
+      const borrowedUnits = completedTxs
+        .filter((t) => t.type === SupplyTransactionType.LOAN)
+        .reduce((sum, t) => sum + t.quantity, 0);
+      return {
+        id: supply.id,
+        productName: supply.productName,
+        price: Number(supply.price),
+        quantity: supply.quantity,
+        inventoryValue: Number(supply.price) * supply.quantity,
+        soldUnits,
+        borrowedUnits,
+        createdAt: supply.createdAt.toISOString(),
+        transactions: supply.transactions.map((transaction) => ({
+          ...transaction,
+          totalPrice: Number(transaction.totalPrice),
+          createdAt: transaction.createdAt.toISOString(),
+          reviewedAt: transaction.reviewedAt?.toISOString() ?? null,
+        })),
+      };
+    }),
   };
 }
 
@@ -489,7 +536,8 @@ async function generateAuditReport() {
 }
 
 async function generateSummaryReport(filters: ReportFilters = {}) {
-  const [users, loans, payments, supplies, supplyRequests, machines, requests, audits] =
+  const hasRange = Boolean(filters.from || filters.to);
+  const [users, loans, payments, supplies, machines, requests, audits, supplyRepayments] =
     await Promise.all([
       prisma.user.count(),
       prisma.loan.findMany({
@@ -506,11 +554,36 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
           application: { select: { id: true, fullName: true, status: true } },
         },
       }),
-      prisma.supply.findMany({ select: { price: true, quantity: true } }),
-      prisma.supplyTransaction.count(),
+      prisma.supply.findMany({
+        select: {
+          price: true,
+          quantity: true,
+          transactions: {
+            where: {
+              ...(filters.statuses && filters.statuses.length
+                ? { status: { in: filters.statuses as TransactionStatus[] } }
+                : {}),
+              ...(hasRange ? { createdAt: dateRangePrisma(filters) } : {}),
+            },
+            select: {
+              quantity: true,
+              type: true,
+              status: true,
+              totalPrice: true,
+            },
+          },
+        },
+      }),
       prisma.machine.count(),
       prisma.machineRequest.findMany({ select: { status: true } }),
       prisma.auditTrail.count(),
+      prisma.loanPayment.findMany({
+        where: {
+          loan: { type: LoanType.SUPPLY },
+          ...(hasRange ? { paidAt: dateRangePrisma(filters) } : {}),
+        },
+        select: { amount: true },
+      }),
     ]);
   const paid = loans.reduce(
     (total, loan) =>
@@ -520,6 +593,16 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
         0,
       ),
     0,
+  );
+  const supplyTransactions = supplies.flatMap((supply) => supply.transactions);
+  const completed = supplyTransactions.filter(
+    (t) => t.status === TransactionStatus.COMPLETED,
+  );
+  const sold = completed.filter(
+    (t) => t.type === SupplyTransactionType.PURCHASE,
+  );
+  const borrowed = completed.filter(
+    (t) => t.type === SupplyTransactionType.LOAN,
   );
 
   return {
@@ -563,7 +646,11 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
     })),
     supplies: {
       products: supplies.length,
-      requests: supplyRequests,
+      requests: supplyTransactions.length,
+      requestsByStatus: countsBy(
+        supplyTransactions.map((t) => t.status),
+        Object.values(TransactionStatus),
+      ),
       unitsInStock: supplies.reduce(
         (sum, supply) => sum + supply.quantity,
         0,
@@ -572,6 +659,18 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
         (sum, supply) => sum + Number(supply.price) * supply.quantity,
         0,
       ),
+      sold: {
+        units: sold.reduce((sum, t) => sum + t.quantity, 0),
+        amount: sold.reduce((sum, t) => sum + Number(t.totalPrice), 0),
+      },
+      borrowed: {
+        units: borrowed.reduce((sum, t) => sum + t.quantity, 0),
+        amount: borrowed.reduce((sum, t) => sum + Number(t.totalPrice), 0),
+      },
+      paidBorrowed: {
+        repayments: supplyRepayments.length,
+        amount: supplyRepayments.reduce((sum, p) => sum + Number(p.amount), 0),
+      },
     },
     machines: {
       count: machines,

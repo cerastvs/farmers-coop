@@ -10,6 +10,7 @@ import {
 import prisma from "@/lib/client";
 import { assertTransition, supplyTransitions } from "@/lib/lifecycles";
 import { SUPPLY_REVIEW_ROLES } from "@/lib/permissions";
+import { completeSupplyRequest } from "@/lib/services/supply-requests";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -72,19 +73,7 @@ export async function PATCH(
         }
 
         if (nextStatus === TransactionStatus.COMPLETED) {
-          const inventory = await tx.supply.updateMany({
-            where: {
-              id: request.supplyId,
-              quantity: { gte: request.quantity },
-            },
-            data: { quantity: { decrement: request.quantity } },
-          });
-          if (inventory.count !== 1) {
-            throw new ApiError(
-              409,
-              "Insufficient inventory to complete request",
-            );
-          }
+          await completeSupplyRequest(tx, request);
         }
 
         await notifyUser(tx, {

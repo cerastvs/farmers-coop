@@ -112,56 +112,27 @@ async function reservePayment(
   loanId: string,
   amount: number,
 ) {
-  try {
-    return await prisma.$transaction(
-      async (tx) => {
-        const loan = await tx.loan.findFirst({
-          where: { id: loanId, userId },
-          include: { payments: true },
-        });
-        assertPaymentFitsLoan(loan, amount);
+  return prisma.$transaction(
+    async (tx) => {
+      const loan = await tx.loan.findFirst({
+        where: { id: loanId, userId },
+        include: { payments: true },
+      });
+      assertPaymentFitsLoan(loan, amount);
 
-        const pending = await tx.payment.findFirst({
-          where: {
-            userId,
-            loanId,
-            type: PaymentType.LOAN_PAYMENT,
-            status: PaymentStatus.PENDING,
-          },
-          select: { id: true },
-        });
-        if (pending) {
-          throw new ApiError(
-            409,
-            "A payment submission is already pending for this loan",
-          );
-        }
-
-        const reservation = await tx.payment.create({
-          data: {
-            userId,
-            loanId,
-            type: PaymentType.LOAN_PAYMENT,
-            amount,
-          },
-          select: { id: true },
-        });
-        return reservation.id;
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    );
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
-      throw new ApiError(
-        409,
-        "A payment submission is already pending for this loan",
-      );
-    }
-    throw error;
-  }
+      const reservation = await tx.payment.create({
+        data: {
+          userId,
+          loanId,
+          type: PaymentType.LOAN_PAYMENT,
+          amount,
+        },
+        select: { id: true },
+      });
+      return reservation.id;
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 }
 
 async function completePayment(

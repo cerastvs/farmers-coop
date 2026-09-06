@@ -149,6 +149,18 @@ function money(n: unknown) {
   return Number.isFinite(num) ? <Money value={num} /> : "—";
 }
 
+function unitsCard(label: string, primary: string, secondary: ReactNode) {
+  return (
+    <div className="rounded-xl border border-[#dce5d9] bg-[#fafdf7] p-3">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-[#718176]">
+        {label}
+      </p>
+      <p className="mt-1 text-xl font-black text-[#173a2b]">{primary}</p>
+      <p className="text-xs font-semibold text-[#496558]">{secondary}</p>
+    </div>
+  );
+}
+
 function formatDateRange(from: string | null, to: string | null): string | null {
   if (!from && !to) return null;
   const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
@@ -241,6 +253,11 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
             {kvCard("Machines", machines.count ?? 0)}
             {kvCard("Machine Requests", machines.requests ?? 0)}
             {kvCard("Audit Entries", audit.entries ?? 0)}
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {unitsCard("Sold", `${((supplies.sold as ReportData)?.units ?? 0)} units`, money((supplies.sold as ReportData)?.amount))}
+            {unitsCard("Borrowed", `${((supplies.borrowed as ReportData)?.units ?? 0)} units`, money((supplies.borrowed as ReportData)?.amount))}
+            {unitsCard("Paid Borrowed", `${((supplies.paidBorrowed as ReportData)?.repayments ?? 0)} repayments`, money((supplies.paidBorrowed as ReportData)?.amount))}
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {statCards([
@@ -417,6 +434,9 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
     case "SUPPLIES": {
       const totals = (data.totals ?? {}) as ReportData;
       const supplies = (data.supplies ?? []) as ReportData[];
+      const sold = (totals.sold ?? {}) as ReportData;
+      const borrowed = (totals.borrowed ?? {}) as ReportData;
+      const paidBorrowed = (totals.paidBorrowed ?? {}) as ReportData;
       return (
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -425,13 +445,20 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
             {kvCard("Inventory Value", money(totals.inventoryValue))}
             {kvCard("Requests", totals.requests ?? 0)}
           </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {unitsCard("Sold", `${sold.units ?? 0} units`, money(sold.amount))}
+            {unitsCard("Borrowed", `${borrowed.units ?? 0} units`, money(borrowed.amount))}
+            {unitsCard("Paid Borrowed", `${paidBorrowed.repayments ?? 0} repayments`, money(paidBorrowed.amount))}
+          </div>
           <SummarySection label={`Supplies (${supplies.length})`}>
             <Table
-              head={["Product", "Price", "Qty", "Inventory Value"]}
+              head={["Product", "Price", "Qty", "Sold", "Borrowed", "Inventory Value"]}
               rows={supplies.map((s) => [
                 (s.productName as string) ?? "—",
                 money(s.price),
                 String(s.quantity ?? "—"),
+                String(s.soldUnits ?? "—"),
+                String(s.borrowedUnits ?? "—"),
                 money(s.inventoryValue),
               ])}
               fallback="No supplies."

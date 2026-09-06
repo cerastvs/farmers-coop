@@ -113,7 +113,10 @@ export async function GET() {
         debit: true,
       })),
       ...supplyTransactions.map((t) => ({
-        type: `Purchase: ${t.supply.productName}`,
+        type:
+          t.type === "LOAN"
+            ? `Supply loan: ${t.supply.productName}`
+            : `Purchase: ${t.supply.productName}`,
         date: t.createdAt,
         amount: Number(t.totalPrice),
         debit: true,

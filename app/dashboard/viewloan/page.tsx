@@ -12,7 +12,7 @@ import { Money } from "@/components/Money";
 interface LoanData {
   id: string;
   name: string;
-  status: "PENDING" | "APPROVED" | "REJECTED" | "ACTIVE" | "PAID";
+  status: "PENDING" | "APPROVED" | "REJECTED" | "ACTIVE" | "OVERDUE" | "PAID";
   amount: number;
   remainingBalance: number;
   due: string;
@@ -57,6 +57,7 @@ export default function ViewLoanPage() {
   const [submissions, setSubmissions] = useState<PaymentSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   const [proofModalUrl, setProofModalUrl] = useState<string | null>(null);
 
@@ -124,6 +125,22 @@ export default function ViewLoanPage() {
     }
   }
 
+  async function cancelPayment(paymentId: string) {
+    setCancellingId(paymentId);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/payments/${paymentId}`, { method: "DELETE" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error ?? data.message ?? "Unable to cancel payment");
+      setMessage({ kind: "success", text: data.message ?? "Payment submission cancelled." });
+      await fetchData();
+    } catch (error) {
+      setMessage({ kind: "error", text: error instanceof Error ? error.message : "Unable to cancel payment" });
+    } finally {
+      setCancellingId(null);
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
@@ -171,7 +188,7 @@ export default function ViewLoanPage() {
           )}
         </div>
 
-        {loans.some((loan) => loan.status === "ACTIVE") && (
+        {loans.some((loan) => loan.status === "ACTIVE" || loan.status === "OVERDUE") && (
           <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <h2 className="text-base font-bold text-gray-800">Submit a Payment</h2>
             <p className="mt-1 text-sm text-gray-500">Upload a clear image of your bank, e-wallet, or cooperative payment receipt.</p>
@@ -179,9 +196,9 @@ export default function ViewLoanPage() {
               <label className="text-sm font-semibold text-gray-700">
                 Loan
                 <select name="loanId" required className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5">
-                  {loans.filter((loan) => loan.status === "ACTIVE").map((loan) => (
+                  {loans.filter((loan) => loan.status === "ACTIVE" || loan.status === "OVERDUE").map((loan) => (
                     <option value={loan.id} key={loan.id}>
-                      {loan.name} · ₱{loan.remainingBalance.toLocaleString()}
+                      {loan.name} · ₱{loan.remainingBalance.toLocaleString()}{loan.status === "OVERDUE" ? " (OVERDUE)" : ""}
                     </option>
                   ))}
                 </select>
@@ -249,9 +266,20 @@ export default function ViewLoanPage() {
                     )}
                     {payment.rejectionReason && <p className="mt-1 text-xs text-red-600">{payment.rejectionReason}</p>}
                   </div>
+                  <div className="flex items-center gap-2">
+                  {payment.status === "PENDING" && (
+                    <button
+                      onClick={() => cancelPayment(payment.id)}
+                      disabled={cancellingId === payment.id}
+                      className="rounded-full border border-gray-200 px-2.5 py-1 text-xs font-bold text-gray-500 hover:border-red-200 hover:text-red-600 disabled:opacity-50"
+                    >
+                      {cancellingId === payment.id ? "Cancelling…" : "Cancel"}
+                    </button>
+                  )}
                   <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${
                     payment.status === "VERIFIED" ? "bg-green-100 text-green-700" : payment.status === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
                   }`}>{payment.status}</span>
+                </div>
                 </div>
               );
             })}

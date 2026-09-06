@@ -77,13 +77,36 @@ export async function GET(req: NextRequest) {
           take: 1,
           select: exposedApplicationFields,
         },
+        loans: {
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            status: true,
+            amount: true,
+            due: true,
+            payments: { select: { amount: true } },
+          },
+        },
       },
     });
 
     return NextResponse.json({
-      members: members.map(({ applications, ...member }) => ({
+      members: members.map(({ applications, loans, ...member }) => ({
         ...member,
         application: applications[0] ?? null,
+        loans: loans.map(({ payments, ...loan }) => {
+          const paid = payments.reduce(
+            (sum, p) => sum + Number(p.amount),
+            0,
+          );
+          return {
+            ...loan,
+            amount: Number(loan.amount),
+            remainingBalance: Math.max(Number(loan.amount) - paid, 0),
+          };
+        }),
       })),
     });
   } catch (error) {

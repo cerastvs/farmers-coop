@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { LoanStatus } from "@/app/generated/prisma";
 import prisma from "@/lib/client";
 import {
   apiErrorResponse,
@@ -24,7 +25,7 @@ export async function GET() {
         payments: true,
       },
       orderBy: {
-        createdAt: "desc",
+        due: "asc",
       },
     });
 
@@ -47,26 +48,28 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      loans: loans.map((l) => {
-        const paidAmount = l.payments.reduce(
-          (sum, p) => sum + Number(p.amount),
-          0,
-        );
-        const remainingBalance = Number(l.amount) - paidAmount;
+      loans: loans
+        .filter((l) => l.status !== LoanStatus.PAID)
+        .map((l) => {
+          const paidAmount = l.payments.reduce(
+            (sum, p) => sum + Number(p.amount),
+            0,
+          );
+          const remainingBalance = Number(l.amount) - paidAmount;
 
-        return {
-          id: l.id,
-          name: l.name,
-          type: l.type,
-          status: l.status,
-          amount: Number(l.amount),
-          remainingBalance: remainingBalance > 0 ? remainingBalance : 0,
-          due: l.due,
-          termMonths: l.termMonths,
-          purpose: l.purpose,
-          rejectionReason: l.rejectionReason,
-        };
-      }),
+          return {
+            id: l.id,
+            name: l.name,
+            type: l.type,
+            status: l.status,
+            amount: Number(l.amount),
+            remainingBalance: remainingBalance > 0 ? remainingBalance : 0,
+            due: l.due,
+            termMonths: l.termMonths,
+            purpose: l.purpose,
+            rejectionReason: l.rejectionReason,
+          };
+        }),
       paymentHistory: allPayments.map((p) => ({
         receiptNo: p.receiptNo,
         paidAt: p.paidAt,

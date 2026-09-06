@@ -60,6 +60,17 @@ export async function GET() {
             select: { farmSize: true, cropType: true },
             take: 1,
           },
+          loans: {
+            orderBy: { createdAt: "desc" },
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              status: true,
+              amount: true,
+              payments: { select: { amount: true } },
+            },
+          },
         },
       }),
 
@@ -186,6 +197,20 @@ export async function GET() {
         farm: m.applications[0]
           ? `${m.applications[0].farmSize} ha - ${m.applications[0].cropType}`
           : null,
+        loans: m.loans.map((l) => {
+          const paid = l.payments.reduce(
+            (sum, p) => sum + Number(p.amount),
+            0,
+          );
+          return {
+            id: l.id,
+            name: l.name,
+            type: l.type,
+            status: String(l.status),
+            amount: Number(l.amount),
+            remainingBalance: Math.max(Number(l.amount) - paid, 0),
+          };
+        }),
       })),
       loans: loans.map((l) => {
         const paid = l.payments.reduce(

@@ -55,7 +55,10 @@ export const ApplicationSchema = z.object({
 
   guarantor: z
     .object({
-      name: z.string().min(1, "Guarantor name is required").transform(sanitizeSql),
+      firstName: z.string().min(1, "Guarantor first name is required").transform(sanitizeSql),
+      middleName: z.string().optional().transform((val) => (val ? sanitizeSql(val) : "")),
+      lastName: z.string().min(1, "Guarantor last name is required").transform(sanitizeSql),
+      extensionName: z.string().optional().transform((val) => (val ? sanitizeSql(val) : "")),
       contact: z
         .string()
         .min(10, "Guarantor contact is too short")

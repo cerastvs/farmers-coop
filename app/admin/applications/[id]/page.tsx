@@ -57,7 +57,15 @@ interface ApplicationDetail {
   yearsFarming: number;
   farmOwnership: string | null;
   farmMachinery: string | null;
-  guarantor: { name?: string; contact?: string; relationship?: string } | null;
+  guarantor: {
+    name?: string;
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    extensionName?: string;
+    contact?: string;
+    relationship?: string;
+  } | null;
   validIdUrl: string;
   proofOfFarmUrl: string;
   status: string;
@@ -393,7 +401,19 @@ export default function ApplicationReviewPage() {
         <Section title="Guarantor">
           {application.guarantor ? (
             <dl className="grid gap-3 sm:grid-cols-3">
-              <Field label="Guarantor name" value={application.guarantor.name || "—"} />
+              <Field
+                label="Guarantor name"
+                value={
+                  [
+                    application.guarantor.firstName,
+                    application.guarantor.middleName,
+                    application.guarantor.lastName,
+                    application.guarantor.extensionName,
+                  ]
+                    .filter(Boolean)
+                    .join(" ") || application.guarantor.name || "—"
+                }
+              />
               <Field label="Guarantor contact" value={application.guarantor.contact || "—"} />
               <Field label="Relationship" value={application.guarantor.relationship || "—"} />
             </dl>

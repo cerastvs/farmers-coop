@@ -15,26 +15,32 @@ export async function handleSubmit(
   setErrors({});
   const formData = new FormData(form);
 
-  const guarantorName = String(formData.get("guarantorName") || "").trim();
+  const guarantorFirstName = String(formData.get("guarantorFirstName") || "").trim();
+  const guarantorMiddleName = String(formData.get("guarantorMiddleName") || "").trim();
+  const guarantorLastName = String(formData.get("guarantorLastName") || "").trim();
+  const guarantorExtensionName = String(formData.get("guarantorExtensionName") || "").trim();
   const guarantorContact = String(formData.get("guarantorContact") || "").trim();
   const guarantorRelationship = String(
     formData.get("guarantorRelationship") || "",
   ).trim();
 
-  if (guarantorName || guarantorContact || guarantorRelationship) {
+  if (guarantorFirstName || guarantorLastName || guarantorContact || guarantorRelationship) {
     formData.set(
       "guarantor",
       JSON.stringify({
-        name: guarantorName,
+        firstName: guarantorFirstName,
+        middleName: guarantorMiddleName,
+        lastName: guarantorLastName,
+        extensionName: guarantorExtensionName,
         contact: guarantorContact,
         relationship: guarantorRelationship,
       }),
     );
   }
 
-  const farmMachinery = formData.getAll("farmMachinery");
-  if (farmMachinery.length > 0) {
-    formData.set("farmMachinery", farmMachinery.join(", "));
+  const farmMachinery = String(formData.get("farmMachinery") || "").trim();
+  if (farmMachinery) {
+    formData.set("farmMachinery", farmMachinery);
   }
 
   if (!formData.get("farmOwnership")) {
@@ -42,6 +48,15 @@ export async function handleSubmit(
   }
 
   const formValues = Object.fromEntries(formData.entries());
+
+  const guarantorRaw = formValues.guarantor;
+  if (typeof guarantorRaw === "string" && guarantorRaw.trim()) {
+    try {
+      formValues.guarantor = JSON.parse(guarantorRaw);
+    } catch {
+      delete formValues.guarantor;
+    }
+  }
 
   const result = ApplicationSchema.safeParse(formValues);
   if (!result.success) {

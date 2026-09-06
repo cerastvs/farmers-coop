@@ -55,7 +55,15 @@ interface Application {
   yearsFarming: number;
   farmOwnership: string | null;
   farmMachinery: string | null;
-  guarantor: { name?: string; contact?: string; relationship?: string } | null;
+  guarantor: {
+    name?: string;
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    extensionName?: string;
+    contact?: string;
+    relationship?: string;
+  } | null;
   validIdUrl: string;
   proofOfFarmUrl: string;
   status: string;
@@ -2023,7 +2031,16 @@ function ApplicationDetailModal({
               <div className="grid grid-cols-3 gap-3">
                 <DetailField
                   label="Name"
-                  value={application.guarantor.name || "—"}
+                  value={
+                    [
+                      application.guarantor.firstName,
+                      application.guarantor.middleName,
+                      application.guarantor.lastName,
+                      application.guarantor.extensionName,
+                    ]
+                      .filter(Boolean)
+                      .join(" ") || application.guarantor.name || "—"
+                  }
                 />
                 <DetailField
                   label="Contact"

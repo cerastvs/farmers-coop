@@ -21,15 +21,6 @@ function InputLabel({ children, optional }: { children: React.ReactNode; optiona
   );
 }
 
-const machineryOptions = [
-  "Hand tractor",
-  "Rice thresher",
-  "Corn sheller",
-  "Water pump",
-  "Tricycle",
-  "Truck",
-];
-
 export default function Registration() {
   const [loading, setLoading] = useState(false);
   const [application, setApplication] = useState<Application | null>(null);
@@ -276,28 +267,12 @@ export default function Registration() {
 
               <div>
                 <InputLabel optional>Farm machinery owned/accessible</InputLabel>
-                <div className="grid grid-cols-2 gap-2">
-                  {machineryOptions.map((option) => {
-                    const claimed = String(
-                      application?.farmMachinery || "",
-                    ).includes(option);
-                    return (
-                      <label
-                        key={option}
-                        className="flex items-center gap-2 rounded-lg border border-[#dbe5d7] bg-[#fafcf8] px-3 py-2 text-xs text-[#173a2b] cursor-pointer transition hover:border-[#4f7e38]"
-                      >
-                        <input
-                          type="checkbox"
-                          name="farmMachinery"
-                          value={option}
-                          defaultChecked={claimed}
-                          className="accent-[#4f7e38]"
-                        />
-                        {option}
-                      </label>
-                    );
-                  })}
-                </div>
+                <TextInput
+                  name="farmMachinery"
+                  placeholder="Hand tractor, Rice thresher…"
+                  defaultValue={application?.farmMachinery || ""}
+                  error={errors.farmMachinery}
+                />
                 <FieldError error={errors.farmMachinery} />
               </div>
             </div>
@@ -310,22 +285,97 @@ export default function Registration() {
                 Provide a guarantor who can vouch for you and be contacted by
                 the cooperative if needed.
               </p>
-              <div>
-                <InputLabel>Full name</InputLabel>
-                <TextInput
-                  name="guarantorName"
-                  placeholder="Maria Santos"
-                  defaultValue={
-                    typeof application?.guarantor === "object" &&
-                    application?.guarantor !== null
-                      ? String(
-                          (application.guarantor as { name?: string }).name ||
-                            "",
-                        )
-                      : ""
-                  }
-                  error={errors.guarantor}
-                />
+              <div className="grid grid-cols-5 gap-3">
+                <div className="col-span-3">
+                  <InputLabel>First name</InputLabel>
+                  <TextInput
+                    name="guarantorFirstName"
+                    placeholder="Maria"
+                    defaultValue={
+                      typeof application?.guarantor === "object" &&
+                      application?.guarantor !== null
+                        ? String(
+                            (
+                              application.guarantor as {
+                                firstName?: string;
+                              }
+                            ).firstName || "",
+                          )
+                        : ""
+                    }
+                    error={errors.guarantor}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <InputLabel optional>Middle name</InputLabel>
+                  <TextInput
+                    name="guarantorMiddleName"
+                    placeholder="Santos"
+                    defaultValue={
+                      typeof application?.guarantor === "object" &&
+                      application?.guarantor !== null
+                        ? String(
+                            (
+                              application.guarantor as {
+                                middleName?: string;
+                              }
+                            ).middleName || "",
+                          )
+                        : ""
+                    }
+                    error={errors.guarantor}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-5 gap-3">
+                <div className="col-span-3">
+                  <InputLabel>Last name</InputLabel>
+                  <TextInput
+                    name="guarantorLastName"
+                    placeholder="Santos"
+                    defaultValue={
+                      typeof application?.guarantor === "object" &&
+                      application?.guarantor !== null
+                        ? String(
+                            (
+                              application.guarantor as {
+                                lastName?: string;
+                              }
+                            ).lastName || "",
+                          )
+                        : ""
+                    }
+                    error={errors.guarantor}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <InputLabel optional>Extension</InputLabel>
+                  <select
+                    name="guarantorExtensionName"
+                    defaultValue={
+                      typeof application?.guarantor === "object" &&
+                      application?.guarantor !== null
+                        ? String(
+                            (
+                              application.guarantor as {
+                                extensionName?: string;
+                              }
+                            ).extensionName || "",
+                          )
+                        : ""
+                    }
+                    className={`w-full rounded-xl border bg-[#fafcf8] px-3 py-2.5 text-sm text-[#173a2b] outline-none transition placeholder:text-[#9aa89e] focus:border-[#4f7e38] focus:ring-4 focus:ring-[#b9db9e]/35 ${
+                      errors.guarantor ? "border-red-400" : "border-[#dbe5d7]"
+                    }`}
+                  >
+                    <option value="">None</option>
+                    <option value="Jr.">Jr.</option>
+                    <option value="Sr.">Sr.</option>
+                    <option value="II">II</option>
+                    <option value="III">III</option>
+                    <option value="IV">IV</option>
+                  </select>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

@@ -82,6 +82,11 @@ export const ApplicationSchema = z.object({
     }),
   ),
 
+  farmOwnershipDetails: z
+    .string()
+    .optional()
+    .transform((val) => (val ? sanitizeSql(val.trim()) : "")),
+
   farmMachinery: z.preprocess(
     (val) => parseStringArray(val),
     z

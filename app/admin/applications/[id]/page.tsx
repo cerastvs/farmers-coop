@@ -56,6 +56,7 @@ interface ApplicationDetail {
   crops: string[];
   yearsFarming: number;
   farmOwnership: string | null;
+  farmOwnershipDetails: string | null;
   machines: string[];
   guarantor: {
     name?: string;
@@ -394,6 +395,10 @@ export default function ApplicationReviewPage() {
                       : application.farmOwnership || "—"
               }
             />
+            {application.farmOwnership === "OTHERS" &&
+              application.farmOwnershipDetails && (
+                <Field label="Role on farm" value={application.farmOwnershipDetails} />
+              )}
             <Field label="Farm machinery" value={application.machines.join(", ") || "None"} />
           </dl>
         </Section>

@@ -43,10 +43,12 @@ function DynamicListField({
   note?: string;
 }) {
   const [count, setCount] = useState(Math.max(items.length, 1));
+  const [prevItems, setPrevItems] = useState(items);
 
-  useEffect(() => {
+  if (items !== prevItems) {
+    setPrevItems(items);
     setCount((c) => Math.max(c, items.length, 1));
-  }, [items]);
+  }
 
   return (
     <div>
@@ -99,6 +101,7 @@ export default function Registration() {
   const [application, setApplication] = useState<ApplicationWithLists | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isApplicant, setIsApplicant] = useState(false);
+  const [farmOwnership, setFarmOwnership] = useState("");
 
   useEffect(() => {
     fetch("/api/registration")
@@ -112,6 +115,7 @@ export default function Registration() {
       .then((data) => {
         if (data) {
           setApplication(data);
+          setFarmOwnership(data.farmOwnership || "");
         }
       })
       .catch((err) => {
@@ -353,7 +357,8 @@ export default function Registration() {
                 <InputLabel>Farm ownership status</InputLabel>
                 <select
                   name="farmOwnership"
-                  defaultValue={application?.farmOwnership || ""}
+                  value={farmOwnership}
+                  onChange={(e) => setFarmOwnership(e.target.value)}
                   className={`w-full rounded-xl border bg-[#fafcf8] px-3 py-2.5 text-sm text-[#173a2b] outline-none transition placeholder:text-[#9aa89e] focus:border-[#4f7e38] focus:ring-4 focus:ring-[#b9db9e]/35 ${
                     errors.farmOwnership ? "border-red-400" : "border-[#dbe5d7]"
                   }`}
@@ -363,6 +368,18 @@ export default function Registration() {
                   <option value="FARM_WORKER">Farm worker / tenant</option>
                   <option value="OTHERS">Others</option>
                 </select>
+                {farmOwnership === "OTHERS" && (
+                  <div className="mt-2">
+                    <InputLabel>Please specify your role</InputLabel>
+                    <input
+                      type="text"
+                      name="farmOwnershipDetails"
+                      placeholder="e.g. Farm caretaker"
+                      defaultValue={application?.farmOwnershipDetails || ""}
+                      className="w-full rounded-xl border border-[#dbe5d7] bg-[#fafcf8] px-3 py-2.5 text-sm text-[#173a2b] outline-none transition placeholder:text-[#9aa89e] focus:border-[#4f7e38] focus:ring-4 focus:ring-[#b9db9e]/35"
+                    />
+                  </div>
+                )}
                 <FieldError error={errors.farmOwnership} />
               </div>
 

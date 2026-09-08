@@ -45,6 +45,8 @@ export async function GET(
             crops: { select: { name: true }, orderBy: { name: "asc" } },
             machines: { select: { name: true }, orderBy: { name: "asc" } },
             yearsFarming: true,
+            farmOwnership: true,
+            farmOwnershipDetails: true,
             status: true,
             createdAt: true,
             reviewedBy: true,

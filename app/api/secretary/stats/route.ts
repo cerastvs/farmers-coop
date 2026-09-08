@@ -188,6 +188,7 @@ export async function GET() {
         machines: a.machines.map((m) => m.name),
         yearsFarming: a.yearsFarming,
         farmOwnership: a.farmOwnership,
+        farmOwnershipDetails: a.farmOwnershipDetails,
         guarantor: a.guarantor,
         validIdUrl: a.validIdUrl,
         proofOfFarmUrl: a.proofOfFarmUrl,

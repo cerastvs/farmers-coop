@@ -1,4 +1,4 @@
-import { Prisma, Role } from "@/app/generated/prisma";
+import { FarmOwnership, Prisma, Role } from "@/app/generated/prisma";
 import { z } from "zod";
 
 import { notifyUser, writeAudit } from "@/lib/activity";
@@ -21,6 +21,8 @@ export const ProfileUpdateSchema = z
     contact: z.string().trim().regex(/^[0-9]{10,15}$/).optional(),
     farmSize: z.coerce.number().positive().optional(),
     yearsFarming: z.coerce.number().int().min(0).max(80).optional(),
+    farmOwnership: z.nativeEnum(FarmOwnership).optional(),
+    farmOwnershipDetails: z.string().trim().max(300).optional(),
     cropType: cropMachineRequest,
     farmMachinery: cropMachineRequest,
   })
@@ -76,6 +78,8 @@ export const memberSelect = {
       crops: { select: { name: true }, orderBy: { name: "asc" as const } },
       machines: { select: { name: true }, orderBy: { name: "asc" as const } },
       yearsFarming: true,
+      farmOwnership: true,
+      farmOwnershipDetails: true,
       status: true,
       createdAt: true,
       reviewedBy: true,
@@ -128,6 +132,8 @@ export async function updateMemberRecord({
           crops: { select: { name: true }, orderBy: { name: "asc" } },
           machines: { select: { name: true }, orderBy: { name: "asc" } },
           yearsFarming: true,
+          farmOwnership: true,
+          farmOwnershipDetails: true,
         },
       },
     },
@@ -151,6 +157,8 @@ export async function updateMemberRecord({
         crops: existing.applications[0].crops.map((c) => c.name),
         machines: existing.applications[0].machines.map((m) => m.name),
         yearsFarming: existing.applications[0].yearsFarming,
+        farmOwnership: existing.applications[0].farmOwnership,
+        farmOwnershipDetails: existing.applications[0].farmOwnershipDetails,
       }
     : null;
 

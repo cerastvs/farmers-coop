@@ -55,6 +55,7 @@ interface Application {
   crops: string[];
   yearsFarming: number;
   farmOwnership: string | null;
+  farmOwnershipDetails: string | null;
   machines: string[];
   guarantor: {
     name?: string;
@@ -2027,6 +2028,13 @@ function ApplicationDetailModal({
                         : application.farmOwnership || "—"
                 }
               />
+              {application.farmOwnership === "OTHERS" &&
+                application.farmOwnershipDetails && (
+                  <DetailField
+                    label="Role on Farm"
+                    value={application.farmOwnershipDetails}
+                  />
+                )}
               <DetailField
                 label="Farm Machinery"
                 value={application.machines.join(", ") || "None"}

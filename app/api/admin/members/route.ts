@@ -16,6 +16,8 @@ const exposedApplicationFields = {
   crops: { select: { name: true }, orderBy: { name: "asc" as const } },
   machines: { select: { name: true }, orderBy: { name: "asc" as const } },
   yearsFarming: true,
+  farmOwnership: true,
+  farmOwnershipDetails: true,
   status: true,
   createdAt: true,
   reviewedBy: true,

@@ -239,9 +239,10 @@ model Application {
   address       String
   contact       String
 
-  farmSize       Float
-  yearsFarming   Int
-  farmOwnership  FarmOwnership @default(FARM_OWNER)
+  farmSize             Float
+  yearsFarming         Int
+  farmOwnership        FarmOwnership @default(FARM_OWNER)
+  farmOwnershipDetails String?
 
   guarantor      Json?
 

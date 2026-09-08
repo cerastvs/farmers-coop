@@ -54,6 +54,8 @@ export async function GET(req: NextRequest) {
             crops: { select: { name: true }, orderBy: { name: "asc" } },
             machines: { select: { name: true }, orderBy: { name: "asc" } },
             yearsFarming: true,
+            farmOwnership: true,
+            farmOwnershipDetails: true,
           },
         },
         loans: {

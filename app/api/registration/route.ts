@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
       cropType: formData.get("cropType"),
       yearsFarming: formData.get("yearsFarming"),
       farmOwnership: formData.get("farmOwnership"),
+      farmOwnershipDetails: formData.get("farmOwnershipDetails"),
       farmMachinery: formData.get("farmMachinery"),
       guarantor: parseGuarantor(formData.get("guarantor")),
       proofOfFarm: formData.get("proofOfFarm"),
@@ -104,6 +105,7 @@ export async function POST(req: NextRequest) {
       cropType,
       yearsFarming,
       farmOwnership,
+      farmOwnershipDetails,
       farmMachinery,
       guarantor,
       proofOfFarm,
@@ -131,6 +133,7 @@ export async function POST(req: NextRequest) {
           farmSize,
           yearsFarming,
           farmOwnership,
+          farmOwnershipDetails: farmOwnershipDetails || null,
           crops: {
             create: (cropType as string[]).map((name) => ({ name })),
           },
@@ -223,6 +226,7 @@ export async function PATCH(req: NextRequest) {
       cropType: formData.get("cropType"),
       yearsFarming: formData.get("yearsFarming"),
       farmOwnership: formData.get("farmOwnership"),
+      farmOwnershipDetails: formData.get("farmOwnershipDetails"),
       farmMachinery: formData.get("farmMachinery"),
       guarantor: parseGuarantor(formData.get("guarantor")),
       proofOfFarm: formData.get("proofOfFarm"),
@@ -259,6 +263,7 @@ export async function PATCH(req: NextRequest) {
       cropType,
       yearsFarming,
       farmOwnership,
+      farmOwnershipDetails,
       farmMachinery,
       guarantor,
     } = result.data;
@@ -303,6 +308,7 @@ export async function PATCH(req: NextRequest) {
           farmSize,
           yearsFarming,
           farmOwnership,
+          farmOwnershipDetails: farmOwnershipDetails || null,
           crops: {
             deleteMany: {},
             create: (cropType as string[]).map((name) => ({ name })),

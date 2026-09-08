@@ -99,6 +99,7 @@ export async function GET(
         machines: application.machines.map((m) => m.name),
         yearsFarming: application.yearsFarming,
         farmOwnership: application.farmOwnership,
+        farmOwnershipDetails: application.farmOwnershipDetails,
         guarantor: application.guarantor,
         validIdUrl: application.validIdUrl,
         proofOfFarmUrl: application.proofOfFarmUrl,

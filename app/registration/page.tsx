@@ -34,6 +34,7 @@ function DynamicListField({
   items,
   max = 10,
   note,
+  className,
 }: {
   name: string;
   label: string;
@@ -41,6 +42,7 @@ function DynamicListField({
   items: string[];
   max?: number;
   note?: string;
+  className?: string;
 }) {
   const [count, setCount] = useState(Math.max(items.length, 1));
   const [prevItems, setPrevItems] = useState(items);
@@ -51,7 +53,7 @@ function DynamicListField({
   }
 
   return (
-    <div>
+    <div className={className}>
       <div className="flex items-center justify-between mb-1.5">
         <label className="block text-xs font-semibold text-[#3d5c47]">{label}</label>
         {note && <span className="text-[11px] text-[#8fa594] italic">{note}</span>}
@@ -135,26 +137,26 @@ export default function Registration() {
   const isUpdate = !!application;
 
   return (
-    <div className="relative min-h-screen bg-[#edf5df] flex flex-col items-center px-4 py-10">
+    <div className="relative min-h-screen bg-[#edf5df] flex flex-col items-center px-4 py-10 md:px-8 md:py-12">
       <div className="absolute left-[-10rem] top-[-8rem] h-80 w-80 rounded-full bg-[#badb94]/50 blur-3xl" />
       <div className="absolute bottom-[-12rem] right-[-8rem] h-96 w-96 rounded-full bg-[#86b87b]/35 blur-3xl" />
 
-      <div className="relative flex w-full max-w-3xl flex-col">
+      <div className="relative flex w-full max-w-6xl flex-col">
         {/* Header */}
-        <div className="mx-auto w-full max-w-lg">
-          <div className="flex items-center justify-between mb-6">
+        <div className="mx-auto w-full max-w-lg md:max-w-none">
+          <div className="flex items-center justify-between mb-6 md:mb-8 md:pb-6 md:border-b md:border-[#d8e5d1]">
             <Link
               href="/dashboard"
-              className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#4f7e38] transition hover:text-[#2d6a2d]"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#4f7e38] transition hover:text-[#2d6a2d] md:text-base"
             >
               <ArrowLeft size={16} />
               Back
             </Link>
-            <div className="flex items-center gap-2">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#174b36] text-[#d6ed9f]">
-                <Sprout size={16} />
+            <div className="flex items-center gap-2 md:gap-3">
+              <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#174b36] text-[#d6ed9f] md:h-10 md:w-10 md:rounded-xl">
+                <Sprout size={16} className="md:h-5 md:w-5" />
               </span>
-              <span className="text-sm font-bold text-[#174b36] tracking-tight">FarmCoop</span>
+              <span className="text-sm font-bold text-[#174b36] tracking-tight md:text-lg">FarmCoop</span>
             </div>
           </div>
         </div>
@@ -175,9 +177,9 @@ export default function Registration() {
         )}
 
         {/* Card */}
-        <div className="mx-auto w-full max-w-lg">
+        <div className="mx-auto w-full max-w-lg md:max-w-none">
         <div className="bg-white rounded-3xl border border-white/80 shadow-2xl shadow-[#173a2b]/15 backdrop-blur-md overflow-hidden">
-          <div className="px-7 pt-7 pb-1">
+          <div className="px-7 pt-7 pb-1 md:px-10">
             <h1 className="text-2xl font-extrabold tracking-tight text-[#173a2b]">
               {isUpdate ? "Edit profile" : "Membership application"}
             </h1>
@@ -188,7 +190,7 @@ export default function Registration() {
 
           <form
             key={application?.id || "new"}
-            className="flex flex-col px-7 pb-7 pt-5"
+            className="flex flex-col px-7 pb-7 pt-5 md:px-10"
             onSubmit={(e) => handleSubmit(e, setLoading, setErrors, isUpdate)}
           >
             <input type="hidden" name="userId" value="" />
@@ -196,7 +198,7 @@ export default function Registration() {
             {/* Personal Information */}
             <SectionHeader label="Personal information" />
 
-            <div className="space-y-4">
+            <div className="space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-x-8 md:gap-y-5">
               {/* Name row 1: First name + Middle name */}
               <div className="grid grid-cols-5 gap-3">
                 <div className="col-span-3">
@@ -279,7 +281,7 @@ export default function Registration() {
               </div>
 
               {/* Birthdate + Gender */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 md:col-span-2">
                 <div>
                   <InputLabel>Birth Date</InputLabel>
                   <TextInput
@@ -315,8 +317,8 @@ export default function Registration() {
             {/* Farming Details */}
             <SectionHeader label="Farming details" />
 
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-x-8 md:gap-y-5">
+              <div className="grid grid-cols-2 gap-3 md:col-span-2">
                 <div>
                   <InputLabel>Farm size</InputLabel>
                   <div className="relative">
@@ -351,9 +353,10 @@ export default function Registration() {
                 placeholder="e.g. Rice"
                 items={(application?.crops ?? []).map((c) => c.name)}
                 note="Leave blank if not applicable"
+                className="md:col-span-1"
               />
 
-              <div>
+              <div className="md:col-span-1">
                 <InputLabel>Farm ownership status</InputLabel>
                 <select
                   name="farmOwnership"
@@ -389,14 +392,15 @@ export default function Registration() {
                 placeholder="e.g. Hand tractor"
                 items={(application?.machines ?? []).map((m) => m.name)}
                 note="Leave blank if not applicable"
+                className="md:col-span-2"
               />
             </div>
 
             {/* Guarantor */}
             <SectionHeader label="Guarantor" />
 
-            <div className="space-y-4">
-              <p className="text-xs text-[#718176]">
+            <div className="space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-x-8 md:gap-y-5">
+              <p className="text-xs text-[#718176] md:col-span-2">
                 Provide a guarantor who can vouch for you and be contacted by
                 the cooperative if needed.
               </p>
@@ -492,7 +496,7 @@ export default function Registration() {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 md:col-span-2">
                 <div>
                   <InputLabel>Contact number</InputLabel>
                   <TextInput
@@ -535,13 +539,15 @@ export default function Registration() {
                   />
                 </div>
               </div>
-              <FieldError error={errors.guarantor} />
+              <div className="md:col-span-2">
+                <FieldError error={errors.guarantor} />
+              </div>
             </div>
 
             {/* Requirements */}
             <SectionHeader label="Requirements" />
 
-            <div className="space-y-4">
+            <div className="space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-x-8 md:gap-y-5">
               <FileUpload
                 name="validId"
                 label="Valid ID"

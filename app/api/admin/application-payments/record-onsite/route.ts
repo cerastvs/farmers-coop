@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({
-      message: "On-site payment recorded and application advanced.",
+      message: "On-site payment recorded and membership activated.",
     });
   } catch (error) {
     return apiErrorResponse(error, "Failed to record on-site payment");
@@ -179,14 +179,32 @@ async function completeOnSiteApplicationFee(
         throw new ApiError(409, "Payment record changed during upload");
       }
 
-      await tx.application.update({
-        where: { id: applicationId },
-        data: { status: ApplicationStatus.PENDING_APPLICATION_REVIEW },
-      });
-
       const application = await tx.application.findUnique({
         where: { id: applicationId },
         select: { userId: true, fullName: true },
+      });
+
+      await tx.application.update({
+        where: { id: applicationId },
+        data: {
+          status: ApplicationStatus.APPROVED,
+          reviewedBy: actorId,
+          reviewedAt: new Date(),
+        },
+      });
+
+      await tx.user.updateMany({
+        where: { id: application!.userId },
+        data: { role: Role.MEMBER, active: true },
+      });
+
+      await writeAudit(tx, {
+        userId: actorId,
+        userRole: Role.PRESIDENT,
+        action: "MEMBERSHIP_APPLICATION_APPROVED",
+        entity: "Application",
+        entityId: applicationId,
+        newStatus: ApplicationStatus.APPROVED,
       });
 
       await writeAudit(tx, {
@@ -202,25 +220,12 @@ async function completeOnSiteApplicationFee(
         },
       });
 
-      const presidents = await tx.user.findMany({
-        where: { role: Role.PRESIDENT, active: true },
-        select: { id: true },
+      await notifyUser(tx, {
+        userId: application!.userId,
+        title: "Membership approved",
+        message:
+          "Congratulations! Your on-site application fee payment was recorded. You are now an official member of the cooperative.",
       });
-      await Promise.all([
-        notifyUser(tx, {
-          userId: application!.userId,
-          title: "Payment approved",
-          message:
-            "Your on-site application fee payment was recorded. Your application will now proceed to the next stage.",
-        }),
-        ...presidents.map((president) =>
-          notifyUser(tx, {
-            userId: president.id,
-            title: "Membership application awaiting review",
-            message: `${application!.fullName}'s application fee was verified on-site and their membership application is now ready for your review.`,
-          }),
-        ),
-      ]);
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );

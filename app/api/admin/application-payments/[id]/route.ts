@@ -107,40 +107,44 @@ export async function PATCH(
         }
 
         if (nextStatus === PaymentStatus.APPROVED && payment.application) {
+          const previousStatus = payment.application.status;
           const updated = await tx.application.updateMany({
             where: { id: payment.application.id },
             data: {
-              status: ApplicationStatus.PENDING_APPLICATION_REVIEW,
+              status: ApplicationStatus.APPROVED,
+              reviewedBy: actor.userId,
+              reviewedAt: now,
             },
           });
           if (updated.count !== 1) {
             throw new ApiError(409, "Application status changed during review");
           }
 
-          const presidents = await tx.user.findMany({
-            where: { role: Role.PRESIDENT, active: true },
-            select: { id: true },
+          await tx.user.updateMany({
+            where: { id: payment.application.userId },
+            data: { role: Role.MEMBER, active: true },
           });
-          await Promise.all(
-            presidents.map((president) =>
-              notifyUser(tx, {
-                userId: president.id,
-                title: "Membership application awaiting review",
-                message: `${payment.application!.fullName}'s application fee was verified and their membership application is now ready for your review.`,
-              }),
-            ),
-          );
+
+          await writeAudit(tx, {
+            userId: actor.userId,
+            userRole: actor.userRole,
+            action: "MEMBERSHIP_APPLICATION_APPROVED",
+            entity: "Application",
+            entityId: payment.application.id,
+            previousStatus,
+            newStatus: ApplicationStatus.APPROVED,
+          });
         }
 
         await notifyUser(tx, {
           userId: payment.userId,
           title:
             nextStatus === PaymentStatus.APPROVED
-              ? "Payment approved"
+              ? "Membership approved"
               : "Payment proof declined",
           message:
             nextStatus === PaymentStatus.APPROVED
-              ? "Your application fee payment was verified. Your application will now proceed to the next stage."
+              ? "Congratulations! Your application fee payment was verified. You are now an official member of the cooperative."
               : `Your submitted application fee proof could not be approved.${
                   result.data.reason
                     ? ` Reason: ${result.data.reason}`
@@ -167,7 +171,7 @@ export async function PATCH(
     return NextResponse.json({
       message:
         result.data.action === "approve"
-          ? "Payment approved and application advanced."
+          ? "Payment approved and membership activated."
           : "Payment proof declined.",
     });
   } catch (error) {

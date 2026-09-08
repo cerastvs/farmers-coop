@@ -4,7 +4,6 @@ const STEPS = [
   "Application Submitted",
   "Application Fee Paid",
   "Payment Verified",
-  "President Review",
   "Membership Approved",
 ];
 

@@ -319,7 +319,7 @@ function ApplicantPendingScreen() {
     icon = <FileSearch className="text-blue-600 w-10 h-10" />;
     iconBg = "bg-blue-100";
     title = "Payment Approved";
-    body = "Your application fee has been verified. Your membership application is now being reviewed by the President.";
+    body = "Your application fee has been verified. Your membership is now being activated.";
     actionLabel = "View payment status";
   } else if (membershipApproved) {
     icon = <ShieldCheck className="text-green-600 w-10 h-10" />;

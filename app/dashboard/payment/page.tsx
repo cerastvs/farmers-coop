@@ -180,11 +180,11 @@ function derivePhase(
 }
 
 function currentStepIndex(applicationStatus: string, phase: ApplicationFeeStatus) {
-  if (applicationStatus === "APPROVED") return 4;
-  if (applicationStatus === "REJECTED") return 3;
-  if (phase === "approved") return 3;
-  if (phase === "pending") return 2;
-  return 1;
+  if (applicationStatus === "APPROVED") return 3;
+  if (applicationStatus === "REJECTED") return 2;
+  if (phase === "approved") return 2;
+  if (phase === "pending") return 1;
+  return 0;
 }
 
 function WaitingForPayment({
@@ -445,17 +445,19 @@ function PendingApproval({ data }: { data: ApplicationFeeData }) {
 
 function PaymentApproved({ data }: { data: ApplicationFeeData }) {
   const latest = data.history[0];
-  const inReview = data.application.status === "PENDING_APPLICATION_REVIEW";
+  const isMember = data.application.status === "APPROVED";
   return (
     <>
       <div className="mb-6 rounded-3xl border border-green-200 bg-green-50 p-6">
         <div className="flex items-center gap-2 text-green-700">
           <CheckCircle2 size={18} />
-          <h2 className="font-extrabold">Payment Approved</h2>
+          <h2 className="font-extrabold">
+            {isMember ? "Membership Approved" : "Payment Approved"}
+          </h2>
         </div>
         <p className="mt-2 text-sm text-green-800/90">
-          {inReview
-            ? "Your application fee payment has been verified. Your application will now proceed to the next stage."
+          {isMember
+            ? "Congratulations! Your application fee payment has been verified and you are now an official member of the cooperative."
             : "Your application fee payment has been verified successfully."}
         </p>
         {latest?.verifiedAt && (
@@ -503,17 +505,6 @@ function PaymentApproved({ data }: { data: ApplicationFeeData }) {
               </dd>
             </div>
           </dl>
-        </div>
-      )}
-      {inReview && (
-        <div className="mb-6 rounded-3xl border border-[#dce5d9] bg-white p-6">
-          <h2 className="text-lg font-extrabold text-[#173a2b]">
-            Application Under Review
-          </h2>
-          <p className="mt-1 text-sm text-[#718176]">
-            Your application is now being reviewed by the cooperative. We will
-            notify you once your membership has been approved.
-          </p>
         </div>
       )}
     </>

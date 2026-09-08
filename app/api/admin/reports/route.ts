@@ -36,6 +36,16 @@ const FINANCIAL_REPORT_TYPES: readonly ReportType[] = [
   ReportType.SUPPLIES,
 ];
 
+// Statuses shown in payment breakdowns. DECLINED is a legacy enum value kept
+// for read-compatibility; all rejections now use REJECTED.
+const VISIBLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
+  PaymentStatus.PENDING,
+  PaymentStatus.VERIFIED,
+  PaymentStatus.REJECTED,
+  PaymentStatus.PENDING_APPROVAL,
+  PaymentStatus.APPROVED,
+];
+
 const DEFAULT_TITLES: Record<ReportType, string> = {
   SUMMARY: "Cooperative Summary Report",
   MEMBERS: "Member Records Report",
@@ -225,6 +235,20 @@ async function generateLoansReport(filters: ReportFilters = {}) {
     include: {
       user: { select: { id: true, name: true, username: true } },
       payments: { select: { amount: true, paidAt: true, receiptNo: true } },
+      paymentSubmissions: {
+        where: {
+          status: { in: [PaymentStatus.REJECTED, PaymentStatus.DECLINED] },
+        },
+        select: {
+          id: true,
+          amount: true,
+          status: true,
+          rejectionReason: true,
+          paymentMethod: true,
+          referenceNo: true,
+          createdAt: true,
+        },
+      },
     },
   });
 
@@ -242,6 +266,20 @@ async function generateLoansReport(filters: ReportFilters = {}) {
       (sum, payment) => sum + Number(payment.amount),
       0,
     );
+    const rejectedPayments = loan.paymentSubmissions
+      .filter(
+        (payment) =>
+          !hasRange || isInDateRange(payment.createdAt, filters),
+      )
+      .map((payment) => ({
+        id: payment.id,
+        amount: Number(payment.amount),
+        status: payment.status,
+        rejectionReason: payment.rejectionReason,
+        paymentMethod: payment.paymentMethod,
+        referenceNo: payment.referenceNo,
+        createdAt: payment.createdAt.toISOString(),
+      }));
     return {
       id: loan.id,
       borrower: loan.user,
@@ -257,6 +295,7 @@ async function generateLoansReport(filters: ReportFilters = {}) {
         amount: Number(payment.amount),
         paidAt: payment.paidAt.toISOString(),
       })),
+      rejectedPayments,
     };
   });
 
@@ -270,10 +309,32 @@ async function generateLoansReport(filters: ReportFilters = {}) {
         (sum, loan) => sum + loan.outstandingBalance,
         0,
       ),
-      byStatus: countsBy(
-        records.map((loan) => loan.status),
-        Object.values(LoanStatus),
+      rejectedPayments: records.reduce(
+        (sum, loan) => sum + loan.rejectedPayments.length,
+        0,
       ),
+      rejectedAmount: records.reduce(
+        (sum, loan) =>
+          sum +
+          loan.rejectedPayments.reduce(
+            (s, payment) => s + payment.amount,
+            0,
+          ),
+        0,
+      ),
+      byStatus: (() => {
+        const byStatus = countsBy(
+          records.map((loan) => loan.status),
+          Object.values(LoanStatus),
+        );
+        byStatus[LoanStatus.REJECTED] = records.reduce(
+          (sum, loan) => sum + loan.rejectedPayments.length,
+          0,
+        );
+        // REJECTED status bucket reflects rejected loan-payment submissions so
+        // rejected activity is visible in the Loans by Status summary.
+        return byStatus;
+      })(),
     },
     loans: records,
   };
@@ -331,7 +392,7 @@ async function generatePaymentsReport(filters: ReportFilters = {}) {
         .reduce((sum, payment) => sum + Number(payment.amount), 0),
       byStatus: countsBy(
         payments.map((payment) => payment.status),
-        Object.values(PaymentStatus),
+        VISIBLE_PAYMENT_STATUSES,
       ),
       byMethod: countsBy(
         payments.map((payment) => payment.paymentMethod),
@@ -674,7 +735,7 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
       ),
       byStatus: countsBy(
         payments.map((payment) => payment.status),
-        Object.values(PaymentStatus),
+        VISIBLE_PAYMENT_STATUSES,
       ),
       byMethod: countsBy(
         payments.map((payment) => payment.paymentMethod),

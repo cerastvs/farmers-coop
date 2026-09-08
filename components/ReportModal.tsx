@@ -594,6 +594,26 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
             cell(l.status, humanize(l.status)),
           ];
         });
+        const rejectedList = loans.flatMap((l) => {
+          const b = (l.borrower ?? {}) as ReportData;
+          const rejected = (l.rejectedPayments ?? []) as ReportData[];
+          return rejected.map((p) => ({
+            borrower: b.name as string,
+            loan: l.name as string,
+            amount: Number(p.amount),
+            createdAt: p.createdAt as string,
+            reason: p.rejectionReason as string,
+          }));
+        });
+        const rejectedTotal = rejectedList.reduce((sum, r) => sum + r.amount, 0);
+        const rejectedCols = ["Borrower", "Loan", "Amount", "Date", "Reason"];
+        const rejectedRows = rejectedList.map((r) => [
+          cell(r.borrower),
+          cell(r.loan),
+          cell(r.amount, money(r.amount)),
+          cell(r.createdAt, r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-PH") : "—"),
+          cell(r.reason, r.reason || "—"),
+        ]);
         return (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -601,8 +621,21 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
               {kvCard("Principal", money(totals.principal), () => showDetail("Loan Principal", loanCols, loanRows))}
               {kvCard("Paid", money(totals.amountPaid), () => showDetail("Loan Repayments", ["Borrower", "Amount", "Paid", "Status"], repayRows))}
               {kvCard("Outstanding", money(totals.outstandingBalance), () => showDetail("Outstanding Balances", ["Borrower", "Amount", "Outstanding", "Status"], outstandingRows))}
+              {rejectedList.length > 0 &&
+                kvCard(
+                  "Rejected Payments",
+                  `${rejectedList.length} · ₱${rejectedTotal.toLocaleString()}`,
+                  () => showDetail("Rejected Payments", rejectedCols, rejectedRows),
+                )}
             </div>
             {statCards([{ label: "Loans by Status", byStatus: totals.byStatus as Record<string, number> }])}
+            {rejectedList.length > 0 && (
+              <SummarySection
+                label={`Rejected payments (${rejectedList.length}) · ₱${rejectedTotal.toLocaleString()}`}
+              >
+                <Table head={rejectedCols} rows={rejectedRows} fallback="No rejected payments." />
+              </SummarySection>
+            )}
             <SummarySection label={`Loans (${loans.length})`}>
               <Table head={loanCols} rows={loanRows} fallback="No loans." />
             </SummarySection>

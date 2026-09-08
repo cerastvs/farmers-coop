@@ -62,7 +62,7 @@ export async function PATCH(
         const nextStatus =
           result.data.action === "approve"
             ? PaymentStatus.APPROVED
-            : PaymentStatus.DECLINED;
+            : PaymentStatus.REJECTED;
         assertTransition(
           applicationFeePaymentTransitions,
           payment.status,

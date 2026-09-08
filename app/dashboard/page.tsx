@@ -295,7 +295,8 @@ function ApplicantPendingScreen() {
 
   const appStatus = status?.application.status ?? "PENDING_PAYMENT";
   const paymentStatus = status?.payment?.status ?? null;
-  const declined = paymentStatus === "DECLINED";
+  const declined =
+    paymentStatus === "DECLINED" || paymentStatus === "REJECTED";
   const pending = paymentStatus === "PENDING_APPROVAL";
   const approved = paymentStatus === "APPROVED";
   const inReview = appStatus === "PENDING_APPLICATION_REVIEW";

@@ -140,13 +140,13 @@ test("application fee payment transitions only allow approve and decline", () =>
   assertTransition(
     applicationFeePaymentTransitions,
     "PENDING_APPROVAL" as never,
-    "DECLINED" as never,
+    "REJECTED" as never,
     "Application fee payment",
   );
   assert.throws(() =>
     assertTransition(
       applicationFeePaymentTransitions,
-      "DECLINED" as never,
+      "REJECTED" as never,
       "PENDING_APPROVAL" as never,
       "Application fee payment",
     ),

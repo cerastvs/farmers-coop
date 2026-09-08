@@ -33,7 +33,7 @@ interface AuditUser {
 
 interface PaymentRecord {
   id: string;
-  status: "PENDING_APPROVAL" | "APPROVED" | "DECLINED";
+  status: "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
   amount: number;
   paymentMethod: "ONLINE" | "ON_SITE";
   referenceNo: string | null;
@@ -708,12 +708,12 @@ function StatusPill({ status }: { status: PaymentRecord["status"] }) {
   const styles: Record<PaymentRecord["status"], string> = {
     PENDING_APPROVAL: "bg-orange-100 text-orange-700",
     APPROVED: "bg-green-100 text-green-700",
-    DECLINED: "bg-red-100 text-red-600",
+    REJECTED: "bg-red-100 text-red-600",
   };
   const labels: Record<PaymentRecord["status"], string> = {
     PENDING_APPROVAL: "🟠 Waiting for approval",
     APPROVED: "🟢 Approved",
-    DECLINED: "🔴 Declined",
+    REJECTED: "🔴 Rejected",
   };
   return (
     <span className={`rounded-full px-2.5 py-1 text-[11px] font-black ${styles[status]}`}>

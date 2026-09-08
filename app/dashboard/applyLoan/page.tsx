@@ -4,32 +4,57 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DashboardHeader } from "../components/DashboardHeader";
 import { ApplyLoanCard } from "./components/ApplyLoanCard";
+import {
+  LoanRequestsCard,
+  type LoanRequest,
+} from "./components/LoanRequestsCard";
 import { IconChevronLeft, IconInfoCircle } from "@/components/icons";
 import { Money } from "@/components/Money";
 
 export default function ApplyLoanPage() {
   const [totalDebt, setTotalDebt] = useState<number | null>(null);
   const [hasGuarantor, setHasGuarantor] = useState<boolean | null>(null);
+  const [loans, setLoans] = useState<LoanRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function fetchStats() {
-      try {
-        const res = await fetch("/api/dashboard/stats");
-        if (res.ok) {
-          const data = await res.json();
-          setTotalDebt(data.totalDebt);
-          setHasGuarantor(data.hasGuarantor);
-        }
-      } catch (error) {
-        console.error("Failed to fetch balance:", error);
-      } finally {
-        setLoading(false);
+  const fetchStats = async () => {
+    try {
+      const res = await fetch("/api/dashboard/stats");
+      if (res.ok) {
+        const data = await res.json();
+        setTotalDebt(data.totalDebt);
+        setHasGuarantor(data.hasGuarantor);
       }
+    } catch (error) {
+      console.error("Failed to fetch balance:", error);
+    } finally {
+      setLoading(false);
     }
+  };
 
+  const fetchLoans = async () => {
+    try {
+      const res = await fetch("/api/loans");
+      if (res.ok) {
+        const data = await res.json();
+        setLoans(data.loans ?? []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch loans:", error);
+    }
+  };
+
+  useEffect(() => {
     fetchStats();
   }, []);
+
+  useEffect(() => {
+    fetchLoans();
+  }, []);
+
+  const hasPendingRequest =
+    loans.filter((l) => l.status === "PENDING" || l.status === "APPROVED")
+      .length > 0;
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -82,7 +107,15 @@ export default function ApplyLoanPage() {
           </div>
         )}
 
-        <ApplyLoanCard currentBalance={totalDebt} hasGuarantor={hasGuarantor} isLoading={loading} />
+        <ApplyLoanCard
+          currentBalance={totalDebt}
+          hasGuarantor={hasGuarantor}
+          hasPendingRequest={hasPendingRequest}
+          isLoading={loading}
+          onSubmitted={fetchLoans}
+        />
+
+        <LoanRequestsCard loans={loans} onCancelled={fetchLoans} />
 
         <div className="bg-[#f0f9f0] border border-green-100 rounded-2xl p-6 text-center space-y-3 mt-8">
           <h3 className="text-lg font-bold text-[#2d6a2d]">

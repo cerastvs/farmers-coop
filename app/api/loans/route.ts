@@ -65,6 +65,7 @@ export async function GET() {
             amount: Number(l.amount),
             remainingBalance: remainingBalance > 0 ? remainingBalance : 0,
             due: l.due,
+            createdAt: l.createdAt,
             termMonths: l.termMonths,
             purpose: l.purpose,
             rejectionReason: l.rejectionReason,

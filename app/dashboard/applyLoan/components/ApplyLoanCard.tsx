@@ -1,18 +1,22 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
 import { Money } from "@/components/Money";
+import { ArrowRight } from "lucide-react";
 
 interface ApplyLoanCardProps {
   currentBalance: number | null;
   hasGuarantor?: boolean | null;
+  hasPendingRequest?: boolean;
   isLoading: boolean;
+  onSubmitted?: () => void;
 }
 
-export function ApplyLoanCard({ currentBalance, hasGuarantor, isLoading }: ApplyLoanCardProps) {
+export function ApplyLoanCard({ currentBalance, hasGuarantor, hasPendingRequest, isLoading, onSubmitted }: ApplyLoanCardProps) {
   const hasBalance = currentBalance !== null && currentBalance > 0;
   const missingGuarantor = hasGuarantor !== null && hasGuarantor === false;
-  const blocked = hasBalance || missingGuarantor;
+  const blocked = hasBalance || missingGuarantor || !!hasPendingRequest;
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
@@ -31,13 +35,14 @@ export function ApplyLoanCard({ currentBalance, hasGuarantor, isLoading }: Apply
           amount: Number(form.get("amount")),
           termMonths: Number(form.get("termMonths")),
           purpose: form.get("purpose"),
-          type: form.get("type"),
+          type: "MONEY",
         }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? data.message ?? "Unable to submit loan request");
       setMessage({ kind: "success", text: data.message ?? "Loan request submitted for review." });
       formElement.reset();
+      onSubmitted?.();
     } catch (error) {
       setMessage({ kind: "error", text: error instanceof Error ? error.message : "Unable to submit loan request" });
     } finally {
@@ -79,19 +84,22 @@ export function ApplyLoanCard({ currentBalance, hasGuarantor, isLoading }: Apply
           <p className="text-2xl font-bold text-purple-600">6–24 months</p>
         </div>
 
+        <Link
+          href="/dashboard/supplies"
+          className="flex items-center justify-between gap-3 rounded-xl border border-[#cfe3b8] bg-[#f1f8e8] p-4 transition hover:bg-[#e6f4d8]"
+        >
+          <div>
+            <p className="text-sm font-bold text-[#2d6a2d]">
+              Looking for a supply loan?
+            </p>
+            <p className="mt-0.5 text-sm text-gray-600">
+              Apply for a supply loan on the Supply page instead.
+            </p>
+          </div>
+          <ArrowRight size={18} className="shrink-0 text-[#2d6a2d]" />
+        </Link>
+
         <form className="space-y-4 border-t border-gray-100 pt-4" onSubmit={submitLoan}>
-          <label className="block text-sm font-semibold text-gray-700">
-            Loan Type
-            <select
-              className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 outline-none focus:border-green-600 focus:ring-2 focus:ring-green-100"
-              name="type"
-              defaultValue="MONEY"
-              disabled={blocked}
-            >
-              <option value="MONEY">Money Loan</option>
-              <option value="SUPPLY">Supply Loan</option>
-            </select>
-          </label>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-semibold text-gray-700">
               Amount
@@ -150,7 +158,15 @@ export function ApplyLoanCard({ currentBalance, hasGuarantor, isLoading }: Apply
                 : "bg-green-700 text-white hover:bg-green-800"
             }`}
           >
-            {blocked ? (missingGuarantor ? "Add Your Guarantor" : "Settlement Required") : submitting ? "Submitting…" : "Submit Loan Request"}
+            {blocked
+              ? missingGuarantor
+                ? "Add Your Guarantor"
+                : hasPendingRequest
+                  ? "Request Under Review"
+                  : "Settlement Required"
+              : submitting
+                ? "Submitting…"
+                : "Submit Loan Request"}
           </button>
         </form>
       </div>

@@ -2259,7 +2259,9 @@ function MembersSection({
     >
       {visible.length > 0 ? (
         <div className="space-y-2">
-          {visible.map((m) => (
+          {visible.map((m) => {
+            const hasRejectedLoan = m.loans?.some((l) => l.status === "REJECTED") ?? false;
+            return (
             <div
               key={m.id}
               className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3"
@@ -2311,9 +2313,12 @@ function MembersSection({
                 </div>
               ) : (
                 <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-100 text-sm font-bold text-purple-700">
-                    {m.name.charAt(0)}
-                  </div>
+<div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-100 text-sm font-bold text-purple-700">
+                        {m.name.charAt(0)}
+                        {hasRejectedLoan && (
+                          <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
+                        )}
+                      </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-[#173a2b] truncate">
                       {m.name}
@@ -2357,7 +2362,7 @@ function MembersSection({
                             {loan.status !== "PAID" && (
                               <span
                                 className={
-                                  loan.status === "OVERDUE"
+                                  loan.status === "OVERDUE" || loan.status === "REJECTED"
                                     ? "text-red-600"
                                     : loan.status === "ACTIVE"
                                       ? "text-[#2d6a2d]"
@@ -2381,7 +2386,7 @@ function MembersSection({
                 </div>
               )}
             </div>
-          ))}
+          )})}
         </div>
       ) : (
         <EmptyState text="No members found" />
@@ -2407,6 +2412,7 @@ function LoansSection({
 }) {
   const [loanType, setLoanType] = useState<"ALL" | "SUPPLY" | "MONEY">("ALL");
   const [loanTab, setLoanTab] = useState<"requests" | "payments" | "overdue">("requests");
+  const [rejecting, setRejecting] = useState<Loan | null>(null);
 
   const now = new Date();
   const filtered = loanType === "ALL" ? items : items.filter((l) => l.type === loanType);
@@ -2523,10 +2529,7 @@ function LoansSection({
                 </button>
                 <button
                   disabled={busy === loan.id}
-                  onClick={() => {
-                    const reason = window.prompt("Enter rejection reason:");
-                    if (reason) onAction(loan.id, "reject", reason);
-                  }}
+                  onClick={() => setRejecting(loan)}
                   className="rounded-lg border border-red-200 px-3 py-1.5 text-[11px] font-bold text-red-600 hover:bg-red-50 transition disabled:opacity-50"
                 >
                   Reject
@@ -2542,6 +2545,22 @@ function LoansSection({
               ? `No pending ${loanType === "SUPPLY" ? "supply" : "money"} loan requests`
               : `No ${loanType === "SUPPLY" ? "supply" : "money"} ${loanTab}`
           }
+        />
+      )}
+      {rejecting && (
+        <PaymentConfirmModal
+          title="Reject loan request?"
+          memberName={rejecting.borrower.name}
+          amount={rejecting.amount}
+          detail={`${rejecting.name} · ${rejecting.purpose ?? ""}`}
+          message="The member will be notified and can submit a new request afterwards."
+          confirmLabel="Reject Loan"
+          reject
+          onConfirm={(reason) => {
+            onAction(rejecting.id, "reject", reason);
+            setRejecting(null);
+          }}
+          onClose={() => setRejecting(null)}
         />
       )}
     </SectionCard>

@@ -204,6 +204,7 @@ export default function TreasurerPage() {
     payment: Payment;
     action: "approve" | "verify" | "reject";
   } | null>(null);
+  const [rejectLoan, setRejectLoan] = useState<Loan | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
@@ -298,10 +299,6 @@ export default function TreasurerPage() {
 
   const isApplicationFee = (payment: Payment) =>
     payment.type === "APPLICATION_FEE";
-
-  function rejectReason() {
-    return window.prompt("Enter the reason for rejection:");
-  }
 
   function paymentActionLabel(
     payment: Payment,
@@ -821,16 +818,7 @@ export default function TreasurerPage() {
                             </button>
                             <button
                               disabled={busy === loan.id}
-                              onClick={() => {
-                                const reason = rejectReason();
-                                if (reason)
-                                  void mutate(
-                                    loan.id,
-                                    `/api/admin/loans/${loan.id}`,
-                                    { action: "reject", reason },
-                                    "Loan rejected.",
-                                  );
-                              }}
+                              onClick={() => setRejectLoan(loan)}
                               className={buttonDanger}
                             >
                               Reject
@@ -1127,16 +1115,7 @@ export default function TreasurerPage() {
                                   </button>
                                   <button
                                     disabled={busy === loan.id}
-                                    onClick={() => {
-                                      const reason = rejectReason();
-                                      if (reason)
-                                        void mutate(
-                                          loan.id,
-                                          `/api/admin/loans/${loan.id}`,
-                                          { action: "reject", reason },
-                                          "Loan rejected.",
-                                        );
-                                    }}
+                                    onClick={() => setRejectLoan(loan)}
                                     className="rounded-md border border-red-200 px-2.5 py-1 text-[10px] font-semibold text-red-600 transition-all hover:bg-red-50 disabled:opacity-40"
                                   >
                                     Reject
@@ -1640,6 +1619,27 @@ export default function TreasurerPage() {
             ).then(() => setConfirmPayment(null))
           }
           onClose={() => setConfirmPayment(null)}
+        />
+      )}
+      {rejectLoan && (
+        <PaymentConfirmModal
+          title="Reject loan request?"
+          memberName={rejectLoan.borrower.name}
+          amount={rejectLoan.amount}
+          detail={`${rejectLoan.name} · ${rejectLoan.purpose ?? ""}`}
+          message="The member will be notified and can submit a new request afterwards."
+          confirmLabel="Reject Loan"
+          reject
+          busy={busy === rejectLoan.id}
+          onConfirm={(reason) => {
+            void mutate(
+              rejectLoan.id,
+              `/api/admin/loans/${rejectLoan.id}`,
+              { action: "reject", reason },
+              "Loan rejected.",
+            ).then(() => setRejectLoan(null));
+          }}
+          onClose={() => setRejectLoan(null)}
         />
       )}
     </div>

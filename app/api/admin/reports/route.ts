@@ -222,6 +222,7 @@ async function generateLoansReport(filters: ReportFilters = {}) {
               ? [
                   { createdAt: dateRangePrisma(filters) },
                   { payments: { some: { paidAt: dateRangePrisma(filters) } } },
+                  { statusHistory: { some: { changedAt: dateRangePrisma(filters) } } },
                 ]
               : []),
           ],
@@ -248,6 +249,10 @@ async function generateLoansReport(filters: ReportFilters = {}) {
           referenceNo: true,
           createdAt: true,
         },
+      },
+      statusHistory: {
+        select: { status: true, changedAt: true },
+        orderBy: { changedAt: "desc" },
       },
     },
   });
@@ -280,6 +285,24 @@ async function generateLoansReport(filters: ReportFilters = {}) {
         referenceNo: payment.referenceNo,
         createdAt: payment.createdAt.toISOString(),
       }));
+
+    const approvedEntry = loan.statusHistory.find(
+      (h) => h.status === LoanStatus.APPROVED,
+    );
+    const rejectedEntry = loan.statusHistory.find(
+      (h) => h.status === LoanStatus.REJECTED,
+    );
+    const decision =
+      approvedEntry
+        ? "Approved"
+        : rejectedEntry
+          ? "Rejected"
+          : null;
+    const decisionAt =
+      approvedEntry?.changedAt?.toISOString() ??
+      rejectedEntry?.changedAt?.toISOString() ??
+      null;
+
     return {
       id: loan.id,
       borrower: loan.user,
@@ -288,6 +311,9 @@ async function generateLoansReport(filters: ReportFilters = {}) {
       amountPaid: paidInRange,
       outstandingBalance: Math.max(Number(loan.amount) - totalPaid, 0),
       status: loan.status,
+      rejectionReason: loan.rejectionReason ?? null,
+      decision,
+      decisionAt,
       due: loan.due.toISOString(),
       createdAt: loan.createdAt.toISOString(),
       payments: inRangePayments.map((payment) => ({
@@ -309,6 +335,8 @@ async function generateLoansReport(filters: ReportFilters = {}) {
         (sum, loan) => sum + loan.outstandingBalance,
         0,
       ),
+      requestsApproved: records.filter((l) => l.decision === "Approved").length,
+      requestsRejected: records.filter((l) => l.decision === "Rejected").length,
       rejectedPayments: records.reduce(
         (sum, loan) => sum + loan.rejectedPayments.length,
         0,

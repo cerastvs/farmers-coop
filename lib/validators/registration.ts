@@ -8,6 +8,19 @@ const sanitizeSql = (val: string) => {
     .replace(/'/g, "''");
 };
 
+const parseStringArray = (val: unknown): unknown => {
+  if (Array.isArray(val)) return val;
+  if (typeof val === "string" && val.trim()) {
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      // fall through
+    }
+  }
+  return val;
+};
+
 export const ApplicationSchema = z.object({
   firstName: z.string().min(1, "First name is required").transform(sanitizeSql),
   middleName: z.string().optional().transform((val) => (val ? sanitizeSql(val) : "")),
@@ -49,7 +62,12 @@ export const ApplicationSchema = z.object({
 
   farmSize: z.coerce.number().positive("Farm size must be greater than 0"),
 
-  cropType: z.string().min(2, "Crop type is required").transform(sanitizeSql),
+  cropType: z.preprocess(
+    (val) => parseStringArray(val),
+    z
+      .array(z.string().min(1, "Crop type must not be empty"))
+      .transform((vals) => vals.map(sanitizeSql)),
+  ),
 
   yearsFarming: z.coerce
     .number()
@@ -64,7 +82,12 @@ export const ApplicationSchema = z.object({
     }),
   ),
 
-  farmMachinery: z.string().optional().transform((val) => (val ? sanitizeSql(val.trim()) : "")),
+  farmMachinery: z.preprocess(
+    (val) => parseStringArray(val),
+    z
+      .array(z.string().min(1, "Machine must not be empty"))
+      .transform((vals) => vals.map(sanitizeSql)),
+  ),
 
   guarantor: z
     .object({

@@ -38,10 +38,15 @@ export async function handleSubmit(
     );
   }
 
-  const farmMachinery = String(formData.get("farmMachinery") || "").trim();
-  if (farmMachinery) {
-    formData.set("farmMachinery", farmMachinery);
-  }
+  const cropTypes = (formData.getAll("cropType") as string[]).map((v) =>
+    v.trim(),
+  );
+  formData.set("cropType", JSON.stringify(cropTypes.filter(Boolean)));
+
+  const machines = (formData.getAll("farmMachinery") as string[]).map((v) =>
+    v.trim(),
+  );
+  formData.set("farmMachinery", JSON.stringify(machines.filter(Boolean)));
 
   const formValues = Object.fromEntries(formData.entries());
 

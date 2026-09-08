@@ -72,7 +72,7 @@ interface Member {
   role: Role;
   active: boolean;
   createdAt: string;
-  application?: { contact?: string; cropType?: string; status?: string } | null;
+  application?: { contact?: string; crops?: string[]; status?: string; fullName?: string; id?: string } | null;
   loans?: MemberLoan[];
 }
 

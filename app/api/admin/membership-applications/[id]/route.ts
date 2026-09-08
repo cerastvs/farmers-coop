@@ -29,6 +29,8 @@ export async function GET(
     const application = await prisma.application.findUnique({
       where: { id },
       include: {
+        crops: true,
+        machines: true,
         reviewedByUser: { select: userSummary },
         payments: {
           where: { type: PaymentType.APPLICATION_FEE },
@@ -93,10 +95,10 @@ export async function GET(
         address: application.address,
         contact: application.contact,
         farmSize: application.farmSize,
-        cropType: application.cropType,
+        crops: application.crops.map((c) => c.name),
+        machines: application.machines.map((m) => m.name),
         yearsFarming: application.yearsFarming,
         farmOwnership: application.farmOwnership,
-        farmMachinery: application.farmMachinery,
         guarantor: application.guarantor,
         validIdUrl: application.validIdUrl,
         proofOfFarmUrl: application.proofOfFarmUrl,

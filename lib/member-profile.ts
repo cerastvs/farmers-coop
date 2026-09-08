@@ -5,6 +5,8 @@ import { notifyUser, writeAudit } from "@/lib/activity";
 import { ApiError } from "@/lib/errors";
 import prisma from "@/lib/client";
 
+const cropMachineRequest = z.array(z.string().trim().min(1)).optional();
+
 export const ProfileUpdateSchema = z
   .object({
     fullName: z.string().trim().min(3).max(120).optional(),
@@ -18,8 +20,9 @@ export const ProfileUpdateSchema = z
     address: z.string().trim().min(5).max(300).optional(),
     contact: z.string().trim().regex(/^[0-9]{10,15}$/).optional(),
     farmSize: z.coerce.number().positive().optional(),
-    cropType: z.string().trim().min(2).max(100).optional(),
     yearsFarming: z.coerce.number().int().min(0).max(80).optional(),
+    cropType: cropMachineRequest,
+    farmMachinery: cropMachineRequest,
   })
   .strict();
 
@@ -70,7 +73,8 @@ export const memberSelect = {
       address: true,
       contact: true,
       farmSize: true,
-      cropType: true,
+      crops: { select: { name: true }, orderBy: { name: "asc" as const } },
+      machines: { select: { name: true }, orderBy: { name: "asc" as const } },
       yearsFarming: true,
       status: true,
       createdAt: true,
@@ -121,7 +125,8 @@ export async function updateMemberRecord({
           address: true,
           contact: true,
           farmSize: true,
-          cropType: true,
+          crops: { select: { name: true }, orderBy: { name: "asc" } },
+          machines: { select: { name: true }, orderBy: { name: "asc" } },
           yearsFarming: true,
         },
       },
@@ -143,7 +148,8 @@ export async function updateMemberRecord({
         address: existing.applications[0].address,
         contact: existing.applications[0].contact,
         farmSize: existing.applications[0].farmSize,
-        cropType: existing.applications[0].cropType,
+        crops: existing.applications[0].crops.map((c) => c.name),
+        machines: existing.applications[0].machines.map((m) => m.name),
         yearsFarming: existing.applications[0].yearsFarming,
       }
     : null;
@@ -161,9 +167,28 @@ export async function updateMemberRecord({
     });
 
     if (data.profile) {
+      const { cropType, farmMachinery, ...scalarProfile } = data.profile;
       await tx.application.update({
         where: { id: existing.applications[0].id },
-        data: data.profile,
+        data: {
+          ...scalarProfile,
+          ...(cropType !== undefined
+            ? {
+                crops: {
+                  deleteMany: {},
+                  create: cropType.map((name) => ({ name })),
+                },
+              }
+            : {}),
+          ...(farmMachinery !== undefined
+            ? {
+                machines: {
+                  deleteMany: {},
+                  create: farmMachinery.map((name) => ({ name })),
+                },
+              }
+            : {}),
+        },
       });
     }
 

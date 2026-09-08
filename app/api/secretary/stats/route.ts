@@ -50,6 +50,10 @@ export async function GET() {
     ] = await Promise.all([
       prisma.application.findMany({
         orderBy: { createdAt: "desc" },
+        include: {
+          crops: { orderBy: { name: "asc" } },
+          machines: { orderBy: { name: "asc" } },
+        },
       }),
 
       prisma.user.findMany({
@@ -57,7 +61,10 @@ export async function GET() {
         orderBy: { createdAt: "desc" },
         include: {
           applications: {
-            select: { farmSize: true, cropType: true },
+            select: {
+              farmSize: true,
+              crops: { select: { name: true } },
+            },
             take: 1,
           },
           loans: {
@@ -107,7 +114,7 @@ export async function GET() {
                       contact: true,
                       address: true,
                       farmSize: true,
-                      cropType: true,
+                      crops: { select: { name: true } },
                       yearsFarming: true,
                     },
                     take: 1,
@@ -177,10 +184,10 @@ export async function GET() {
         address: a.address,
         contact: a.contact,
         farmSize: a.farmSize,
-        cropType: a.cropType,
+        crops: a.crops.map((c) => c.name),
+        machines: a.machines.map((m) => m.name),
         yearsFarming: a.yearsFarming,
         farmOwnership: a.farmOwnership,
-        farmMachinery: a.farmMachinery,
         guarantor: a.guarantor,
         validIdUrl: a.validIdUrl,
         proofOfFarmUrl: a.proofOfFarmUrl,
@@ -195,7 +202,9 @@ export async function GET() {
         active: m.active,
         joined: m.createdAt.toISOString(),
         farm: m.applications[0]
-          ? `${m.applications[0].farmSize} ha - ${m.applications[0].cropType}`
+          ? `${m.applications[0].farmSize} ha - ${m.applications[0].crops
+              .map((c) => c.name)
+              .join(", ")}`
           : null,
         loans: m.loans.map((l) => {
           const paid = l.payments.reduce(
@@ -262,7 +271,7 @@ export async function GET() {
             contact: r.user.applications[0]?.contact ?? null,
             address: r.user.applications[0]?.address ?? null,
             farmSize: r.user.applications[0]?.farmSize ?? null,
-            cropType: r.user.applications[0]?.cropType ?? null,
+            crops: r.user.applications[0]?.crops.map((c) => c.name) ?? null,
             yearsFarming: r.user.applications[0]?.yearsFarming ?? null,
           },
         })),

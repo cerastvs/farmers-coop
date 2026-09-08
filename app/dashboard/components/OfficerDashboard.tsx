@@ -52,10 +52,10 @@ interface Application {
   address: string;
   contact: string;
   farmSize: number;
-  cropType: string;
+  crops: string[];
   yearsFarming: number;
   farmOwnership: string | null;
-  farmMachinery: string | null;
+  machines: string[];
   guarantor: {
     name?: string;
     firstName?: string;
@@ -135,7 +135,7 @@ interface MachineRequestInfo {
     contact: string | null;
     address: string | null;
     farmSize: number | null;
-    cropType: string | null;
+    crops: string[] | null;
     yearsFarming: number | null;
   };
 }
@@ -1396,7 +1396,7 @@ function RequestDetailModal({
                 <div className="flex items-center gap-2.5 text-[#173a2b]">
                   <Wheat size={14} className="text-gray-400 shrink-0" />
                   <span>
-                    {member.farmSize} hectares — {member.cropType}
+                    {member.farmSize} hectares — {member.crops?.join(", ") ?? "—"}
                   </span>
                 </div>
                 {member.yearsFarming != null && (
@@ -1678,7 +1678,7 @@ function RejectionDetailModal({
                 <div className="flex items-center gap-2.5 text-[#173a2b]">
                   <Wheat size={14} className="text-gray-400 shrink-0" />
                   <span>
-                    {member.farmSize} hectares — {member.cropType}
+                    {member.farmSize} hectares — {member.crops?.join(", ") ?? "—"}
                   </span>
                 </div>
                 {member.yearsFarming != null && (
@@ -2007,7 +2007,10 @@ function ApplicationDetailModal({
                 label="Farm Size"
                 value={`${application.farmSize} ha`}
               />
-              <DetailField label="Crop Type" value={application.cropType} />
+              <DetailField
+                label="Crop Type"
+                value={application.crops.join(", ") || "—"}
+              />
               <DetailField
                 label="Years Farming"
                 value={`${application.yearsFarming} years`}
@@ -2026,7 +2029,7 @@ function ApplicationDetailModal({
               />
               <DetailField
                 label="Farm Machinery"
-                value={application.farmMachinery || "None"}
+                value={application.machines.join(", ") || "None"}
               />
             </div>
           </div>
@@ -2189,7 +2192,7 @@ function ApplicationsSection({
                 {app.fullName}
               </p>
               <p className="text-xs text-[#718176]">
-                {app.cropType} · Applied{" "}
+                {app.crops.join(", ") || "—"} · Applied{" "}
                 {new Date(app.createdAt).toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
@@ -3931,7 +3934,7 @@ export default function OfficerDashboard({
                     <div className="space-y-2">
                       {data.applications.filter((a) => a.status === "PENDING").slice(0, 5).map((app) => (
                         <button key={app.id} onClick={() => setDetailApp(app)} className="flex w-full items-center justify-between rounded-lg border border-[#e2ebe6] bg-[#fafdf9] px-3.5 py-2.5 text-left transition hover:border-amber-300 hover:bg-amber-50/30 active:scale-[0.99]">
-                          <div className="min-w-0 flex-1"><p className="text-sm font-medium text-[#0f2318] truncate">{app.fullName}</p><p className="text-[11px] text-[#5a7267]">{app.cropType} · {app.farmSize} ha</p></div>
+                          <div className="min-w-0 flex-1"><p className="text-sm font-medium text-[#0f2318] truncate">{app.fullName}</p><p className="text-[11px] text-[#5a7267]">{app.crops.join(", ") || "—"} · {app.farmSize} ha</p></div>
                           <span className="ml-2 shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">Review</span>
                         </button>
                       ))}
@@ -3985,7 +3988,7 @@ export default function OfficerDashboard({
                 <div className="p-4 space-y-2">
                   {(pendingFilter.applications ? searchedApplications.filter((a) => a.status === "PENDING") : searchedApplications).length > 0 ? (pendingFilter.applications ? searchedApplications.filter((a) => a.status === "PENDING") : searchedApplications).map((app) => (
                     <button key={app.id} onClick={() => setDetailApp(app)} className="flex w-full items-center justify-between rounded-xl border border-[#eef2e8] bg-[#fafdf7] px-4 py-3 text-left transition hover:border-blue-300 hover:bg-blue-50/30 active:scale-[0.99]">
-                      <div className="min-w-0 flex-1"><p className="text-sm font-semibold text-[#173a2b] truncate">{app.fullName}</p><p className="text-xs text-[#718176]">{app.cropType} · Applied {new Date(app.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p></div>
+                      <div className="min-w-0 flex-1"><p className="text-sm font-semibold text-[#173a2b] truncate">{app.fullName}</p><p className="text-xs text-[#718176]">{app.crops.join(", ") || "—"} · Applied {new Date(app.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p></div>
                       <span className={`shrink-0 ml-3 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${APP_STATUS_STYLE[app.status] || ""}`}>{app.status.charAt(0) + app.status.slice(1).toLowerCase()}</span>
                     </button>
                   )) : <EmptyState text={pendingFilter.applications ? "No pending applications" : "No applications found"} />}

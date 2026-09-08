@@ -129,11 +129,14 @@ export async function POST(req: NextRequest) {
           birthDate: new Date(birthDate as string),
           gender,
           farmSize,
-          cropType,
           yearsFarming,
           farmOwnership,
-          farmMachinery:
-            farmMachinery && farmMachinery.length > 0 ? farmMachinery : null,
+          crops: {
+            create: (cropType as string[]).map((name) => ({ name })),
+          },
+          machines: {
+            create: (farmMachinery as string[]).map((name) => ({ name })),
+          },
           guarantor: guarantor && Object.keys(guarantor).length
             ? (guarantor as Prisma.InputJsonValue)
             : undefined,
@@ -298,13 +301,16 @@ export async function PATCH(req: NextRequest) {
           birthDate: new Date(birthDate as string),
           gender,
           farmSize,
-          cropType,
           yearsFarming,
           farmOwnership,
-          farmMachinery:
-            farmMachinery && farmMachinery.length > 0
-              ? farmMachinery
-              : null,
+          crops: {
+            deleteMany: {},
+            create: (cropType as string[]).map((name) => ({ name })),
+          },
+          machines: {
+            deleteMany: {},
+            create: (farmMachinery as string[]).map((name) => ({ name })),
+          },
           guarantor:
             guarantor && Object.keys(guarantor).length
               ? (guarantor as Prisma.InputJsonValue)
@@ -344,6 +350,10 @@ export async function GET() {
     const actor = await requireUser([Role.APPLICANT, Role.MEMBER]);
     const application = await prisma.application.findFirst({
       where: { userId: actor.userId },
+      include: {
+        crops: { orderBy: { name: "asc" } },
+        machines: { orderBy: { name: "asc" } },
+      },
     });
 
     if (!application) {

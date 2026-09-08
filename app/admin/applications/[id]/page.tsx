@@ -53,10 +53,10 @@ interface ApplicationDetail {
   address: string;
   contact: string;
   farmSize: number;
-  cropType: string;
+  crops: string[];
   yearsFarming: number;
   farmOwnership: string | null;
-  farmMachinery: string | null;
+  machines: string[];
   guarantor: {
     name?: string;
     firstName?: string;
@@ -380,7 +380,7 @@ export default function ApplicationReviewPage() {
         <Section title="Cooperative Information">
           <dl className="grid gap-3 sm:grid-cols-3">
             <Field label="Farm size" value={`${application.farmSize} hectares`} />
-            <Field label="Crop type" value={application.cropType} />
+            <Field label="Crop type" value={application.crops.join(", ") || "—"} />
             <Field label="Years farming" value={`${application.yearsFarming} years`} />
             <Field
               label="Farm ownership status"
@@ -394,7 +394,7 @@ export default function ApplicationReviewPage() {
                       : application.farmOwnership || "—"
               }
             />
-            <Field label="Farm machinery" value={application.farmMachinery || "None"} />
+            <Field label="Farm machinery" value={application.machines.join(", ") || "None"} />
           </dl>
         </Section>
 

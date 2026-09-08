@@ -240,10 +240,8 @@ model Application {
   contact       String
 
   farmSize       Float
-  cropType       String
   yearsFarming   Int
   farmOwnership  FarmOwnership @default(FARM_OWNER)
-  farmMachinery  String?
 
   guarantor      Json?
 
@@ -258,7 +256,27 @@ model Application {
   rejectionReason String?
   rejectionDetails String?
 
+  crops    ApplicationCrop[]
+  machines ApplicationMachine[]
   payments Payment[]
+}
+
+model ApplicationCrop {
+  id            String      @id @default(uuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  name          String
+
+  @@index([applicationId])
+}
+
+model ApplicationMachine {
+  id            String      @id @default(uuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  name          String
+
+  @@index([applicationId])
 }
 
 model Payment {

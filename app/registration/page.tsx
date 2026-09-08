@@ -8,6 +8,11 @@ import { handleSubmit } from "./actions";
 import { MembershipProgressSteps } from "@/components/MembershipProgressSteps";
 import { ArrowLeft, FileImage, Sprout } from "lucide-react";
 
+type ApplicationWithLists = Application & {
+  crops: { name: string }[];
+  machines: { name: string }[];
+};
+
 function FieldError({ error }: { error?: string }) {
   if (!error) return null;
   return <p className="text-red-500 text-xs mt-1.5">{error}</p>;
@@ -22,9 +27,76 @@ function InputLabel({ children, optional }: { children: React.ReactNode; optiona
   );
 }
 
+function DynamicListField({
+  name,
+  label,
+  placeholder,
+  items,
+  max = 10,
+  note,
+}: {
+  name: string;
+  label: string;
+  placeholder: string;
+  items: string[];
+  max?: number;
+  note?: string;
+}) {
+  const [count, setCount] = useState(Math.max(items.length, 1));
+
+  useEffect(() => {
+    setCount((c) => Math.max(c, items.length, 1));
+  }, [items]);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <label className="block text-xs font-semibold text-[#3d5c47]">{label}</label>
+        {note && <span className="text-[11px] text-[#8fa594] italic">{note}</span>}
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="flex items-center rounded-xl border border-[#dbe5d7] bg-[#fafcf8]">
+          <button
+            type="button"
+            onClick={() => setCount((c) => Math.max(1, c - 1))}
+            className="px-3 py-2.5 text-[#4f7e38] hover:text-[#2d6a2d]"
+            aria-label={`Decrease ${label}`}
+          >
+            −
+          </button>
+          <span className="w-8 text-center text-sm font-semibold text-[#173a2b]">
+            {count}
+          </span>
+          <button
+            type="button"
+            onClick={() => setCount((c) => Math.min(max, c + 1))}
+            className="px-3 py-2.5 text-[#4f7e38] hover:text-[#2d6a2d]"
+            aria-label={`Increase ${label}`}
+          >
+            +
+          </button>
+        </div>
+        <span className="text-xs text-[#718176]">How many?</span>
+      </div>
+      <div className="mt-3 space-y-2">
+        {Array.from({ length: count }, (_, i) => (
+          <input
+            key={i}
+            type="text"
+            name={name}
+            placeholder={i === 0 ? placeholder : `${placeholder} (${i + 1})`}
+            defaultValue={items[i] ?? ""}
+            className="w-full rounded-xl border border-[#dbe5d7] bg-[#fafcf8] px-3 py-2.5 text-sm text-[#173a2b] outline-none transition placeholder:text-[#9aa89e] focus:border-[#4f7e38] focus:ring-4 focus:ring-[#b9db9e]/35"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Registration() {
   const [loading, setLoading] = useState(false);
-  const [application, setApplication] = useState<Application | null>(null);
+  const [application, setApplication] = useState<ApplicationWithLists | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isApplicant, setIsApplicant] = useState(false);
 
@@ -269,16 +341,13 @@ export default function Registration() {
                 </div>
               </div>
 
-              <div>
-                <InputLabel>Principal crop types</InputLabel>
-                <TextInput
-                  name="cropType"
-                  placeholder="Rice, Corn, Vegetables"
-                  defaultValue={application?.cropType || ""}
-                  error={errors.cropType}
-                />
-                <FieldError error={errors.cropType} />
-              </div>
+              <DynamicListField
+                name="cropType"
+                label="Principal crop types"
+                placeholder="e.g. Rice"
+                items={(application?.crops ?? []).map((c) => c.name)}
+                note="Leave blank if not applicable"
+              />
 
               <div>
                 <InputLabel>Farm ownership status</InputLabel>
@@ -297,16 +366,13 @@ export default function Registration() {
                 <FieldError error={errors.farmOwnership} />
               </div>
 
-              <div>
-                <InputLabel optional>Farm machinery owned/accessible</InputLabel>
-                <TextInput
-                  name="farmMachinery"
-                  placeholder="Hand tractor, Rice thresher…"
-                  defaultValue={application?.farmMachinery || ""}
-                  error={errors.farmMachinery}
-                />
-                <FieldError error={errors.farmMachinery} />
-              </div>
+              <DynamicListField
+                name="farmMachinery"
+                label="Farm machinery owned/accessible"
+                placeholder="e.g. Hand tractor"
+                items={(application?.machines ?? []).map((m) => m.name)}
+                note="Leave blank if not applicable"
+              />
             </div>
 
             {/* Guarantor */}

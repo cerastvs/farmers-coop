@@ -26,7 +26,8 @@ type MemberApplication = {
   address: string;
   contact: string;
   farmSize: number;
-  cropType: string;
+  crops: string[];
+  machines: string[];
   yearsFarming: number;
 } | null;
 
@@ -767,7 +768,7 @@ function ProfileModal({
   const [address, setAddress] = useState(app?.address ?? "");
   const [contact, setContact] = useState(app?.contact ?? "");
   const [farmSize, setFarmSize] = useState(app ? String(app.farmSize) : "");
-  const [cropType, setCropType] = useState(app?.cropType ?? "");
+  const [cropType, setCropType] = useState<string[]>(app?.crops ?? []);
   const [yearsFarming, setYearsFarming] = useState(app ? String(app.yearsFarming) : "");
   const [context, setContext] = useState({ source: "OFFICE", remarks: "", reason: "" });
   const [busy, setBusy] = useState(false);
@@ -790,7 +791,9 @@ function ProfileModal({
         if (address !== app.address) profile.address = address;
         if (contact !== app.contact) profile.contact = contact;
         if (farmSize !== String(app.farmSize)) profile.farmSize = Number(farmSize);
-        if (cropType !== app.cropType) profile.cropType = cropType;
+        if (JSON.stringify(cropType) !== JSON.stringify(app.crops)) {
+          profile.cropType = cropType.filter((c) => c.trim());
+        }
         if (yearsFarming !== String(app.yearsFarming)) profile.yearsFarming = Number(yearsFarming);
       }
       if (Object.keys(profile).length > 0) fields.profile = profile;
@@ -883,10 +886,39 @@ function ProfileModal({
               <label className={labelClass}>Years farming</label>
               <input className={inputClass} type="number" min="0" max="80" value={yearsFarming} onChange={(e) => setYearsFarming(e.target.value)} />
             </div>
-            <div>
-              <label className={labelClass}>Crop</label>
-              <input className={inputClass} value={cropType} onChange={(e) => setCropType(e.target.value)} />
+          </div>
+          <div>
+            <label className={labelClass}>Crops</label>
+            <div className="space-y-2">
+              {cropType.map((crop, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    className={inputClass}
+                    value={crop}
+                    onChange={(e) => {
+                      const next = [...cropType];
+                      next[i] = e.target.value;
+                      setCropType(next);
+                    }}
+                    placeholder="e.g. Rice"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setCropType(cropType.filter((_, j) => j !== i))}
+                    className="shrink-0 rounded-lg px-2 py-1.5 text-xs text-[#b4523a] hover:bg-red-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
             </div>
+            <button
+              type="button"
+              onClick={() => setCropType([...cropType, ""])}
+              className="mt-2 rounded-lg border border-[#4f7e38]/30 px-3 py-1.5 text-xs font-semibold text-[#4f7e38] hover:bg-[#4f7e38]/5"
+            >
+              + Add crop
+            </button>
           </div>
         </>
       ) : (
@@ -1058,7 +1090,7 @@ export default function AdminActionsPanel({ onDone }: { onDone?: () => void }) {
                 >
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-[#173a2b] truncate">{m.name}</p>
-                    <p className="text-[11px] text-[#718176]">@{m.username} · {m.application?.farmSize ? `${m.application.farmSize} ha · ` : ""}{m.application?.cropType ?? "no application on file"}</p>
+                    <p className="text-[11px] text-[#718176]">@{m.username} · {m.application?.farmSize ? `${m.application.farmSize} ha · ` : ""}{m.application?.crops?.length ? m.application.crops.join(", ") : "no application on file"}</p>
                   </div>
                   <ChevronRight size={14} className="ml-2 shrink-0 text-[#5a7267]" />
                 </button>
@@ -1104,7 +1136,7 @@ export default function AdminActionsPanel({ onDone }: { onDone?: () => void }) {
             {selected.application && (
               <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 rounded-lg bg-[#fafdf9] p-3.5 text-xs sm:grid-cols-3 lg:grid-cols-4">
                 <div><span className="text-[#718176]">Farm:</span> <span className="font-semibold text-[#173a2b]">{selected.application.farmSize} ha</span></div>
-                <div><span className="text-[#718176]">Crop:</span> <span className="font-semibold text-[#173a2b]">{selected.application.cropType}</span></div>
+                <div><span className="text-[#718176]">Crop:</span> <span className="font-semibold text-[#173a2b]">{selected.application?.crops?.join(", ") || "—"}</span></div>
                 <div><span className="text-[#718176]">Address:</span> <span className="font-semibold text-[#173a2b]">{selected.application.address}</span></div>
                 <div><span className="text-[#718176]">Contact:</span> <span className="font-semibold text-[#173a2b]">{selected.application.contact}</span></div>
               </div>

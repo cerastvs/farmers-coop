@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { toTitleCase } from "@/lib/format";
+
 const sanitizeSql = (val: string) => {
   return val
     .replace(/;/g, "")
@@ -7,6 +9,8 @@ const sanitizeSql = (val: string) => {
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/'/g, "''");
 };
+
+const titleCaseSanitize = (val: string) => toTitleCase(sanitizeSql(val.trim()));
 
 const parseStringArray = (val: unknown): unknown => {
   if (Array.isArray(val)) return val;
@@ -22,10 +26,10 @@ const parseStringArray = (val: unknown): unknown => {
 };
 
 export const ApplicationSchema = z.object({
-  firstName: z.string().min(1, "First name is required").transform(sanitizeSql),
-  middleName: z.string().optional().transform((val) => (val ? sanitizeSql(val) : "")),
-  lastName: z.string().min(1, "Last name is required").transform(sanitizeSql),
-  extensionName: z.string().optional().transform((val) => (val ? sanitizeSql(val) : "")),
+  firstName: z.string().min(1, "First name is required").transform(titleCaseSanitize),
+  middleName: z.string().optional().transform((val) => (val ? titleCaseSanitize(val) : "")),
+  lastName: z.string().min(1, "Last name is required").transform(titleCaseSanitize),
+  extensionName: z.string().optional().transform((val) => (val ? titleCaseSanitize(val) : "")),
 
   birthDate: z
     .string()
@@ -66,7 +70,7 @@ export const ApplicationSchema = z.object({
     (val) => parseStringArray(val),
     z
       .array(z.string().min(1, "Crop type must not be empty"))
-      .transform((vals) => vals.map(sanitizeSql)),
+      .transform((vals) => vals.map(titleCaseSanitize)),
   ),
 
   yearsFarming: z.coerce
@@ -85,28 +89,28 @@ export const ApplicationSchema = z.object({
   farmOwnershipDetails: z
     .string()
     .optional()
-    .transform((val) => (val ? sanitizeSql(val.trim()) : "")),
+    .transform((val) => (val ? titleCaseSanitize(val) : "")),
 
   farmMachinery: z.preprocess(
     (val) => parseStringArray(val),
     z
       .array(z.string().min(1, "Machine must not be empty"))
-      .transform((vals) => vals.map(sanitizeSql)),
+      .transform((vals) => vals.map(titleCaseSanitize)),
   ),
 
   guarantor: z
     .object({
-      firstName: z.string().min(1, "Guarantor first name is required").transform(sanitizeSql),
-      middleName: z.string().optional().transform((val) => (val ? sanitizeSql(val) : "")),
-      lastName: z.string().min(1, "Guarantor last name is required").transform(sanitizeSql),
-      extensionName: z.string().optional().transform((val) => (val ? sanitizeSql(val) : "")),
+      firstName: z.string().min(1, "Guarantor first name is required").transform(titleCaseSanitize),
+      middleName: z.string().optional().transform((val) => (val ? titleCaseSanitize(val) : "")),
+      lastName: z.string().min(1, "Guarantor last name is required").transform(titleCaseSanitize),
+      extensionName: z.string().optional().transform((val) => (val ? titleCaseSanitize(val) : "")),
       contact: z
         .string()
         .min(10, "Guarantor contact is too short")
         .max(15, "Guarantor contact is too long")
         .regex(/^[0-9]+$/, "Guarantor contact must be numbers only")
         .transform(sanitizeSql),
-      relationship: z.string().min(1, "Relationship is required").transform(sanitizeSql),
+      relationship: z.string().min(1, "Relationship is required").transform(titleCaseSanitize),
     })
     .partial()
     .optional(),

@@ -4,12 +4,16 @@ import { z } from "zod";
 import { notifyUser, writeAudit } from "@/lib/activity";
 import { ApiError } from "@/lib/errors";
 import prisma from "@/lib/client";
+import { toTitleCase } from "@/lib/format";
 
-const cropMachineRequest = z.array(z.string().trim().min(1)).optional();
+const cropMachineRequest = z
+  .array(z.string().trim().min(1))
+  .transform((vals) => vals.map(toTitleCase))
+  .optional();
 
 export const ProfileUpdateSchema = z
   .object({
-    fullName: z.string().trim().min(3).max(120).optional(),
+    fullName: z.string().trim().min(3).max(120).transform(toTitleCase).optional(),
     birthDate: z
       .string()
       .refine((val) => !Number.isNaN(Date.parse(val)), {
@@ -22,7 +26,7 @@ export const ProfileUpdateSchema = z
     farmSize: z.coerce.number().positive().optional(),
     yearsFarming: z.coerce.number().int().min(0).max(80).optional(),
     farmOwnership: z.nativeEnum(FarmOwnership).optional(),
-    farmOwnershipDetails: z.string().trim().max(300).optional(),
+    farmOwnershipDetails: z.string().trim().max(300).transform(toTitleCase).optional(),
     cropType: cropMachineRequest,
     farmMachinery: cropMachineRequest,
   })
@@ -30,7 +34,14 @@ export const ProfileUpdateSchema = z
 
 export const MemberUpdateSchema = z
   .object({
-    name: z.string().trim().min(3).max(120).nullable().optional(),
+    name: z
+      .string()
+      .trim()
+      .min(3)
+      .max(120)
+      .transform(toTitleCase)
+      .nullable()
+      .optional(),
     username: z
       .string()
       .trim()

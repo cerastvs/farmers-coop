@@ -88,7 +88,7 @@ export async function GET(
         lastName: application.lastName,
         extensionName: application.extensionName,
         fullName: application.fullName,
-        age: application.age,
+        birthDate: application.birthDate,
         gender: application.gender,
         address: application.address,
         contact: application.contact,

@@ -48,7 +48,7 @@ interface ApplicationDetail {
   lastName: string;
   extensionName: string | null;
   fullName: string;
-  age: number;
+  birthDate: string;
   gender: string;
   address: string;
   contact: string;
@@ -368,7 +368,7 @@ export default function ApplicationReviewPage() {
         <Section title="Personal Information">
           <dl className="grid gap-3 sm:grid-cols-2">
             <Field label="Full name" value={application.fullName} />
-            <Field label="Age" value={String(application.age)} />
+            <Field label="Birth Date" value={application.birthDate ? new Date(application.birthDate).toLocaleDateString() : ""} />
             <Field label="Gender" value={application.gender} />
             <Field label="Contact number" value={application.contact} />
             <div className="sm:col-span-2">

@@ -172,7 +172,7 @@ export async function GET() {
       applications: applications.map((a) => ({
         id: a.id,
         fullName: a.fullName,
-        age: a.age,
+        birthDate: a.birthDate,
         gender: a.gender,
         address: a.address,
         contact: a.contact,

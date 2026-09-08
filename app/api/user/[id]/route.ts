@@ -37,7 +37,7 @@ export async function GET(
           select: {
             id: true,
             fullName: true,
-            age: true,
+            birthDate: true,
             gender: true,
             address: true,
             contact: true,

@@ -14,11 +14,21 @@ export const ApplicationSchema = z.object({
   lastName: z.string().min(1, "Last name is required").transform(sanitizeSql),
   extensionName: z.string().optional().transform((val) => (val ? sanitizeSql(val) : "")),
 
-  age: z.coerce
-    .number()
-    .int("Age must be a whole number")
-    .min(18, "You must be at least 18")
-    .max(100, "Invalid age"),
+  birthDate: z
+    .string()
+    .min(1, "Birth date is required")
+    .refine((val) => !Number.isNaN(Date.parse(val)), {
+      message: "Invalid birth date",
+    })
+    .refine((val) => {
+      const date = new Date(val);
+      const today = new Date();
+      const age = today.getFullYear() - date.getFullYear();
+      const monthDiff = today.getMonth() - date.getMonth();
+      const dayDiff = today.getDate() - date.getDate();
+      const actualAge = monthDiff < 0 || (monthDiff === 0 && dayDiff < 0) ? age - 1 : age;
+      return actualAge >= 18;
+    }, "You must be at least 18 years old"),
 
   gender: z
     .string()

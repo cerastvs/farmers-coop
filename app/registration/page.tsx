@@ -202,18 +202,21 @@ export default function Registration() {
                 <FieldError error={errors.address} />
               </div>
 
-              {/* Age + Gender */}
+              {/* Birthdate + Gender */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <InputLabel>Age</InputLabel>
+                  <InputLabel>Birth Date</InputLabel>
                   <TextInput
-                    name="age"
-                    type="number"
-                    placeholder="35"
-                    defaultValue={application?.age ?? ""}
-                    error={errors.age}
+                    name="birthDate"
+                    type="date"
+                    defaultValue={
+                      application?.birthDate
+                        ? new Date(application.birthDate).toISOString().split("T")[0]
+                        : ""
+                    }
+                    error={errors.birthDate}
                   />
-                  <FieldError error={errors.age} />
+                  <FieldError error={errors.birthDate} />
                 </div>
                 <div>
                   <InputLabel>Gender</InputLabel>
@@ -525,7 +528,7 @@ function TextInput({
   name: string;
   type?: string;
   step?: string;
-  placeholder: string;
+  placeholder?: string;
   defaultValue: string | number;
   error?: string;
 }) {

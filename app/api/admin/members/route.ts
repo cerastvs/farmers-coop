@@ -8,7 +8,7 @@ import { MEMBER_ROLES, RECORDS_ROLES } from "@/lib/permissions";
 const exposedApplicationFields = {
   id: true,
   fullName: true,
-  age: true,
+  birthDate: true,
   gender: true,
   address: true,
   contact: true,

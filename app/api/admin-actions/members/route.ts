@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
           select: {
             id: true,
             fullName: true,
-            age: true,
+            birthDate: true,
             gender: true,
             address: true,
             contact: true,
@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
           application: app
             ? {
                 fullName: app.fullName,
-                age: app.age,
+                birthDate: app.birthDate,
                 gender: app.gender,
                 address: app.address,
                 contact: app.contact,

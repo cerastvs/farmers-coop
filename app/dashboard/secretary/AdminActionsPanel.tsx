@@ -21,7 +21,7 @@ import { BookedDate, BookingCalendar, todayISO } from "../components/BookingCale
 
 type MemberApplication = {
   fullName: string;
-  age: number;
+  birthDate: string;
   gender: string;
   address: string;
   contact: string;
@@ -762,7 +762,7 @@ function ProfileModal({
   const [role, setRole] = useState(member.role);
   const [active, setActive] = useState(member.active);
   const [fullName, setFullName] = useState(app?.fullName ?? "");
-  const [age, setAge] = useState(app ? String(app.age) : "");
+  const [birthDate, setBirthDate] = useState(app?.birthDate ? String(app.birthDate).split("T")[0] : "");
   const [gender, setGender] = useState(app?.gender ?? "Male");
   const [address, setAddress] = useState(app?.address ?? "");
   const [contact, setContact] = useState(app?.contact ?? "");
@@ -785,7 +785,7 @@ function ProfileModal({
       const profile: Record<string, unknown> = {};
       if (app) {
         if (fullName !== app.fullName) profile.fullName = fullName;
-        if (age !== String(app.age)) profile.age = Number(age);
+        if (birthDate !== String(app.birthDate).split("T")[0]) profile.birthDate = birthDate;
         if (gender !== app.gender) profile.gender = gender;
         if (address !== app.address) profile.address = address;
         if (contact !== app.contact) profile.contact = contact;
@@ -855,8 +855,8 @@ function ProfileModal({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelClass}>Age</label>
-              <input className={inputClass} type="number" min="18" max="100" value={age} onChange={(e) => setAge(e.target.value)} />
+              <label className={labelClass}>Birth Date</label>
+              <input className={inputClass} type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
             </div>
             <div>
               <label className={labelClass}>Gender</label>

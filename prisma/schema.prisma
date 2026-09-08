@@ -234,7 +234,7 @@ model Application {
   lastName      String
   extensionName String?
   fullName      String
-  age           Int
+  birthDate     DateTime
   gender        String
   address       String
   contact       String

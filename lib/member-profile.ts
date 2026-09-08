@@ -8,7 +8,12 @@ import prisma from "@/lib/client";
 export const ProfileUpdateSchema = z
   .object({
     fullName: z.string().trim().min(3).max(120).optional(),
-    age: z.coerce.number().int().min(18).max(100).optional(),
+    birthDate: z
+      .string()
+      .refine((val) => !Number.isNaN(Date.parse(val)), {
+        message: "Invalid birth date",
+      })
+      .optional(),
     gender: z.enum(["Male", "Female"]).optional(),
     address: z.string().trim().min(5).max(300).optional(),
     contact: z.string().trim().regex(/^[0-9]{10,15}$/).optional(),
@@ -60,7 +65,7 @@ export const memberSelect = {
     select: {
       id: true,
       fullName: true,
-      age: true,
+      birthDate: true,
       gender: true,
       address: true,
       contact: true,
@@ -111,7 +116,7 @@ export async function updateMemberRecord({
         select: {
           id: true,
           fullName: true,
-          age: true,
+          birthDate: true,
           gender: true,
           address: true,
           contact: true,
@@ -133,7 +138,7 @@ export async function updateMemberRecord({
   const previousProfile = existing.applications[0]
     ? {
         fullName: existing.applications[0].fullName,
-        age: existing.applications[0].age,
+        birthDate: existing.applications[0].birthDate,
         gender: existing.applications[0].gender,
         address: existing.applications[0].address,
         contact: existing.applications[0].contact,

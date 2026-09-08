@@ -47,7 +47,7 @@ import {
 interface Application {
   id: string;
   fullName: string;
-  age: number;
+  birthDate: string;
   gender: string;
   address: string;
   contact: string;
@@ -1988,7 +1988,7 @@ function ApplicationDetailModal({
             </p>
             <div className="grid grid-cols-2 gap-3">
               <DetailField label="Full Name" value={application.fullName} />
-              <DetailField label="Age" value={String(application.age ?? "")} />
+              <DetailField label="Birth Date" value={application.birthDate ? new Date(application.birthDate).toLocaleDateString() : ""} />
               <DetailField label="Gender" value={application.gender} />
               <DetailField label="Contact" value={application.contact} />
               <div className="col-span-2">
@@ -3497,6 +3497,11 @@ export default function OfficerDashboard({
   const dashboardTitle =
     role === "PRESIDENT" ? "President dashboard" : "Secretary dashboard";
   const avatarLetter = role === "PRESIDENT" ? "P" : "S";
+  const isSecretary = role === "SECRETARY";
+  const hiddenSections: Section[] = isSecretary ? ["applications"] : [];
+  const visibleSections = SECTIONS.filter(
+    (s) => !hiddenSections.includes(s),
+  );
   const [data, setData] = useState<SecretaryData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
@@ -3653,9 +3658,11 @@ export default function OfficerDashboard({
   const recentActivity = useMemo(() => {
     if (!data) return [];
     const items: { id: string; text: string; time: string; kind: "application" | "loan" | "payment" | "machine" | "supply" }[] = [];
-    data.applications.slice(0, 3).forEach((a) => {
-      items.push({ id: `app-${a.id}`, text: `${a.fullName} — ${a.status.toLowerCase()} application`, time: new Date(a.createdAt).toLocaleDateString(), kind: "application" });
-    });
+    if (!isSecretary) {
+      data.applications.slice(0, 3).forEach((a) => {
+        items.push({ id: `app-${a.id}`, text: `${a.fullName} — ${a.status.toLowerCase()} application`, time: new Date(a.createdAt).toLocaleDateString(), kind: "application" });
+      });
+    }
     data.loans.slice(0, 4).forEach((l) => {
       items.push({ id: `loan-${l.id}`, text: `${l.borrower.name} — ${l.status.toLowerCase()} ${l.name} loan`, time: new Date(l.createdAt).toLocaleDateString(), kind: "loan" });
     });
@@ -3663,7 +3670,7 @@ export default function OfficerDashboard({
       items.push({ id: `pay-${p.id}`, text: `${p.user.name} — ₱${p.amount.toLocaleString()} ${p.status.toLowerCase()}`, time: new Date(p.createdAt).toLocaleDateString(), kind: "payment" });
     });
     return items.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 8);
-  }, [data]);
+  }, [data, isSecretary]);
 
   const searchLower = searchQuery.toLowerCase();
   const searchedMembers = useMemo(() => {
@@ -3819,7 +3826,7 @@ export default function OfficerDashboard({
   const ALL_TABS: { key: Tab; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
     { key: "overview", label: "Overview", icon: BarChart3 },
     { key: "admin-actions", label: "Admin Actions", icon: HandHelping },
-    ...SECTIONS.map((s) => ({ key: s as Tab, label: SECTION_META[s].label, icon: SECTION_META[s].icon })),
+    ...visibleSections.map((s) => ({ key: s as Tab, label: SECTION_META[s].label, icon: SECTION_META[s].icon })),
   ];
 
   return (
@@ -3866,7 +3873,7 @@ export default function OfficerDashboard({
       <main className="mx-auto max-w-[1400px] px-6 py-6">
         <div className="mb-6 animate-fadeIn">
           <h1 className="text-xl font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-display)" }}>{dashboardTitle}</h1>
-          <p className="mt-0.5 text-sm text-[#5a7267]">Applications, members, loans, payments, machines, supplies, and announcements</p>
+          <p className="mt-0.5 text-sm text-[#5a7267]">{isSecretary ? "Members, loans, payments, machines, supplies, announcements, and reports" : "Applications, members, loans, payments, machines, supplies, and announcements"}</p>
         </div>
 
         {notice && (
@@ -3877,7 +3884,7 @@ export default function OfficerDashboard({
 
         {stats && (
           <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <StatCard label="Pending Applications" value={stats.pendingApps} sub="Awaiting review" accent="bg-amber-500" icon={FileText} delay={0} />
+            {!isSecretary && <StatCard label="Pending Applications" value={stats.pendingApps} sub="Awaiting review" accent="bg-amber-500" icon={FileText} delay={0} />}
             <StatCard label="Active Loans" value={stats.activeLoans} sub={`${stats.pendingLoans} pending`} accent="bg-emerald-500" icon={Banknote} delay={50} />
             <StatCard label="Pending Payments" value={stats.pendingPayments} sub="Need verification" accent="bg-blue-500" icon={ClipboardCheck} delay={100} />
             <StatCard label="Machines In Use" value={stats.machinesInUse} sub="Currently borrowed" accent="bg-indigo-500" icon={Tractor} delay={150} />
@@ -3915,6 +3922,7 @@ export default function OfficerDashboard({
           <div className="min-w-0 space-y-4">
             {activeTab === "overview" && data && (
               <>
+                {!isSecretary && (
                 <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-fadeIn">
                   <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#5a7267]">Pending Applications</h3>
                   {data.applications.filter((a) => a.status === "PENDING").length === 0 ? (
@@ -3930,6 +3938,7 @@ export default function OfficerDashboard({
                     </div>
                   )}
                 </div>
+              )}
 
                 <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-fadeIn">
                   <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#5a7267]">Pending Payments</h3>
@@ -4090,8 +4099,12 @@ export default function OfficerDashboard({
               <div className="space-y-3">
                 {stats && (
                   <>
-                    <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Pending Applications</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.pendingApps}</span></div>
-                    <div className="h-px bg-[#e2ebe6]" />
+                    {!isSecretary && (
+                    <>
+                      <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Pending Applications</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.pendingApps}</span></div>
+                      <div className="h-px bg-[#e2ebe6]" />
+                    </>
+                  )}
                     <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Active Loans</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.activeLoans}</span></div>
                     <div className="h-px bg-[#e2ebe6]" />
                     <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Pending Payments</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.pendingPayments}</span></div>
@@ -4119,7 +4132,7 @@ export default function OfficerDashboard({
             <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-slideUp" style={{ animationDelay: "200ms" }}>
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#5a7267]">Today&apos;s Priorities</h3>
               <div className="space-y-2">
-                {stats && stats.pendingApps > 0 && (
+                {!isSecretary && stats && stats.pendingApps > 0 && (
                   <button onClick={() => openSection("applications")} className="flex w-full items-center gap-2.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-left transition hover:bg-amber-100/70 active:scale-[0.99]">
                     <FileText size={14} className="text-amber-600 shrink-0" />
                     <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-amber-800">{stats.pendingApps} application{stats.pendingApps > 1 ? "s" : ""} to review</p></div>
@@ -4147,7 +4160,7 @@ export default function OfficerDashboard({
                     <ArrowUpRight size={12} className="text-red-500 shrink-0" />
                   </button>
                 )}
-                {(!stats || (stats.pendingApps === 0 && stats.pendingPayments === 0 && stats.pendingLoans === 0 && stats.overdueLoans === 0)) && (
+                {(!stats || (stats.pendingApps === 0 && stats.pendingPayments === 0 && stats.pendingLoans === 0 && stats.overdueLoans === 0) || (isSecretary && stats.pendingPayments === 0 && stats.pendingLoans === 0 && stats.overdueLoans === 0)) && (
                   <div className="py-3 text-center"><CheckCircle2 size={24} className="mx-auto text-emerald-400" /><p className="mt-2 text-xs text-[#5a7267]">All caught up!</p></div>
                 )}
               </div>

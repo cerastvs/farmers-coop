@@ -16,16 +16,33 @@ import { ONLINE_CONTEXT } from "@/lib/services/entry-context";
 export async function GET() {
   try {
     const actor = await requireUser(MEMBER_ROLES);
-    const [supplies, requests] = await Promise.all([
+    const [supplies, requests, application] = await Promise.all([
       prisma.supply.findMany({ orderBy: { productName: "asc" } }),
       prisma.supplyTransaction.findMany({
         where: { userId: actor.userId },
         orderBy: { createdAt: "desc" },
         include: { supply: true },
       }),
+      prisma.application.findFirst({
+        where: { userId: actor.userId },
+        orderBy: { createdAt: "desc" },
+        select: { guarantor: true },
+      }),
     ]);
 
+    const guarantor = application?.guarantor;
+    const guarantorRecord =
+      guarantor && typeof guarantor === "object"
+        ? (guarantor as Record<string, unknown>)
+        : null;
+    const hasGuarantor = Boolean(
+      guarantorRecord &&
+        String(guarantorRecord.firstName ?? "").trim() &&
+        String(guarantorRecord.lastName ?? "").trim(),
+    );
+
     return NextResponse.json({
+      hasGuarantor,
       supplies: supplies.map((supply) => ({
         ...supply,
         price: Number(supply.price),

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import {
+  EntryType,
   LoanStatus,
   LoanType,
   MachineStatus,
@@ -97,6 +98,20 @@ async function requireActiveMember(tx: Prisma.TransactionClient, memberId: strin
   return member;
 }
 
+async function hasGuarantorOnFile(tx: Prisma.TransactionClient, memberId: string) {
+  const application = await tx.application.findFirst({
+    where: { userId: memberId },
+    orderBy: { createdAt: "desc" },
+    select: { guarantor: true },
+  });
+  const guarantor = application?.guarantor;
+  if (!guarantor || typeof guarantor !== "object") return false;
+  const record = guarantor as Record<string, unknown>;
+  const firstName = String(record.firstName ?? "").trim();
+  const lastName = String(record.lastName ?? "").trim();
+  return Boolean(firstName && lastName);
+}
+
 export async function submitLoanRequest({
   actor,
   memberId,
@@ -111,6 +126,16 @@ export async function submitLoanRequest({
   return prisma.$transaction(
     async (tx) => {
       await requireActiveMember(tx, memberId);
+
+      if (context.entryType === EntryType.ONLINE) {
+        const hasGuarantor = await hasGuarantorOnFile(tx, memberId);
+        if (!hasGuarantor) {
+          throw new ApiError(
+            409,
+            "A guarantor is required on file before applying for a loan. Add a guarantor through Edit Profile in your dashboard.",
+          );
+        }
+      }
 
       const isSupply = input.type === "SUPPLY";
       const existing = await tx.loan.findFirst({
@@ -341,6 +366,18 @@ export async function submitSupplyTransaction({
   return prisma.$transaction(
     async (tx) => {
       await requireActiveMember(tx, memberId);
+
+      if (type === SupplyTransactionType.LOAN) {
+        if (context.entryType === EntryType.ONLINE) {
+          const hasGuarantor = await hasGuarantorOnFile(tx, memberId);
+          if (!hasGuarantor) {
+            throw new ApiError(
+              409,
+              "A guarantor is required on file before requesting a supply loan. Add a guarantor through Edit Profile in your dashboard.",
+            );
+          }
+        }
+      }
 
       const supply = await tx.supply.findUnique({
         where: { id: supplyId },

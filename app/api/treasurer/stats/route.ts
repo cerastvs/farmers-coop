@@ -49,6 +49,7 @@ export async function GET() {
         id: p.id,
         user: { name: p.user.name || "Unknown", username: p.user.username },
         loan: p.loan ? { name: p.loan.name, type: p.loan.type } : null,
+        type: String(p.type),
         amount: Number(p.amount),
         receiptUrl: p.receiptUrl,
         referenceNo: p.referenceNo,

@@ -40,6 +40,22 @@ export async function GET() {
       },
     });
 
+    const application = await prisma.application.findFirst({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      select: { guarantor: true },
+    });
+    const guarantor = application?.guarantor;
+    const guarantorRecord =
+      guarantor && typeof guarantor === "object"
+        ? (guarantor as Record<string, unknown>)
+        : null;
+    const hasGuarantor = Boolean(
+      guarantorRecord &&
+        String(guarantorRecord.firstName ?? "").trim() &&
+        String(guarantorRecord.lastName ?? "").trim(),
+    );
+
     const activeLoans = await prisma.loan.findMany({
       where: {
         userId,
@@ -129,6 +145,7 @@ export async function GET() {
       activeLoansCount,
       overdueLoansCount,
       borrowedMachinesCount,
+      hasGuarantor,
       totalDebt,
       cashDebt,
       supplyDebt,

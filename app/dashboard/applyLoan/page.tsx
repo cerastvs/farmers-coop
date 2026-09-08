@@ -9,6 +9,7 @@ import { Money } from "@/components/Money";
 
 export default function ApplyLoanPage() {
   const [totalDebt, setTotalDebt] = useState<number | null>(null);
+  const [hasGuarantor, setHasGuarantor] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -18,6 +19,7 @@ export default function ApplyLoanPage() {
         if (res.ok) {
           const data = await res.json();
           setTotalDebt(data.totalDebt);
+          setHasGuarantor(data.hasGuarantor);
         }
       } catch (error) {
         console.error("Failed to fetch balance:", error);
@@ -48,6 +50,23 @@ export default function ApplyLoanPage() {
           </p>
         </div>
 
+        {hasGuarantor === false && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 items-start animate-in fade-in slide-in-from-top-2">
+            <IconInfoCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-amber-800">
+                Guarantor Required
+              </p>
+              <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+                You need a guarantor on file before the cooperative can consider
+                a money loan or supply loan. Add your guarantor through{" "}
+                <span className="font-semibold">Edit Profile</span> in your
+                dashboard, then return here to apply.
+              </p>
+            </div>
+          </div>
+        )}
+
         {totalDebt !== null && totalDebt > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 items-start animate-in fade-in slide-in-from-top-2">
             <IconInfoCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
@@ -63,7 +82,7 @@ export default function ApplyLoanPage() {
           </div>
         )}
 
-        <ApplyLoanCard currentBalance={totalDebt} isLoading={loading} />
+        <ApplyLoanCard currentBalance={totalDebt} hasGuarantor={hasGuarantor} isLoading={loading} />
 
         <div className="bg-[#f0f9f0] border border-green-100 rounded-2xl p-6 text-center space-y-3 mt-8">
           <h3 className="text-lg font-bold text-[#2d6a2d]">

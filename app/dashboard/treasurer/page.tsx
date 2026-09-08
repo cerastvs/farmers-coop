@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ImageModal } from "@/components/ImageModal";
+import { PaymentConfirmModal } from "@/components/PaymentConfirmModal";
 import { IconLeaf } from "@/components/icons";
 import {
   Bell,
@@ -30,7 +31,7 @@ import ReportsSection, {
 } from "@/components/ReportsSection";
 
 type Tab = "overview" | "loans" | "payments" | "overdue" | "reports";
-type LoanType = "SUPPLY" | "MONEY";
+type LoanType = "ALL" | "SUPPLY" | "MONEY";
 type LoanSubTab = "requests" | "active" | "overdue";
 type PaymentFilter = "ALL" | "PENDING" | "VERIFIED" | "REJECTED";
 
@@ -53,6 +54,7 @@ interface Payment {
   id: string;
   user: { name: string; username: string };
   loan: { name: string; type: string } | null;
+  type: string;
   amount: number;
   receiptUrl: string | null;
   referenceNo: string | null;
@@ -198,6 +200,10 @@ export default function TreasurerPage() {
   } | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [proofModalUrl, setProofModalUrl] = useState<string | null>(null);
+  const [confirmPayment, setConfirmPayment] = useState<{
+    payment: Payment;
+    action: "approve" | "verify" | "reject";
+  } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
@@ -220,7 +226,7 @@ export default function TreasurerPage() {
   }, []);
 
   // Loans sub-state
-  const [loanType, setLoanType] = useState<LoanType>("MONEY");
+  const [loanType, setLoanType] = useState<LoanType>("ALL");
   const [loanSubTab, setLoanSubTab] = useState<LoanSubTab>("requests");
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>("ALL");
 
@@ -290,8 +296,43 @@ export default function TreasurerPage() {
     }
   }
 
+  const isApplicationFee = (payment: Payment) =>
+    payment.type === "APPLICATION_FEE";
+
   function rejectReason() {
     return window.prompt("Enter the reason for rejection:");
+  }
+
+  function paymentActionLabel(
+    payment: Payment,
+    action: "approve" | "verify" | "reject",
+  ) {
+    if (isApplicationFee(payment)) {
+      return action === "reject" ? "Reject" : "Approve";
+    }
+    return action === "reject" ? "Reject" : "Verify";
+  }
+
+  async function runPaymentAction(
+    payment: Payment,
+    action: "approve" | "verify" | "reject",
+    reason?: string,
+  ) {
+    const appFee = isApplicationFee(payment);
+    const url = appFee
+      ? `/api/admin/application-payments/${payment.id}`
+      : `/api/admin/payments/${payment.id}`;
+    const body = appFee
+      ? { action: action === "reject" ? "decline" : "approve", reason }
+      : { action: action === "reject" ? "reject" : "verify", reason };
+    const success = appFee
+      ? action === "reject"
+        ? "Payment declined."
+        : "Payment approved."
+      : action === "reject"
+        ? "Payment rejected."
+        : "Payment verified.";
+    await mutate(payment.id, url, body, success);
   }
 
   async function handleGenerateReport(
@@ -356,7 +397,7 @@ export default function TreasurerPage() {
       isOverdueLoan(l, now),
     );
     const pendingPayments = data.payments.filter(
-      (p) => p.status === "PENDING",
+      (p) => p.status === "PENDING" || p.status === "PENDING_APPROVAL",
     );
     const totalReceived = data.payments
       .filter((p) => p.status === "VERIFIED")
@@ -377,6 +418,7 @@ export default function TreasurerPage() {
   // ── Loan filtering ──
   const filteredLoans = useMemo(() => {
     if (!data) return [];
+    if (loanType === "ALL") return data.loans;
     return data.loans.filter((l) => l.type === loanType);
   }, [data, loanType]);
 
@@ -404,13 +446,17 @@ export default function TreasurerPage() {
         : loanOverdue;
 
   // ── Payment filtering ──
+  const isPendingPayment = (p: Payment) =>
+    p.status === "PENDING" || p.status === "PENDING_APPROVAL";
   const pendingPayments = useMemo(
-    () => data?.payments.filter((p) => p.status === "PENDING") ?? [],
+    () => data?.payments.filter(isPendingPayment) ?? [],
     [data],
   );
   const filteredPayments = useMemo(() => {
     if (!data) return [];
     if (paymentFilter === "ALL") return data.payments;
+    if (paymentFilter === "PENDING")
+      return data.payments.filter(isPendingPayment);
     return data.payments.filter((p) => p.status === paymentFilter);
   }, [data, paymentFilter]);
 
@@ -851,20 +897,33 @@ export default function TreasurerPage() {
                                   View receipt
                                 </button>
                               )}
-                              <button
-                                disabled={busy === payment.id}
-                                onClick={() =>
-                                  mutate(
-                                    payment.id,
-                                    `/api/admin/payments/${payment.id}`,
-                                    { action: "verify" },
-                                    "Payment verified.",
-                                  )
-                                }
-                                className={buttonPrimary}
-                              >
-                                Verify
-                              </button>
+                              {payment.type === "APPLICATION_FEE" ? (
+                                <button
+                                  disabled={busy === payment.id}
+                                  onClick={() =>
+                                    setConfirmPayment({
+                                      payment,
+                                      action: "approve",
+                                    })
+                                  }
+                                  className={buttonPrimary}
+                                >
+                                  Approve
+                                </button>
+                              ) : (
+                                <button
+                                  disabled={busy === payment.id}
+                                  onClick={() =>
+                                    setConfirmPayment({
+                                      payment,
+                                      action: "verify",
+                                    })
+                                  }
+                                  className={buttonPrimary}
+                                >
+                                  Verify
+                                </button>
+                              )}
                             </div>
                           </div>
                         );
@@ -941,11 +1000,11 @@ export default function TreasurerPage() {
                         Loan management
                       </h2>
                       <p className="text-xs text-[#5a7267]">
-                        {filteredLoans.length} {loanType.toLowerCase()} loans
+                        {filteredLoans.length} {loanType === "ALL" ? "" : `${loanType.toLowerCase()} `}loans
                       </p>
                     </div>
                     <div className="flex gap-1 rounded-lg border border-[#e2ebe6] bg-[#f8faf9] p-0.5">
-                      {(["MONEY", "SUPPLY"] as const).map((type) => (
+                      {(["ALL", "MONEY", "SUPPLY"] as const).map((type) => (
                         <button
                           key={type}
                           onClick={() => setLoanType(type)}
@@ -955,7 +1014,11 @@ export default function TreasurerPage() {
                               : "text-[#5a7267] hover:text-[#0f2318]"
                           }`}
                         >
-                          {type === "MONEY" ? "Money" : "Supply"}
+                          {type === "ALL"
+                            ? "All"
+                            : type === "MONEY"
+                              ? "Money"
+                              : "Supply"}
                         </button>
                       ))}
                     </div>
@@ -1090,7 +1153,7 @@ export default function TreasurerPage() {
                   <div className="px-5 py-12 text-center">
                     <FileText size={32} className="mx-auto mb-2 text-[#dce5d9]" />
                     <p className="text-sm text-[#5a7267]">
-                      No {loanType.toLowerCase()} {loanSubTab} found.
+                      No {loanType === "ALL" ? `${loanSubTab} found.` : `${loanType.toLowerCase()} ${loanSubTab} found.`}
                     </p>
                   </div>
                 )}
@@ -1125,7 +1188,9 @@ export default function TreasurerPage() {
                         const count =
                           f.key === "ALL"
                             ? data?.payments.length ?? 0
-                            : data?.payments.filter((p) => p.status === f.key).length ?? 0;
+                            : f.key === "PENDING"
+                              ? data?.payments.filter(isPendingPayment).length ?? 0
+                              : data?.payments.filter((p) => p.status === f.key).length ?? 0;
                         return (
                           <button
                             key={f.key}
@@ -1214,36 +1279,46 @@ export default function TreasurerPage() {
                                       View
                                     </button>
                                   )}
-                                  {payment.status === "PENDING" && (
+                                  {(payment.status === "PENDING" ||
+                                    payment.status === "PENDING_APPROVAL") && (
                                     <>
-                                      <button
-                                        disabled={
-                                          busy === payment.id || !proofUrl
-                                        }
-                                        onClick={() =>
-                                          mutate(
-                                            payment.id,
-                                            `/api/admin/payments/${payment.id}`,
-                                            { action: "verify" },
-                                            "Payment verified.",
-                                          )
-                                        }
-                                        className="rounded-md bg-[#1b5e3b] px-2.5 py-1 text-[10px] font-semibold text-white transition-all hover:bg-[#15503a] disabled:opacity-40"
-                                      >
-                                        Verify
-                                      </button>
+                                      {payment.type === "APPLICATION_FEE" ? (
+                                        <button
+                                          disabled={busy === payment.id}
+                                          onClick={() =>
+                                            setConfirmPayment({
+                                              payment,
+                                              action: "approve",
+                                            })
+                                          }
+                                          className="rounded-md bg-[#1b5e3b] px-2.5 py-1 text-[10px] font-semibold text-white transition-all hover:bg-[#15503a] disabled:opacity-40"
+                                        >
+                                          Approve
+                                        </button>
+                                      ) : (
+                                        <button
+                                          disabled={
+                                            busy === payment.id || !proofUrl
+                                          }
+                                          onClick={() =>
+                                            setConfirmPayment({
+                                              payment,
+                                              action: "verify",
+                                            })
+                                          }
+                                          className="rounded-md bg-[#1b5e3b] px-2.5 py-1 text-[10px] font-semibold text-white transition-all hover:bg-[#15503a] disabled:opacity-40"
+                                        >
+                                          Verify
+                                        </button>
+                                      )}
                                       <button
                                         disabled={busy === payment.id}
-                                        onClick={() => {
-                                          const reason = rejectReason();
-                                          if (reason)
-                                            void mutate(
-                                              payment.id,
-                                              `/api/admin/payments/${payment.id}`,
-                                              { action: "reject", reason },
-                                              "Payment rejected.",
-                                            );
-                                        }}
+                                        onClick={() =>
+                                          setConfirmPayment({
+                                            payment,
+                                            action: "reject",
+                                          })
+                                        }
                                         className="rounded-md border border-red-200 px-2.5 py-1 text-[10px] font-semibold text-red-600 transition-all hover:bg-red-50 disabled:opacity-40"
                                       >
                                         Reject
@@ -1527,6 +1602,44 @@ export default function TreasurerPage() {
           src={proofModalUrl}
           alt="Proof of payment"
           onClose={() => setProofModalUrl(null)}
+        />
+      )}
+
+      {confirmPayment && (
+        <PaymentConfirmModal
+          key={confirmPayment.payment.id + confirmPayment.action}
+          title={`${paymentActionLabel(
+            confirmPayment.payment,
+            confirmPayment.action,
+          )} payment?`}
+          memberName={confirmPayment.payment.user.name}
+          amount={confirmPayment.payment.amount}
+          detail={
+            isApplicationFee(confirmPayment.payment)
+              ? "Application fee"
+              : (confirmPayment.payment.loan?.name ?? "Loan payment")
+          }
+          message={
+            confirmPayment.action === "reject"
+              ? "The member will be notified and the payment will be marked as rejected. Please provide a reason."
+              : isApplicationFee(confirmPayment.payment)
+                ? "This will approve the payment and advance the membership application."
+                : "This will verify the payment and update the member's loan balance."
+          }
+          confirmLabel={`${paymentActionLabel(
+            confirmPayment.payment,
+            confirmPayment.action,
+          )} payment`}
+          reject={confirmPayment.action === "reject"}
+          busy={busy === confirmPayment.payment.id}
+          onConfirm={(reason) =>
+            void runPaymentAction(
+              confirmPayment.payment,
+              confirmPayment.action,
+              reason,
+            ).then(() => setConfirmPayment(null))
+          }
+          onClose={() => setConfirmPayment(null)}
         />
       )}
     </div>

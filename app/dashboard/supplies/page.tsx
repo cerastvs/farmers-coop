@@ -28,6 +28,7 @@ interface SupplyRequest {
 export default function SuppliesPage() {
   const [supplies, setSupplies] = useState<Supply[]>([]);
   const [requests, setRequests] = useState<SupplyRequest[]>([]);
+  const [hasGuarantor, setHasGuarantor] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -41,6 +42,7 @@ export default function SuppliesPage() {
       if (!response.ok) throw new Error(data.error ?? "Unable to load supplies");
       setSupplies(data.supplies);
       setRequests(data.requests);
+      setHasGuarantor(data.hasGuarantor);
     } catch (error) {
       setMessage({ kind: "error", text: error instanceof Error ? error.message : "Unable to load supplies" });
     } finally {
@@ -124,6 +126,17 @@ export default function SuppliesPage() {
           <p className="mt-1 text-sm text-gray-500">Request supplies for purchase or as a cooperative loan.</p>
         </div>
 
+        {hasGuarantor === false && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            <p className="font-bold">Guarantor Required</p>
+            <p className="mt-1 text-xs leading-relaxed text-amber-700">
+              You need a guarantor on file before requesting a supply loan. Purchases are still
+              available. Add your guarantor through{" "}
+              <span className="font-semibold">Edit Profile</span> in your dashboard.
+            </p>
+          </div>
+        )}
+
         {message && (
           <p aria-live="polite" className={`rounded-xl px-4 py-3 text-sm ${message.kind === "success" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
             {message.text}
@@ -152,9 +165,9 @@ export default function SuppliesPage() {
                   </div>
                   <form onSubmit={(event) => requestSupply(event, supply.id)} className="mt-4 grid grid-cols-[1fr_1fr_auto] gap-2">
                     <input aria-label="Quantity" name="quantity" type="number" min="1" max={supply.quantity} defaultValue="1" required className="min-w-0 rounded-xl border border-gray-200 px-3 py-2 text-sm" />
-                    <select aria-label="Request type" name="type" className="min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
+                    <select aria-label="Request type" name="type" className="min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm" defaultValue="PURCHASE">
                       <option value="PURCHASE">Purchase</option>
-                      <option value="LOAN">Loan</option>
+                      <option value="LOAN" disabled={hasGuarantor === false}>Loan</option>
                     </select>
                     <button disabled={!supply.quantity || submittingId === supply.id} className="rounded-xl bg-green-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
                       {submittingId === supply.id ? "…" : "Request"}

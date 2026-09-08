@@ -20,6 +20,7 @@ import {
   assertTransition,
   applicationFeePaymentTransitions,
 } from "@/lib/lifecycles";
+import { FINANCE_ROLES } from "@/lib/permissions";
 import { z } from "zod";
 
 const ReviewSchema = z
@@ -34,7 +35,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const actor = await requireUser([Role.PRESIDENT]);
+    const actor = await requireUser(FINANCE_ROLES);
     const result = ReviewSchema.safeParse(await readJsonBody(req));
     if (!result.success) {
       throw new ApiError(400, result.error.issues[0].message);

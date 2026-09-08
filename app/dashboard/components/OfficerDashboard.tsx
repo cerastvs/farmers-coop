@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { IconLeaf, IconLoan, IconMachine } from "@/components/icons";
 import { ImageModal } from "@/components/ImageModal";
+import { PaymentConfirmModal } from "@/components/PaymentConfirmModal";
 import { ReportModal, ReportContent } from "@/components/ReportModal";
 import { logout } from "../../login/actions";
 import AdminActionsPanel from "../secretary/AdminActionsPanel";
@@ -165,6 +166,7 @@ interface PaymentSubmission {
   id: string;
   user: { name: string; username: string };
   loan: { name: string } | null;
+  type: string;
   amount: number;
   receiptUrl: string | null;
   referenceNo: string | null;
@@ -2403,11 +2405,11 @@ function LoansSection({
   busy: string | null;
   pendingOnly?: boolean;
 }) {
-  const [loanType, setLoanType] = useState<"SUPPLY" | "MONEY">("MONEY");
+  const [loanType, setLoanType] = useState<"ALL" | "SUPPLY" | "MONEY">("ALL");
   const [loanTab, setLoanTab] = useState<"requests" | "payments" | "overdue">("requests");
 
   const now = new Date();
-  const filtered = items.filter((l) => l.type === loanType);
+  const filtered = loanType === "ALL" ? items : items.filter((l) => l.type === loanType);
 
   const requests = filtered.filter((l) => l.status === "PENDING");
   const payments = filtered.filter((l) => l.status === "APPROVED" || l.status === "ACTIVE");
@@ -2431,6 +2433,16 @@ function LoansSection({
       onToggle={onToggle}
     >
       <div className="flex gap-2 mb-2">
+        <button
+          onClick={() => setLoanType("ALL")}
+          className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+            loanType === "ALL"
+              ? "bg-[#173a2b] text-white"
+              : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+          }`}
+        >
+          All Loans
+        </button>
         <button
           onClick={() => setLoanType("MONEY")}
           className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
@@ -2875,14 +2887,17 @@ function PaymentsSection({
   items,
   expanded,
   onToggle,
-  onAction,
+  onRequestAction,
   onImageClick,
   busy,
 }: {
   items: PaymentSubmission[];
   expanded: boolean;
   onToggle: () => void;
-  onAction: (id: string, action: "verify" | "reject", reason?: string) => void;
+  onRequestAction: (
+    payment: PaymentSubmission,
+    action: "verify" | "reject",
+  ) => void;
   onImageClick: (src: string, alt: string) => void;
   busy: string | null;
 }) {
@@ -2905,7 +2920,7 @@ function PaymentsSection({
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-[#173a2b] truncate">{payment.user.name}</p>
-                  <p className="text-xs text-[#718176]"><Money value={payment.amount} /> · {payment.loan?.name ?? "Loan payment"} · {new Date(payment.createdAt).toLocaleDateString()}</p>
+                  <p className="text-xs text-[#718176]"><Money value={payment.amount} /> · {payment.type === "APPLICATION_FEE" ? "Application fee" : (payment.loan?.name ?? "Loan payment")} · {new Date(payment.createdAt).toLocaleDateString()}</p>
                 </div>
                 <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${payment.status === "VERIFIED" ? "bg-green-100 text-green-700" : payment.status === "REJECTED" ? "bg-red-100 text-red-600" : "bg-yellow-100 text-yellow-700"}`}>{payment.status}</span>
               </div>
@@ -2920,10 +2935,10 @@ function PaymentsSection({
                 <p className="mt-1.5 text-xs font-semibold text-amber-700">Missing payment evidence</p>
               )}
               {payment.rejectionReason && <p className="mt-1 text-xs text-red-600">{payment.rejectionReason}</p>}
-              {payment.status === "PENDING" && (
+              {(payment.status === "PENDING" || payment.status === "PENDING_APPROVAL") && (
                 <div className="flex gap-2 mt-2">
-                  <button disabled={busy === payment.id || !hasEvidence} onClick={() => onAction(payment.id, "verify")} className="rounded-lg bg-green-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-green-700 transition disabled:opacity-50">Verify</button>
-                  <button disabled={busy === payment.id} onClick={() => { const r = window.prompt("Rejection reason:"); if (r) onAction(payment.id, "reject", r); }} className="rounded-lg border border-red-200 px-3 py-1.5 text-[11px] font-bold text-red-600 hover:bg-red-50 transition disabled:opacity-50">Reject</button>
+                  <button disabled={busy === payment.id || !hasEvidence} onClick={() => onRequestAction(payment, "verify")} className="rounded-lg bg-green-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-green-700 transition disabled:opacity-50">{payment.type === "APPLICATION_FEE" ? "Approve" : "Verify"}</button>
+                  <button disabled={busy === payment.id} onClick={() => onRequestAction(payment, "reject")} className="rounded-lg border border-red-200 px-3 py-1.5 text-[11px] font-bold text-red-600 hover:bg-red-50 transition disabled:opacity-50">{payment.type === "APPLICATION_FEE" ? "Decline" : "Reject"}</button>
                 </div>
               )}
             </div>
@@ -3530,6 +3545,10 @@ export default function OfficerDashboard({
   const [viewRequest, setViewRequest] = useState<MachineRequestInfo | null>(null);
   const [viewRejectedRequest, setViewRejectedRequest] = useState<MachineRequestInfo | null>(null);
   const [imageModal, setImageModal] = useState<{ src: string; alt: string } | null>(null);
+  const [confirmPayment, setConfirmPayment] = useState<{
+    payment: PaymentSubmission;
+    action: "verify" | "reject";
+  } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [pendingFilter, setPendingFilter] = useState<Record<Section, boolean>>({
     applications: false,
@@ -3602,7 +3621,9 @@ export default function OfficerDashboard({
     const pendingLoans = data.loans.filter((l) => l.status === "PENDING");
     const activeLoans = data.loans.filter((l) => l.status === "APPROVED" || l.status === "ACTIVE");
     const overdueLoans = data.loans.filter((l) => l.status === "ACTIVE" && l.due && new Date(l.due) < now);
-    const pendingPayments = data.payments.filter((p) => p.status === "PENDING");
+    const pendingPayments = data.payments.filter(
+      (p) => p.status === "PENDING" || p.status === "PENDING_APPROVAL",
+    );
     const lowStock = data.supplies.filter((s) => s.stock <= 30);
     return {
       pendingApps: pendingApps.length,
@@ -3645,7 +3666,9 @@ export default function OfficerDashboard({
       applications: data.applications.filter((a) => a.status === "PENDING").length,
       members: 0,
       loans: data.loans.filter((l) => l.status === "PENDING").length,
-      payments: data.payments.filter((p) => p.status === "PENDING").length,
+      payments: data.payments.filter(
+        (p) => p.status === "PENDING" || p.status === "PENDING_APPROVAL",
+      ).length,
       machines: machinePending,
       supplies: supplyPending,
       reports: 0,
@@ -3736,7 +3759,15 @@ export default function OfficerDashboard({
   async function handlePaymentAction(paymentId: string, action: "verify" | "reject", reason?: string) {
     setBusy(paymentId);
     try {
-      const res = await fetch(`/api/secretary/payments/${paymentId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, reason }) });
+      const target = data?.payments.find((p) => p.id === paymentId);
+      const isApplicationFee = target?.type === "APPLICATION_FEE";
+      const url = isApplicationFee
+        ? `/api/admin/application-payments/${paymentId}`
+        : `/api/secretary/payments/${paymentId}`;
+      const body = isApplicationFee
+        ? { action: action === "verify" ? "approve" : "decline", reason }
+        : { action, reason };
+      const res = await fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const result = await res.json();
       if (res.ok) { await fetchData(); } else { alert(result.error || `Failed to ${action} payment`); }
     } catch { alert(`Failed to ${action} payment`); } finally { setBusy(null); }
@@ -3953,11 +3984,11 @@ export default function OfficerDashboard({
 
                 <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-fadeIn">
                   <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#5a7267]">Pending Payments</h3>
-                  {data.payments.filter((p) => p.status === "PENDING").length === 0 ? (
+                  {data.payments.filter((p) => p.status === "PENDING" || p.status === "PENDING_APPROVAL").length === 0 ? (
                     <p className="py-4 text-center text-sm text-[#5a7267]">No pending payments</p>
                   ) : (
                     <div className="space-y-2">
-                      {data.payments.filter((p) => p.status === "PENDING").slice(0, 5).map((p) => (
+                      {data.payments.filter((p) => p.status === "PENDING" || p.status === "PENDING_APPROVAL").slice(0, 5).map((p) => (
                         <div key={p.id} className="flex items-center justify-between rounded-lg border border-[#e2ebe6] bg-[#fafdf9] px-3.5 py-2.5">
                           <div className="min-w-0 flex-1"><p className="text-sm font-medium text-[#0f2318] truncate">{p.user.name}</p><p className="text-[11px] text-[#5a7267]"><Money value={p.amount} /> · {p.loan?.name ?? "Payment"}</p></div>
                           <span className="ml-2 shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">Verify</span>
@@ -4028,11 +4059,11 @@ export default function OfficerDashboard({
             {activeTab === "payments" && data && (
               <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
                 <div className="flex items-center justify-between gap-3 border-b border-[#e2ebe6] px-5 py-4">
-                  <div><h3 className="text-sm font-bold text-[#0f2318]">Payment Verification</h3><p className="text-[11px] text-[#5a7267]">{data.payments.length} total · {data.payments.filter((p) => p.status === "PENDING").length} pending</p></div>
+                  <div><h3 className="text-sm font-bold text-[#0f2318]">Payment Verification</h3><p className="text-[11px] text-[#5a7267]">{data.payments.length} total · {data.payments.filter((p) => p.status === "PENDING" || p.status === "PENDING_APPROVAL").length} pending</p></div>
                   <PendingOnlyToggle active={pendingFilter.payments} count={badges.payments} onToggle={() => togglePendingFilter("payments")} />
                 </div>
                 <div className="p-4">
-                  <PaymentsSection items={pendingFilter.payments ? data.payments.filter((p) => p.status === "PENDING") : data.payments} expanded={true} onToggle={() => {}} onAction={handlePaymentAction} onImageClick={(src, alt) => setImageModal({ src, alt })} busy={busy} />
+                  <PaymentsSection items={pendingFilter.payments ? data.payments.filter((p) => p.status === "PENDING" || p.status === "PENDING_APPROVAL") : data.payments} expanded={true} onToggle={() => {}} onRequestAction={(payment, action) => setConfirmPayment({ payment, action })} onImageClick={(src, alt) => setImageModal({ src, alt })} busy={busy} />
                 </div>
               </div>
             )}
@@ -4202,6 +4233,58 @@ export default function OfficerDashboard({
             </div>
           </div>
         </div>
+      )}
+
+      {confirmPayment && (
+        <PaymentConfirmModal
+          key={confirmPayment.payment.id + confirmPayment.action}
+          title={
+            confirmPayment.action === "reject"
+              ? confirmPayment.payment.type === "APPLICATION_FEE"
+                ? "Decline payment?"
+                : "Reject payment?"
+              : confirmPayment.payment.type === "APPLICATION_FEE"
+                ? "Approve payment?"
+                : "Verify payment?"
+          }
+          memberName={confirmPayment.payment.user.name}
+          amount={confirmPayment.payment.amount}
+          detail={
+            confirmPayment.payment.type === "APPLICATION_FEE"
+              ? "Application fee"
+              : (confirmPayment.payment.loan?.name ?? "Loan payment")
+          }
+          message={
+            confirmPayment.action === "reject"
+              ? confirmPayment.payment.type === "APPLICATION_FEE"
+                ? "This will decline the application fee and notify the member. Please provide a reason."
+                : "This will reject the loan payment and notify the member. Please provide a reason."
+              : confirmPayment.payment.type === "APPLICATION_FEE"
+                ? "This will approve the payment and advance the membership application."
+                : "This will verify the payment and update the member's loan balance."
+          }
+          confirmLabel={
+            confirmPayment.action === "reject"
+              ? confirmPayment.payment.type === "APPLICATION_FEE"
+                ? "Decline payment"
+                : "Reject payment"
+              : confirmPayment.payment.type === "APPLICATION_FEE"
+                ? "Approve payment"
+                : "Verify payment"
+          }
+          reject={confirmPayment.action === "reject"}
+          busy={busy === confirmPayment.payment.id}
+          onConfirm={(reason) => {
+            const { payment, action } = confirmPayment;
+            setConfirmPayment(null);
+            if (action === "reject") {
+              if (reason) void handlePaymentAction(payment.id, action, reason);
+            } else {
+              void handlePaymentAction(payment.id, action);
+            }
+          }}
+          onClose={() => setConfirmPayment(null)}
+        />
       )}
 
       {imageModal && <ImageModal src={imageModal.src} alt={imageModal.alt} onClose={() => setImageModal(null)} />}

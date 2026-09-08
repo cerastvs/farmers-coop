@@ -5,11 +5,14 @@ import { Money } from "@/components/Money";
 
 interface ApplyLoanCardProps {
   currentBalance: number | null;
+  hasGuarantor?: boolean | null;
   isLoading: boolean;
 }
 
-export function ApplyLoanCard({ currentBalance, isLoading }: ApplyLoanCardProps) {
+export function ApplyLoanCard({ currentBalance, hasGuarantor, isLoading }: ApplyLoanCardProps) {
   const hasBalance = currentBalance !== null && currentBalance > 0;
+  const missingGuarantor = hasGuarantor !== null && hasGuarantor === false;
+  const blocked = hasBalance || missingGuarantor;
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
@@ -83,7 +86,7 @@ export function ApplyLoanCard({ currentBalance, isLoading }: ApplyLoanCardProps)
               className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 outline-none focus:border-green-600 focus:ring-2 focus:ring-green-100"
               name="type"
               defaultValue="MONEY"
-              disabled={hasBalance}
+              disabled={blocked}
             >
               <option value="MONEY">Money Loan</option>
               <option value="SUPPLY">Supply Loan</option>
@@ -101,7 +104,7 @@ export function ApplyLoanCard({ currentBalance, isLoading }: ApplyLoanCardProps)
                 step="0.01"
                 placeholder="Up to ₱5,000"
                 required
-                disabled={hasBalance}
+                disabled={blocked}
               />
             </label>
             <label className="text-sm font-semibold text-gray-700">
@@ -110,7 +113,7 @@ export function ApplyLoanCard({ currentBalance, isLoading }: ApplyLoanCardProps)
                 className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 outline-none focus:border-green-600 focus:ring-2 focus:ring-green-100"
                 name="termMonths"
                 defaultValue="6"
-                disabled={hasBalance}
+                disabled={blocked}
               >
                 {[6, 9, 12, 18, 24].map((months) => (
                   <option value={months} key={months}>{months} months</option>
@@ -127,7 +130,7 @@ export function ApplyLoanCard({ currentBalance, isLoading }: ApplyLoanCardProps)
               maxLength={500}
               placeholder="Describe how this loan will support your farm."
               required
-              disabled={hasBalance}
+              disabled={blocked}
             />
           </label>
           {message && (
@@ -140,14 +143,14 @@ export function ApplyLoanCard({ currentBalance, isLoading }: ApplyLoanCardProps)
           )}
           <button
             type="submit"
-            disabled={hasBalance || submitting || isLoading}
+            disabled={blocked || submitting || isLoading}
             className={`w-full rounded-xl px-6 py-3 font-medium transition md:w-auto ${
-              hasBalance || submitting || isLoading
+              blocked || submitting || isLoading
                 ? "cursor-not-allowed border border-gray-200 bg-gray-100 text-gray-400"
                 : "bg-green-700 text-white hover:bg-green-800"
             }`}
           >
-            {hasBalance ? "Settlement Required" : submitting ? "Submitting…" : "Submit Loan Request"}
+            {blocked ? (missingGuarantor ? "Add Your Guarantor" : "Settlement Required") : submitting ? "Submitting…" : "Submit Loan Request"}
           </button>
         </form>
       </div>

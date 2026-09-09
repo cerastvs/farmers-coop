@@ -8,13 +8,17 @@ import { QuickActionButton } from "./components/QuickActionButton";
 import { ActiveLoanCard } from "./components/ActiveLoanCard";
 import { RecentTransactions } from "./components/RecentTransactions";
 import { Money } from "@/components/Money";
-import { quickActions } from "./data";
 import { useUser } from "../hooks/useUser";
+import { unseenAlertIds } from "./hooks/useAlertSeen";
 import {
   IconLoan,
   IconMachine,
   IconBalance,
   IconCalendar,
+  IconApplyLoan,
+  IconRentMachine,
+  IconBuySupplies,
+  IconViewLoans,
 } from "@/components/icons";
 import {
   ArrowRight,
@@ -32,6 +36,10 @@ interface DashboardStats {
   totalDebt: number;
   cashDebt: number;
   supplyDebt: number;
+  rejectedLoanIds: string[];
+  supplyRequestIds: string[];
+  machineRequestIds: string[];
+  loanDueAlerts: number;
   nextPaymentDue: string | null;
   activeLoans: Array<{
     id: string;
@@ -55,6 +63,12 @@ export default function Dashboard() {
   const { user, setUser } = useUser();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dots, setDots] = useState({
+    rejectedLoans: false,
+    supplyAlerts: false,
+    machineAlerts: false,
+    loanDue: false,
+  });
 
   useEffect(() => {
     async function fetchData() {
@@ -70,6 +84,18 @@ export default function Dashboard() {
             if (statsRes.ok) {
               const statsData = await statsRes.json();
               setStats(statsData);
+              setDots({
+                rejectedLoans:
+                  unseenAlertIds("rejectedLoans", statsData.rejectedLoanIds)
+                    .length > 0,
+                supplyAlerts:
+                  unseenAlertIds("supplyAlerts", statsData.supplyRequestIds)
+                    .length > 0,
+                machineAlerts:
+                  unseenAlertIds("machineAlerts", statsData.machineRequestIds)
+                    .length > 0,
+                loanDue: statsData.loanDueAlerts > 0,
+              });
             }
           }
         }
@@ -165,9 +191,38 @@ export default function Dashboard() {
             Quick Actions
           </h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {quickActions.map((action) => (
-              <QuickActionButton key={action.label} {...action} />
-            ))}
+            <QuickActionButton
+              label="Apply Loan"
+              icon={<IconApplyLoan />}
+              iconBg="bg-green-100"
+              iconColor="text-green-700"
+              href="/dashboard/applyLoan"
+              dot={dots.rejectedLoans}
+            />
+            <QuickActionButton
+              label="Rent Machine"
+              icon={<IconRentMachine />}
+              iconBg="bg-blue-100"
+              iconColor="text-blue-700"
+              href="/dashboard/rentMachine"
+              dot={dots.machineAlerts}
+            />
+            <QuickActionButton
+              label="Buy Supplies"
+              icon={<IconBuySupplies />}
+              iconBg="bg-yellow-100"
+              iconColor="text-yellow-700"
+              href="/dashboard/supplies"
+              dot={dots.supplyAlerts}
+            />
+            <QuickActionButton
+              label="View Loans"
+              icon={<IconViewLoans />}
+              iconBg="bg-purple-100"
+              iconColor="text-purple-700"
+              href="/dashboard/viewloan"
+              dot={dots.loanDue}
+            />
           </div>
         </section>
 

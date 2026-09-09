@@ -5,6 +5,7 @@ import Link from "next/link";
 import { DashboardHeader } from "../components/DashboardHeader";
 import { IconChevronLeft } from "@/components/icons";
 import { Money } from "@/components/Money";
+import { useMarkAlertSeen } from "../hooks/useAlertSeen";
 
 interface Supply {
   id: string;
@@ -26,6 +27,7 @@ interface SupplyRequest {
 }
 
 export default function SuppliesPage() {
+  useMarkAlertSeen("supplyAlerts");
   const [supplies, setSupplies] = useState<Supply[]>([]);
   const [requests, setRequests] = useState<SupplyRequest[]>([]);
   const [hasGuarantor, setHasGuarantor] = useState<boolean | null>(null);

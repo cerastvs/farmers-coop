@@ -40,6 +40,34 @@ export async function GET() {
       },
     });
 
+    const rejectedLoans = await prisma.loan.findMany({
+      where: {
+        userId,
+        status: LoanStatus.REJECTED,
+      },
+      select: { id: true },
+    });
+
+    const supplyRequestAlerts = await prisma.supplyTransaction.findMany({
+      where: {
+        userId,
+        status: {
+          in: [TransactionStatus.APPROVED, TransactionStatus.REJECTED],
+        },
+      },
+      select: { id: true },
+    });
+
+    const machineRequestAlerts = await prisma.machineRequest.findMany({
+      where: {
+        userId,
+        status: {
+          in: [MachineStatus.APPROVED, MachineStatus.REJECTED, MachineStatus.OVERDUE],
+        },
+      },
+      select: { id: true },
+    });
+
     const application = await prisma.application.findFirst({
       where: { userId },
       orderBy: { createdAt: "desc" },
@@ -84,6 +112,13 @@ export async function GET() {
     }, 0);
 
     const nextLoan = activeLoans.find((l) => l.status !== LoanStatus.PAID) || null;
+
+    const loanDueAlerts = activeLoans.filter(
+      (l) =>
+        Number(l.amount) -
+          l.payments.reduce((s, p) => s + Number(p.amount), 0) >
+          0 && new Date(l.due) < new Date(),
+    ).length;
 
     const loanPayments = await prisma.loanPayment.findMany({
       where: {
@@ -149,6 +184,10 @@ export async function GET() {
       totalDebt,
       cashDebt,
       supplyDebt,
+      rejectedLoanIds: rejectedLoans.map((l) => l.id),
+      supplyRequestIds: supplyRequestAlerts.map((t) => t.id),
+      machineRequestIds: machineRequestAlerts.map((r) => r.id),
+      loanDueAlerts,
       nextPaymentDue: nextLoan?.due || null,
       activeLoans: activeLoans.map((l) => ({
         id: l.id,

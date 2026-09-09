@@ -10,8 +10,10 @@ import {
 } from "./components/LoanRequestsCard";
 import { IconChevronLeft, IconInfoCircle } from "@/components/icons";
 import { Money } from "@/components/Money";
+import { useMarkAlertSeen } from "../hooks/useAlertSeen";
 
 export default function ApplyLoanPage() {
+  useMarkAlertSeen("rejectedLoans");
   const [totalDebt, setTotalDebt] = useState<number | null>(null);
   const [hasGuarantor, setHasGuarantor] = useState<boolean | null>(null);
   const [loans, setLoans] = useState<LoanRequest[]>([]);

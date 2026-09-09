@@ -13,6 +13,7 @@ import {
 import { IconChevronLeft } from "@/components/icons";
 import { ImageModal } from "@/components/ImageModal";
 import { Tractor, X } from "lucide-react";
+import { useMarkAlertSeen } from "../hooks/useAlertSeen";
 
 interface OtherRequest {
   id: string;
@@ -33,6 +34,7 @@ interface Machine {
 }
 
 export default function RentMachinePage() {
+  useMarkAlertSeen("machineAlerts");
   const [machines, setMachines] = useState<Machine[]>([]);
   const [loading, setLoading] = useState(true);
   const [borrowing, setBorrowing] = useState<string | null>(null);

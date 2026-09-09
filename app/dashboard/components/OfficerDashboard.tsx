@@ -99,6 +99,8 @@ interface Loan {
   name: string;
   type: string;
   amount: number;
+  principalAmount: number | null;
+  interestRate: number;
   remainingBalance: number;
   termMonths: number;
   purpose: string | null;
@@ -2508,7 +2510,19 @@ function LoansSection({
                   </span>
                 </div>
                 <p className="text-xs text-[#718176] mt-0.5">
-                  {loan.name} · <Money value={loan.amount} />
+                  {loan.name} ·{" "}
+                  <span className="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                    <span className="text-sm font-bold text-[#173a2b]">
+                      <Money value={loan.principalAmount ?? loan.amount} />
+                    </span>
+                    {loan.principalAmount !== null &&
+                      loan.principalAmount > 0 &&
+                      Math.abs(loan.amount - loan.principalAmount) >= 0.005 && (
+                        <span className="text-[11px] font-medium text-[#1b5e3b]">
+                          requested · <Money value={loan.amount} /> payable with {loan.interestRate}% interest
+                        </span>
+                      )}
+                  </span>
                   {loan.due &&
                     ` · Due ${new Date(loan.due).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
                 </p>

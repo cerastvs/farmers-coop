@@ -35,7 +35,6 @@ export default function SuppliesPage() {
   const [loading, setLoading] = useState(true);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
-  const [pickingUpId, setPickingUpId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
   const loadSupplies = useCallback(async () => {
@@ -98,22 +97,6 @@ export default function SuppliesPage() {
       setMessage({ kind: "error", text: error instanceof Error ? error.message : "Unable to cancel request" });
     } finally {
       setCancellingId(null);
-    }
-  }
-
-  async function pickupRequest(requestId: string) {
-    setPickingUpId(requestId);
-    setMessage(null);
-    try {
-      const response = await fetch(`/api/supplies/${requestId}`, { method: "PATCH" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? data.message ?? "Unable to mark as picked up");
-      setMessage({ kind: "success", text: data.message ?? "Request marked as picked up." });
-      await loadSupplies();
-    } catch (error) {
-      setMessage({ kind: "error", text: error instanceof Error ? error.message : "Unable to mark as picked up" });
-    } finally {
-      setPickingUpId(null);
     }
   }
 
@@ -205,18 +188,16 @@ export default function SuppliesPage() {
                         {cancellingId === request.id ? "Cancelling…" : "Cancel"}
                       </button>
                     )}
-                    {request.status === "APPROVED" && (
-                      <button
-                        onClick={() => pickupRequest(request.id)}
-                        disabled={pickingUpId === request.id}
-                        className="rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-bold text-green-700 hover:bg-green-100 disabled:opacity-50"
-                      >
-                        {pickingUpId === request.id ? "Picking up…" : "Picked Up"}
-                      </button>
-                    )}
                     <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-700">{request.status}</span>
                   </div>
                 </div>
+                {request.status === "APPROVED" && (
+                  <p className="mt-1 w-full text-xs font-semibold text-green-700">
+                    {request.type === "LOAN"
+                      ? "Approved — your request is ready for pickup at the cooperative office."
+                      : "Approved — your purchase is ready for pickup at the cooperative office."}
+                  </p>
+                )}
               </div>
             ))}
           </div>

@@ -2,84 +2,12 @@ import {
   apiErrorResponse,
   ApiError,
   requireUser,
-  requireUuid,
 } from "@/lib/api";
 import { notifyUser, writeAudit } from "@/lib/activity";
 import { NotificationType, Role, TransactionStatus } from "@/app/generated/prisma";
 import prisma from "@/lib/client";
-import { assertTransition, supplyTransitions } from "@/lib/lifecycles";
 import { MEMBER_ROLES } from "@/lib/permissions";
-import { completeSupplyRequest } from "@/lib/services/supply-requests";
 import { NextRequest, NextResponse } from "next/server";
-
-export async function PATCH(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  try {
-    const actor = await requireUser(MEMBER_ROLES);
-    const { id: rawId } = await params;
-    const id = requireUuid(rawId, "Supply request ID");
-
-    await prisma.$transaction(async (tx) => {
-      const request = await tx.supplyTransaction.findUnique({
-        where: { id },
-        include: { supply: true },
-      });
-      if (!request) throw new ApiError(404, "Supply request not found");
-      if (request.userId !== actor.userId) {
-        throw new ApiError(403, "You can only pick up your own requests");
-      }
-      if (request.status !== TransactionStatus.APPROVED) {
-        throw new ApiError(
-          409,
-          "Only approved requests can be marked as picked up",
-        );
-      }
-      assertTransition(
-        supplyTransitions,
-        request.status,
-        TransactionStatus.COMPLETED,
-        "Supply request",
-      );
-
-      const claimed = await tx.supplyTransaction.updateMany({
-        where: { id, status: request.status },
-        data: {
-          status: TransactionStatus.COMPLETED,
-          reviewedBy: actor.userId,
-          reviewedAt: new Date(),
-        },
-      });
-      if (claimed.count !== 1) {
-        throw new ApiError(409, "Supply request changed during pickup");
-      }
-
-      await completeSupplyRequest(tx, request);
-
-      await notifyUser(tx, {
-        userId: request.userId,
-        type: NotificationType.SUPPLY_COMPLETED,
-        link: "/dashboard/supplies",
-        title: "Supply request picked up",
-        message: `Your request for ${request.quantity} ${request.supply.productName} is now picked up.`,
-      });
-      await writeAudit(tx, {
-        userId: actor.userId,
-        userRole: actor.userRole,
-        action: "SUPPLY_COMPLETED",
-        entity: "SupplyTransaction",
-        entityId: id,
-        previousStatus: request.status,
-        newStatus: TransactionStatus.COMPLETED,
-      });
-    });
-
-    return NextResponse.json({ message: "Supply request marked as picked up" });
-  } catch (error) {
-    return apiErrorResponse(error, "Failed to pick up supply request");
-  }
-}
 
 export async function DELETE(
   _req: NextRequest,

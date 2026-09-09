@@ -1,4 +1,4 @@
-import { NotificationType, Prisma, TransactionStatus } from "@/app/generated/prisma";
+import { NotificationType, Prisma, Role, TransactionStatus } from "@/app/generated/prisma";
 import { notifyUser, writeAudit } from "@/lib/activity";
 import {
   apiErrorResponse,
@@ -31,6 +31,12 @@ export async function PATCH(
     }
     if (result.data.action === "reject" && !result.data.reason) {
       throw new ApiError(400, "A rejection reason is required");
+    }
+    if (result.data.action === "complete" && actor.userRole !== Role.PRESIDENT) {
+      throw new ApiError(
+        403,
+        "Only the president can mark supply requests as picked up",
+      );
     }
 
     const { id: rawId } = await params;

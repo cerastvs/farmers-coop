@@ -2685,6 +2685,7 @@ function SuppliesSection({
   onUpdateSupply,
   onActionRequest,
   busy,
+  canComplete,
 }: {
   items: Supply[];
   expanded: boolean;
@@ -2693,6 +2694,7 @@ function SuppliesSection({
   onUpdateSupply: (id: string, formData: FormData) => void;
   onActionRequest: (id: string, action: "approve" | "complete" | "reject", reason?: string) => void;
   busy: string | null;
+  canComplete: boolean;
 }) {
   const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
   const [showAdd, setShowAdd] = useState(false);
@@ -2873,7 +2875,7 @@ function SuppliesSection({
                               <button disabled={busy === t.id} onClick={() => { const r = window.prompt("Rejection reason:"); if (r) onActionRequest(t.id, "reject", r); }} className="rounded-md border border-red-200 px-2 py-0.5 text-[10px] font-bold text-red-600 disabled:opacity-50">Reject</button>
                             </>
                           )}
-                          {t.status === "APPROVED" && (
+                          {t.status === "APPROVED" && canComplete && (
                             <button disabled={busy === t.id} onClick={() => onActionRequest(t.id, "complete")} className="rounded-md bg-[#1b5e3b] px-2 py-0.5 text-[10px] font-bold text-white disabled:opacity-50">Picked Up</button>
                           )}
                         </div>
@@ -4109,7 +4111,7 @@ export default function OfficerDashboard({
                   <PendingOnlyToggle active={pendingFilter.supplies} count={badges.supplies} onToggle={() => togglePendingFilter("supplies")} />
                 </div>
                 <div className="p-4">
-                  <SuppliesSection items={pendingFilter.supplies ? data.supplies.filter((s) => s.transactions.some((t) => t.status === "PENDING")) : data.supplies} expanded={true} onToggle={() => {}} onAddSupply={handleAddSupply} onUpdateSupply={handleUpdateSupply} onActionRequest={handleSupplyRequestAction} busy={busy} />
+                  <SuppliesSection items={pendingFilter.supplies ? data.supplies.filter((s) => s.transactions.some((t) => t.status === "PENDING")) : data.supplies} expanded={true} onToggle={() => {}} onAddSupply={handleAddSupply} onUpdateSupply={handleUpdateSupply} onActionRequest={handleSupplyRequestAction} busy={busy} canComplete={role === "PRESIDENT"} />
                 </div>
               </div>
             )}

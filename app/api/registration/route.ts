@@ -1,5 +1,6 @@
 import {
   ApplicationStatus,
+  GuarantorStatus,
   NotificationType,
   Prisma,
   Role,
@@ -143,6 +144,9 @@ export async function POST(req: NextRequest) {
           guarantor: guarantor && Object.keys(guarantor).length
             ? (guarantor as Prisma.InputJsonValue)
             : undefined,
+          guarantorStatus: guarantor && Object.keys(guarantor).length
+            ? GuarantorStatus.PENDING
+            : null,
           proofOfFarmUrl: farmImgUrl!,
           validIdUrl: validIdImgUrl!,
           status: ApplicationStatus.PENDING_PAYMENT,
@@ -293,6 +297,15 @@ export async function PATCH(req: NextRequest) {
     }
 
     await prisma.$transaction(async (tx) => {
+      const currentGuarantor = existingApplication.guarantor;
+      const nextGuarantor =
+        guarantor && Object.keys(guarantor).length
+          ? (guarantor as Prisma.InputJsonValue)
+          : undefined;
+      const guarantorChanged =
+        JSON.stringify(currentGuarantor ?? null) !==
+        JSON.stringify(nextGuarantor ?? null);
+
       await tx.application.update({
         where: { id: existingApplication.id },
         data: {
@@ -317,10 +330,15 @@ export async function PATCH(req: NextRequest) {
             deleteMany: {},
             create: (farmMachinery as string[]).map((name) => ({ name })),
           },
-          guarantor:
-            guarantor && Object.keys(guarantor).length
-              ? (guarantor as Prisma.InputJsonValue)
-              : undefined,
+          guarantor: nextGuarantor,
+          ...(guarantorChanged
+            ? {
+                guarantorStatus: GuarantorStatus.PENDING,
+                guarantorReviewedBy: null,
+                guarantorReviewedAt: null,
+                guarantorRejectionReason: null,
+              }
+            : {}),
           proofOfFarmUrl: farmImgUrl,
           validIdUrl: validIdImgUrl,
         },

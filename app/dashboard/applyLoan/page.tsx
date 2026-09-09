@@ -17,6 +17,7 @@ export default function ApplyLoanPage() {
   useMarkAlertSeen("rejectedLoans");
   const [totalDebt, setTotalDebt] = useState<number | null>(null);
   const [hasGuarantor, setHasGuarantor] = useState<boolean | null>(null);
+  const [guarantorStatus, setGuarantorStatus] = useState<string | null>(null);
   const [loans, setLoans] = useState<LoanRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -27,6 +28,11 @@ export default function ApplyLoanPage() {
         const data = await res.json();
         setTotalDebt(data.totalDebt);
         setHasGuarantor(data.hasGuarantor);
+        setGuarantorStatus(
+          typeof data.guarantorStatus === "string"
+            ? data.guarantorStatus
+            : null,
+        );
       }
     } catch (error) {
       console.error("Failed to fetch balance:", error);
@@ -78,7 +84,24 @@ export default function ApplyLoanPage() {
           </p>
         </div>
 
-        {hasGuarantor === false && (
+        {hasGuarantor === false && guarantorStatus === "PENDING" && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 items-start animate-in fade-in slide-in-from-top-2">
+            <IconInfoCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-amber-800">
+                Guarantor Approval Pending
+              </p>
+              <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+                Your guarantor is on file but has{" "}
+                <span className="font-semibold">not yet been verified</span>.
+                Please wait for the president or treasurer to approve it before
+                applying for a loan.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {hasGuarantor === false && guarantorStatus !== "PENDING" && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 items-start animate-in fade-in slide-in-from-top-2">
             <IconInfoCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
             <div>
@@ -113,6 +136,7 @@ export default function ApplyLoanPage() {
         <ApplyLoanCard
           currentBalance={totalDebt}
           hasGuarantor={hasGuarantor}
+          guarantorStatus={guarantorStatus}
           hasPendingRequest={hasPendingRequest}
           isLoading={loading}
           onSubmitted={fetchLoans}

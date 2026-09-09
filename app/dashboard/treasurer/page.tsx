@@ -30,6 +30,7 @@ import { Money } from "@/components/Money";
 import ReportsSection, {
   type ReportRecord,
 } from "@/components/ReportsSection";
+import { GuarantorApprovalsCard } from "@/components/GuarantorApprovalsCard";
 
 type Tab = "overview" | "loans" | "payments" | "overdue" | "reports";
 type LoanType = "ALL" | "SUPPLY" | "MONEY";
@@ -845,6 +846,8 @@ export default function TreasurerPage() {
                     </div>
                   )}
                 </section>
+
+                <GuarantorApprovalsCard />
 
                 {/* Pending payments */}
                 <section className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm">

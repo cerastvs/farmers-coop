@@ -11,6 +11,7 @@ import { ArrowLeft, FileImage, Sprout } from "lucide-react";
 type ApplicationWithLists = Application & {
   crops: { name: string }[];
   machines: { name: string }[];
+  guarantorStatus?: string | null;
 };
 
 function FieldError({ error }: { error?: string }) {
@@ -135,6 +136,10 @@ export default function Registration() {
   }, []);
 
   const isUpdate = !!application;
+
+  const guarantorNeedsReview =
+    !!application?.guarantorStatus &&
+    application.guarantorStatus !== "APPROVED";
 
   return (
     <div className="relative min-h-screen bg-[#edf5df] flex flex-col items-center px-4 py-10 md:px-8 md:py-12">
@@ -423,6 +428,7 @@ export default function Registration() {
                         : ""
                     }
                     error={errors.guarantor}
+                    accent={guarantorNeedsReview}
                   />
                 </div>
                 <div className="col-span-2">
@@ -443,6 +449,7 @@ export default function Registration() {
                         : ""
                     }
                     error={errors.guarantor}
+                    accent={guarantorNeedsReview}
                   />
                 </div>
               </div>
@@ -465,6 +472,7 @@ export default function Registration() {
                         : ""
                     }
                     error={errors.guarantor}
+                    accent={guarantorNeedsReview}
                   />
                 </div>
                 <div className="col-span-2">
@@ -484,7 +492,11 @@ export default function Registration() {
                         : ""
                     }
                     className={`w-full rounded-xl border bg-[#fafcf8] px-3 py-2.5 text-sm text-[#173a2b] outline-none transition placeholder:text-[#9aa89e] focus:border-[#4f7e38] focus:ring-4 focus:ring-[#b9db9e]/35 ${
-                      errors.guarantor ? "border-red-400" : "border-[#dbe5d7]"
+                      errors.guarantor
+                        ? "border-red-400"
+                        : guarantorNeedsReview
+                          ? "border-[#e8993d] focus:border-[#e8993d] focus:ring-[#f3c98b]/40"
+                          : "border-[#dbe5d7]"
                     }`}
                   >
                     <option value="">None</option>
@@ -516,6 +528,7 @@ export default function Registration() {
                         : ""
                     }
                     error={errors.guarantor}
+                    accent={guarantorNeedsReview}
                   />
                 </div>
                 <div>
@@ -536,12 +549,33 @@ export default function Registration() {
                         : ""
                     }
                     error={errors.guarantor}
+                    accent={guarantorNeedsReview}
                   />
                 </div>
               </div>
               <div className="md:col-span-2">
                 <FieldError error={errors.guarantor} />
               </div>
+              {guarantorNeedsReview && (
+                <div className="flex items-start gap-2 rounded-xl border border-[#e8993d]/50 bg-[#fdf4e3] px-3.5 py-2.5 md:col-span-2">
+                  <span className="grid h-5 w-5 flex-none place-items-center rounded-full bg-[#e8993d] text-[10px] text-white">
+                    !
+                  </span>
+                  {application?.guarantorStatus === "REJECTED" ? (
+                    <p className="text-xs leading-relaxed text-[#8a5416]">
+                      Your guarantor was not approved. Please update your
+                      guarantor information above and save — it will be
+                      reviewed again by the president or treasurer.
+                    </p>
+                  ) : (
+                    <p className="text-xs leading-relaxed text-[#8a5416]">
+                      Your guarantor has not been verified yet. Wait for the
+                      president or treasurer to approve it before applying for
+                      a loan.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Requirements */}
@@ -613,6 +647,7 @@ function TextInput({
   placeholder,
   defaultValue,
   error,
+  accent,
 }: {
   name: string;
   type?: string;
@@ -620,7 +655,13 @@ function TextInput({
   placeholder?: string;
   defaultValue: string | number;
   error?: string;
+  accent?: boolean;
 }) {
+  const borderClass = error
+    ? "border-red-400"
+    : accent
+      ? "border-[#e8993d] focus:border-[#e8993d] focus:ring-[#f3c98b]/40"
+      : "border-[#dbe5d7]";
   return (
     <input
       type={type}
@@ -628,9 +669,7 @@ function TextInput({
       step={step}
       placeholder={placeholder}
       defaultValue={defaultValue}
-      className={`w-full rounded-xl border bg-[#fafcf8] px-3 py-2.5 text-sm text-[#173a2b] outline-none transition placeholder:text-[#9aa89e] focus:border-[#4f7e38] focus:ring-4 focus:ring-[#b9db9e]/35 ${
-        error ? "border-red-400" : "border-[#dbe5d7]"
-      }`}
+      className={`w-full rounded-xl border bg-[#fafcf8] px-3 py-2.5 text-sm text-[#173a2b] outline-none transition placeholder:text-[#9aa89e] focus:border-[#4f7e38] focus:ring-4 focus:ring-[#b9db9e]/35 ${borderClass}`}
     />
   );
 }

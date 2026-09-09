@@ -104,6 +104,8 @@ enum NotificationType {
   PAYMENT_RECEIVED
   MEMBERSHIP_APPROVED
   MEMBERSHIP_REJECTED
+  GUARANTOR_APPROVED
+  GUARANTOR_REJECTED
   GENERAL
 }
 
@@ -111,6 +113,12 @@ enum SmsStatus {
   PENDING
   SENT
   FAILED
+}
+
+enum GuarantorStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum ReportType {
@@ -162,6 +170,7 @@ model User {
   verifiedPayments       Payment[] @relation("PaymentVerifier")
   declinedPayments       Payment[] @relation("PaymentDecliner")
   reviewedApplications   Application[] @relation("ApplicationReviewer")
+  reviewedGuarantors     Application[] @relation("GuarantorReviewer")
   sentSms                SmsMessage[] @relation("SmsSender")
   receivedSms            SmsMessage[] @relation("SmsReceiver")
 }
@@ -247,6 +256,11 @@ model Application {
   farmOwnershipDetails String?
 
   guarantor      Json?
+  guarantorStatus GuarantorStatus?
+  guarantorReviewedBy String?
+  guarantorReviewedByUser User?    @relation("GuarantorReviewer", fields: [guarantorReviewedBy], references: [id], onDelete: SetNull)
+  guarantorReviewedAt DateTime?
+  guarantorRejectionReason String?
 
   validIdUrl     String
   proofOfFarmUrl String

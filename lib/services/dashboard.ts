@@ -1,6 +1,7 @@
 import prisma from "@/lib/client";
 import { getApplicationFeeAmount } from "@/lib/application-fee";
 import {
+  GuarantorStatus,
   LoanStatus,
   MachineStatus,
   PaymentType,
@@ -24,6 +25,7 @@ export interface DashboardStats {
   cashDebt: number;
   supplyDebt: number;
   hasGuarantor: boolean;
+  guarantorStatus: string | null;
   rejectedLoanIds: string[];
   supplyRequestIds: string[];
   machineRequestIds: string[];
@@ -132,18 +134,20 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
   const application = await prisma.application.findFirst({
     where: { userId },
     orderBy: { createdAt: "desc" },
-    select: { guarantor: true },
+    select: { guarantor: true, guarantorStatus: true },
   });
   const guarantor = application?.guarantor;
   const guarantorRecord =
     guarantor && typeof guarantor === "object"
       ? (guarantor as Record<string, unknown>)
       : null;
-  const hasGuarantor = Boolean(
+  const hasGuarantorOnFile = Boolean(
     guarantorRecord &&
       String(guarantorRecord.firstName ?? "").trim() &&
       String(guarantorRecord.lastName ?? "").trim(),
   );
+  const guarantorStatus = application?.guarantorStatus ?? null;
+  const hasGuarantor = hasGuarantorOnFile && guarantorStatus === GuarantorStatus.APPROVED;
 
   const activeLoans = await prisma.loan.findMany({
     where: {
@@ -242,6 +246,7 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
     overdueLoansCount,
     borrowedMachinesCount,
     hasGuarantor,
+    guarantorStatus,
     totalDebt,
     cashDebt,
     supplyDebt,

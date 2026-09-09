@@ -8,6 +8,7 @@ import { ArrowRight } from "lucide-react";
 interface ApplyLoanCardProps {
   currentBalance: number | null;
   hasGuarantor?: boolean | null;
+  guarantorStatus?: string | null;
   hasPendingRequest?: boolean;
   isLoading: boolean;
   onSubmitted?: () => void;
@@ -17,9 +18,10 @@ function roundMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-export function ApplyLoanCard({ currentBalance, hasGuarantor, hasPendingRequest, isLoading, onSubmitted }: ApplyLoanCardProps) {
+export function ApplyLoanCard({ currentBalance, hasGuarantor, guarantorStatus, hasPendingRequest, isLoading, onSubmitted }: ApplyLoanCardProps) {
   const hasBalance = currentBalance !== null && currentBalance > 0;
   const missingGuarantor = hasGuarantor !== null && hasGuarantor === false;
+  const guarantorPending = guarantorStatus === "PENDING";
   const blocked = hasBalance || missingGuarantor || !!hasPendingRequest;
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
@@ -218,11 +220,13 @@ export function ApplyLoanCard({ currentBalance, hasGuarantor, hasPendingRequest,
             }`}
           >
             {blocked
-              ? missingGuarantor
-                ? "Add Your Guarantor"
-                : hasPendingRequest
-                  ? "Request Under Review"
-                  : "Settlement Required"
+              ? guarantorPending
+                ? "Guarantor Approval Pending"
+                : missingGuarantor
+                  ? "Add Your Guarantor"
+                  : hasPendingRequest
+                    ? "Request Under Review"
+                    : "Settlement Required"
               : submitting
                 ? "Submitting…"
                 : "Submit Loan Request"}

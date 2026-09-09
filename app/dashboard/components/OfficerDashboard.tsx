@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { IconLeaf, IconLoan, IconMachine } from "@/components/icons";
 import { ImageModal } from "@/components/ImageModal";
+import { GuarantorApprovalsCard } from "@/components/GuarantorApprovalsCard";
 import { PaymentConfirmModal } from "@/components/PaymentConfirmModal";
 import { ReportModal, ReportContent } from "@/components/ReportModal";
 import { logout } from "../../login/actions";
@@ -4178,6 +4179,7 @@ export default function OfficerDashboard({
 
             {activeTab === "loans" && data && (
               <>
+                <GuarantorApprovalsCard />
                 {role === "PRESIDENT" && (
                   <div className="mb-4 rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-fadeIn">
                     <div className="flex items-start justify-between gap-3">

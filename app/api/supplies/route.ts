@@ -1,3 +1,4 @@
+import { GuarantorStatus } from "@/app/generated/prisma";
 import {
   apiErrorResponse,
   ApiError,
@@ -26,7 +27,7 @@ export async function GET() {
       prisma.application.findFirst({
         where: { userId: actor.userId },
         orderBy: { createdAt: "desc" },
-        select: { guarantor: true },
+        select: { guarantor: true, guarantorStatus: true },
       }),
     ]);
 
@@ -35,14 +36,18 @@ export async function GET() {
       guarantor && typeof guarantor === "object"
         ? (guarantor as Record<string, unknown>)
         : null;
-    const hasGuarantor = Boolean(
+    const hasGuarantorOnFile = Boolean(
       guarantorRecord &&
         String(guarantorRecord.firstName ?? "").trim() &&
         String(guarantorRecord.lastName ?? "").trim(),
     );
+    const guarantorStatus = application?.guarantorStatus ?? null;
+    const hasGuarantor =
+      hasGuarantorOnFile && guarantorStatus === GuarantorStatus.APPROVED;
 
     return NextResponse.json({
       hasGuarantor,
+      guarantorStatus,
       supplies: supplies.map((supply) => ({
         ...supply,
         price: Number(supply.price),

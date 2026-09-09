@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import {
   EntryType,
+  GuarantorStatus,
   LoanStatus,
   LoanType,
   MachineStatus,
@@ -106,14 +107,18 @@ async function hasGuarantorOnFile(tx: Prisma.TransactionClient, memberId: string
   const application = await tx.application.findFirst({
     where: { userId: memberId },
     orderBy: { createdAt: "desc" },
-    select: { guarantor: true },
+    select: { guarantor: true, guarantorStatus: true },
   });
   const guarantor = application?.guarantor;
   if (!guarantor || typeof guarantor !== "object") return false;
   const record = guarantor as Record<string, unknown>;
   const firstName = String(record.firstName ?? "").trim();
   const lastName = String(record.lastName ?? "").trim();
-  return Boolean(firstName && lastName);
+  return Boolean(
+    firstName &&
+      lastName &&
+      application.guarantorStatus === GuarantorStatus.APPROVED,
+  );
 }
 
 export async function submitLoanRequest({

@@ -32,6 +32,7 @@ export default function SuppliesPage() {
   const [supplies, setSupplies] = useState<Supply[]>([]);
   const [requests, setRequests] = useState<SupplyRequest[]>([]);
   const [hasGuarantor, setHasGuarantor] = useState<boolean | null>(null);
+  const [guarantorStatus, setGuarantorStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -45,6 +46,9 @@ export default function SuppliesPage() {
       setSupplies(data.supplies);
       setRequests(data.requests);
       setHasGuarantor(data.hasGuarantor);
+      setGuarantorStatus(
+        typeof data.guarantorStatus === "string" ? data.guarantorStatus : null,
+      );
     } catch (error) {
       setMessage({ kind: "error", text: error instanceof Error ? error.message : "Unable to load supplies" });
     } finally {
@@ -112,7 +116,19 @@ export default function SuppliesPage() {
           <p className="mt-1 text-sm text-gray-500">Request supplies for purchase or as a cooperative loan.</p>
         </div>
 
-        {hasGuarantor === false && (
+        {hasGuarantor === false && guarantorStatus === "PENDING" && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            <p className="font-bold">Guarantor Approval Pending</p>
+            <p className="mt-1 text-xs leading-relaxed text-amber-700">
+              Your guarantor is on file but has{" "}
+              <span className="font-semibold">not yet been verified</span>.
+              Loan option is temporarily disabled until the president or
+              treasurer approves it. Purchases are still available.
+            </p>
+          </div>
+        )}
+
+        {hasGuarantor === false && guarantorStatus !== "PENDING" && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
             <p className="font-bold">Guarantor Required</p>
             <p className="mt-1 text-xs leading-relaxed text-amber-700">

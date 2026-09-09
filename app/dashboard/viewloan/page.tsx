@@ -61,6 +61,8 @@ export default function ViewLoanPage() {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   const [proofModalUrl, setProofModalUrl] = useState<string | null>(null);
+  const [selectedLoanId, setSelectedLoanId] = useState("");
+  const [amount, setAmount] = useState("");
 
   const fetchData = useCallback(async () => {
     try {
@@ -85,9 +87,61 @@ export default function ViewLoanPage() {
     void fetchData();
   }, [fetchData]);
 
+  const payableLoans = loans.filter(
+    (loan) => loan.status === "ACTIVE" || loan.status === "OVERDUE",
+  );
+  const selectedLoan = payableLoans.find((loan) => loan.id === selectedLoanId);
+  const maxAmount = selectedLoan?.remainingBalance ?? 0;
+
+  function handleAmountChange(value: string) {
+    if (value.trim().startsWith("-")) {
+      setAmount("");
+      return;
+    }
+    let cleaned = value.replace(/[^0-9.]/g, "");
+    const dotIndex = cleaned.indexOf(".");
+    if (dotIndex !== -1) {
+      cleaned =
+        cleaned.slice(0, dotIndex + 1) +
+        cleaned.slice(dotIndex + 1).replace(/\./g, "").slice(0, 2);
+    }
+    if (cleaned === "") {
+      setAmount("");
+      return;
+    }
+    const parsed = parseFloat(cleaned);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setAmount("");
+      return;
+    }
+    if (maxAmount > 0 && parsed > maxAmount) {
+      setAmount(maxAmount.toFixed(2));
+      return;
+    }
+    setAmount(cleaned);
+  }
+
   async function submitPayment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formElement = event.currentTarget;
+
+    if (!selectedLoan) {
+      setMessage({ kind: "error", text: "Select a loan to pay." });
+      return;
+    }
+    const parsedAmount = parseFloat(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setMessage({ kind: "error", text: "Enter a valid payment amount." });
+      return;
+    }
+    if (parsedAmount > selectedLoan.remainingBalance) {
+      setMessage({
+        kind: "error",
+        text: `Payment cannot exceed the remaining balance of ₱${selectedLoan.remainingBalance.toLocaleString()}.`,
+      });
+      return;
+    }
+
     setSubmitting(true);
     setMessage(null);
     const form = new FormData(formElement);
@@ -110,6 +164,8 @@ export default function ViewLoanPage() {
     }
 
     try {
+      form.set("loanId", selectedLoan.id);
+      form.set("amount", String(parsedAmount));
       const response = await fetch("/api/payments", {
         method: "POST",
         body: form,
@@ -118,6 +174,7 @@ export default function ViewLoanPage() {
       if (!response.ok) throw new Error(data.error ?? data.message ?? "Unable to submit payment");
       setMessage({ kind: "success", text: data.message ?? "Payment submitted for verification." });
       formElement.reset();
+      setAmount("");
       await fetchData();
     } catch (error) {
       setMessage({ kind: "error", text: error instanceof Error ? error.message : "Unable to submit payment" });
@@ -189,15 +246,24 @@ export default function ViewLoanPage() {
           )}
         </div>
 
-        {loans.some((loan) => loan.status === "ACTIVE" || loan.status === "OVERDUE") && (
+        {payableLoans.length > 0 && (
           <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <h2 className="text-base font-bold text-gray-800">Submit a Payment</h2>
             <p className="mt-1 text-sm text-gray-500">Upload a clear image of your bank, e-wallet, or cooperative payment receipt.</p>
             <form onSubmit={submitPayment} className="mt-4 grid gap-4 sm:grid-cols-3">
               <label className="text-sm font-semibold text-gray-700">
                 Loan
-                <select name="loanId" required className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5">
-                  {loans.filter((loan) => loan.status === "ACTIVE" || loan.status === "OVERDUE").map((loan) => (
+                <select
+                  name="loanId"
+                  required
+                  value={selectedLoanId}
+                  onChange={(event) => setSelectedLoanId(event.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5"
+                >
+                  <option value="" disabled>
+                    Select a loan
+                  </option>
+                  {payableLoans.map((loan) => (
                     <option value={loan.id} key={loan.id}>
                       {loan.name} · ₱{loan.remainingBalance.toLocaleString()}{loan.status === "OVERDUE" ? " (OVERDUE)" : ""}
                     </option>
@@ -206,7 +272,22 @@ export default function ViewLoanPage() {
               </label>
               <label className="text-sm font-semibold text-gray-700">
                 Amount
-                <input name="amount" required type="number" min="0.01" step="0.01" className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5" />
+                <input
+                  name="amount"
+                  required
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  maxLength={12}
+                  value={amount}
+                  onChange={(event) => handleAmountChange(event.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5"
+                />
+                {selectedLoan && (
+                  <span className="mt-1 block text-xs font-normal text-gray-500">
+                    Remaining balance: ₱{selectedLoan.remainingBalance.toLocaleString()}
+                  </span>
+                )}
               </label>
               <label className="text-sm font-semibold text-gray-700">
                 Proof of payment

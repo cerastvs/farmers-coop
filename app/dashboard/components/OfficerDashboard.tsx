@@ -43,6 +43,8 @@ import {
   TrendingUp,
   HandHelping,
   MessageSquare,
+  Percent,
+  Lock,
 } from "lucide-react";
 
 interface Application {
@@ -3571,6 +3573,12 @@ export default function OfficerDashboard({
     action: "verify" | "reject";
   } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [loanRate, setLoanRate] = useState<string>("2");
+  const [rateDraft, setRateDraft] = useState<string>("2");
+  const [rateConfirm, setRateConfirm] = useState<string | null>(null);
+  const [ratePassword, setRatePassword] = useState("");
+  const [ratePassError, setRatePassError] = useState<string | null>(null);
+  const [savingRate, setSavingRate] = useState(false);
   const [pendingFilter, setPendingFilter] = useState<Record<Section, boolean>>({
     applications: false,
     members: false,
@@ -3596,6 +3604,85 @@ export default function OfficerDashboard({
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (role !== "PRESIDENT") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/settings/loan-interest");
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && typeof data.rate === "number") {
+            setLoanRate(String(data.rate));
+            setRateDraft(String(data.rate));
+          }
+        }
+      } catch {
+        // keep default value when the fetch fails
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [role]);
+
+  const openRateConfirm = useCallback(() => {
+    const rate = Number(rateDraft);
+    if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
+      setNotice({ kind: "error", text: "Enter a valid interest rate between 0 and 100." });
+      return;
+    }
+    setRatePassError(null);
+    setRatePassword("");
+    setRateConfirm(rateDraft.trim());
+  }, [rateDraft]);
+
+  const closeRateConfirm = useCallback(() => {
+    if (savingRate) return;
+    setRateConfirm(null);
+    setRatePassword("");
+    setRatePassError(null);
+  }, [savingRate]);
+
+  const confirmRateSave = useCallback(async () => {
+    if (!rateConfirm) return;
+    const rate = Number(rateConfirm);
+    if (!ratePassword) {
+      setRatePassError("Enter your password to confirm.");
+      return;
+    }
+    setSavingRate(true);
+    setRatePassError(null);
+    try {
+      const res = await fetch("/api/admin/settings/loan-interest", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rate, password: ratePassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 403) {
+          setRatePassError(data.error ?? "Incorrect password");
+          return;
+        }
+        throw new Error(data.error ?? data.message ?? "Failed to save the interest rate");
+      }
+      setLoanRate(String(data.rate));
+      setRateDraft(String(data.rate));
+      setRateConfirm(null);
+      setRatePassword("");
+      setNotice({ kind: "success", text: "Loan interest rate updated." });
+    } catch (err) {
+      setRatePassError(null);
+      setNotice({
+        kind: "error",
+        text: err instanceof Error ? err.message : "Failed to save the interest rate",
+      });
+    } finally {
+      setSavingRate(false);
+    }
+  }, [rateConfirm, ratePassword]);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -4066,15 +4153,50 @@ export default function OfficerDashboard({
             )}
 
             {activeTab === "loans" && data && (
-              <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
-                <div className="flex items-center justify-between gap-3 border-b border-[#e2ebe6] px-5 py-4">
-                  <div><h3 className="text-sm font-bold text-[#0f2318]">Loan Management</h3><p className="text-[11px] text-[#5a7267]">{data.loans.length} total loans</p></div>
-                  <PendingOnlyToggle active={pendingFilter.loans} count={badges.loans} onToggle={() => togglePendingFilter("loans")} />
+              <>
+                {role === "PRESIDENT" && (
+                  <div className="mb-4 rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-fadeIn">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-[#5a7267]">Loan Settings</h3>
+                        <p className="text-sm text-[#5a7267]">
+                          New loan accounts carry a flat {loanRate}% interest on the principal. Existing loans are not affected.
+                        </p>
+                      </div>
+                      <div className="flex items-end gap-3">
+                        <label className="text-xs font-semibold text-[#5a7267]">
+                          Interest rate (%)
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.25"
+                            value={rateDraft}
+                            onChange={(e) => setRateDraft(e.target.value)}
+                            className="mt-1 block w-36 rounded-lg border border-[#dce5d9] px-3 py-2 text-sm font-semibold text-[#0f2318] outline-none focus:border-[#1b5e3b] focus:ring-2 focus:ring-[#1b5e3b]/20"
+                          />
+                        </label>
+                        <button
+                          onClick={openRateConfirm}
+                          disabled={savingRate}
+                          className="rounded-lg bg-[#1b5e3b] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#154a2f] disabled:opacity-50"
+                        >
+                          Save rate
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
+                  <div className="flex items-center justify-between gap-3 border-b border-[#e2ebe6] px-5 py-4">
+                    <div><h3 className="text-sm font-bold text-[#0f2318]">Loan Management</h3><p className="text-[11px] text-[#5a7267]">{data.loans.length} total loans</p></div>
+                    <PendingOnlyToggle active={pendingFilter.loans} count={badges.loans} onToggle={() => togglePendingFilter("loans")} />
+                  </div>
+                  <div className="p-4">
+                    <LoansSection items={data.loans} expanded={true} onToggle={() => {}} onAction={handleLoanAction} busy={busy} pendingOnly={pendingFilter.loans} />
+                  </div>
                 </div>
-                <div className="p-4">
-                  <LoansSection items={data.loans} expanded={true} onToggle={() => {}} onAction={handleLoanAction} busy={busy} pendingOnly={pendingFilter.loans} />
-                </div>
-              </div>
+              </>
             )}
 
             {activeTab === "payments" && data && (
@@ -4239,6 +4361,44 @@ export default function OfficerDashboard({
       {viewRejectedRequest && <RejectionDetailModal request={viewRejectedRequest} onClose={() => setViewRejectedRequest(null)} />}
       {detailApp && <ApplicationDetailModal application={detailApp} onClose={() => setDetailApp(null)} />}
       {showForm && <MachineFormModal machine={formMachine} onClose={() => { setShowForm(false); setFormMachine(null); }} onSave={fetchData} />}
+
+      {rateConfirm !== null && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
+            <div className="text-center">
+              <div className="mx-auto h-12 w-12 rounded-full bg-[#e8f5ec] flex items-center justify-center mb-4">
+                <Percent size={20} className="text-[#1b5e3b]" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">Change loan interest rate?</h3>
+              <p className="text-sm text-gray-500 mb-5">
+                The loan interest rate will change from <span className="font-semibold text-gray-700">{loanRate}%</span> to <span className="font-semibold text-gray-700">{rateConfirm}%</span>. Existing loans are not affected.
+              </p>
+              <label className="block text-left text-xs font-semibold text-gray-600 mb-1.5">
+                <span className="inline-flex items-center gap-1"><Lock size={12} /> Enter your password to confirm</span>
+                <input
+                  type="password"
+                  value={ratePassword}
+                  onChange={(e) => {
+                    setRatePassword(e.target.value);
+                    if (ratePassError) setRatePassError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !savingRate) void confirmRateSave();
+                  }}
+                  disabled={savingRate}
+                  placeholder="••••••••"
+                  className="mt-1 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:border-[#1b5e3b] focus:ring-2 focus:ring-[#1b5e3b]/20"
+                />
+              </label>
+              {ratePassError && <p className="mt-1.5 text-left text-xs font-semibold text-red-600">{ratePassError}</p>}
+              <div className="flex gap-3 mt-5">
+                <button onClick={closeRateConfirm} disabled={savingRate} className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition">Cancel</button>
+                <button onClick={confirmRateSave} disabled={savingRate} className="flex-1 py-3 bg-[#1b5e3b] text-white hover:bg-[#154a2f] rounded-2xl font-bold transition disabled:opacity-50">{savingRate ? "Saving…" : "Confirm"}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">

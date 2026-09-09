@@ -26,6 +26,10 @@ import {
   applyVerifiedLoanPayment,
   generateReceiptNo,
 } from "@/lib/services/loan-payments";
+import {
+  applyLoanInterest,
+  getLoanInterestRate,
+} from "@/lib/services/loan-interest";
 import { requiredDurationDays } from "@/lib/services/overdue";
 
 export const LoanRequestSchema = z
@@ -155,12 +159,14 @@ export async function submitLoanRequest({
       }
 
       const due = calculateLoanDueDate(new Date(), input.termMonths);
+      const interestRate = await getLoanInterestRate(tx);
 
       const created = await tx.loan.create({
         data: {
           userId: memberId,
           name: input.type === LoanType.SUPPLY ? "Farm Supply Loan" : "Cash Loan",
-          amount: input.amount,
+          amount: applyLoanInterest(input.amount, interestRate),
+          interestRate,
           termMonths: input.termMonths,
           purpose: input.purpose,
           type: input.type,

@@ -10,6 +10,10 @@ import {
 import { writeAudit } from "@/lib/activity";
 import { ApiError } from "@/lib/errors";
 import { calculateLoanDueDate } from "@/lib/lifecycles";
+import {
+  applyLoanInterest,
+  getLoanInterestRate,
+} from "@/lib/services/loan-interest";
 
 export const SUPPLY_LOAN_DEFAULT_TERM_MONTHS = 6;
 
@@ -46,6 +50,7 @@ export async function openSupplyLoan(
     new Date(),
     SUPPLY_LOAN_DEFAULT_TERM_MONTHS,
   );
+  const interestRate = await getLoanInterestRate(tx);
 
   const created = await tx.loan.create({
     data: {
@@ -53,7 +58,8 @@ export async function openSupplyLoan(
       name: `Farm Supply Loan — ${request.supply.productName}`,
       type: LoanType.SUPPLY,
       status: LoanStatus.ACTIVE,
-      amount: request.totalPrice,
+      amount: applyLoanInterest(request.totalPrice, interestRate),
+      interestRate,
       termMonths: SUPPLY_LOAN_DEFAULT_TERM_MONTHS,
       purpose: `Farm inputs loaned — ${request.quantity} × ${request.supply.productName}`,
       due,

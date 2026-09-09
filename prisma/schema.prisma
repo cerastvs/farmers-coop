@@ -182,6 +182,7 @@ model Loan {
   type               LoanType            @default(MONEY)
   status             LoanStatus          @default(PENDING)
   amount             Decimal             @db.Decimal(10, 2)
+  interestRate       Decimal             @default(2.00) @db.Decimal(5, 2)
   termMonths         Int                 @default(6)
   purpose            String?
   createdAt          DateTime            @default(now())
@@ -472,4 +473,9 @@ model SmsMessage {
   error     String?
   metadata  Json?
   createdAt DateTime  @default(now())
+}
+
+model CoopSetting {
+  key   String @id
+  value String
 }

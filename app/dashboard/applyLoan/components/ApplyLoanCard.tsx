@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Money } from "@/components/Money";
 import { ArrowRight } from "lucide-react";
@@ -13,12 +13,50 @@ interface ApplyLoanCardProps {
   onSubmitted?: () => void;
 }
 
+function roundMoney(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
 export function ApplyLoanCard({ currentBalance, hasGuarantor, hasPendingRequest, isLoading, onSubmitted }: ApplyLoanCardProps) {
   const hasBalance = currentBalance !== null && currentBalance > 0;
   const missingGuarantor = hasGuarantor !== null && hasGuarantor === false;
   const blocked = hasBalance || missingGuarantor || !!hasPendingRequest;
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [interestRate, setInterestRate] = useState<number>(2);
+  const [amount, setAmount] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/settings/loan-interest");
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && typeof data.rate === "number") {
+            setInterestRate(data.rate);
+          }
+        }
+      } catch {
+        // keep the default rate when the fetch fails
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const principal = useMemo(() => {
+    const value = Number(amount);
+    if (!Number.isFinite(value) || value < 0) return 0;
+    return roundMoney(value);
+  }, [amount]);
+
+  const totalPayable = useMemo(
+    () => roundMoney(principal * (1 + interestRate / 100)),
+    [principal, interestRate],
+  );
+  const interestAmount = roundMoney(totalPayable - principal);
 
   async function submitLoan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -42,6 +80,7 @@ export function ApplyLoanCard({ currentBalance, hasGuarantor, hasPendingRequest,
       if (!response.ok) throw new Error(data.error ?? data.message ?? "Unable to submit loan request");
       setMessage({ kind: "success", text: data.message ?? "Loan request submitted for review." });
       formElement.reset();
+      setAmount("");
       onSubmitted?.();
     } catch (error) {
       setMessage({ kind: "error", text: error instanceof Error ? error.message : "Unable to submit loan request" });
@@ -113,8 +152,28 @@ export function ApplyLoanCard({ currentBalance, hasGuarantor, hasPendingRequest,
                 placeholder="Up to ₱5,000"
                 required
                 disabled={blocked}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
               />
             </label>
+            {principal > 0 && !blocked && interestRate > 0 && (
+              <div className="sm:col-span-2 rounded-xl border border-green-200 bg-green-50 p-3.5 space-y-1.5">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Total payable
+                  </span>
+                  <span className="text-lg font-bold text-green-700">
+                    <Money value={totalPayable} />
+                  </span>
+                </div>
+                <p className="text-xs text-gray-600">
+                  <Money value={principal} /> principal plus <Money value={interestAmount} /> flat interest at {interestRate}%
+                </p>
+                <p className="text-[11px] font-mono text-gray-500">
+                  Formula: Total = Amount × (1 + {interestRate}%) = <Money value={principal} /> × {1 + interestRate / 100} = <Money value={totalPayable} />
+                </p>
+              </div>
+            )}
             <label className="text-sm font-semibold text-gray-700">
               Payment term
               <select

@@ -8,7 +8,7 @@ import {
 } from "@/lib/api";
 import { writeAudit } from "@/lib/activity";
 import prisma from "@/lib/client";
-import { OFFICER_ROLES } from "@/lib/permissions";
+import { MEMBER_ROLES } from "@/lib/permissions";
 import {
   getLoanInterestRate,
   LOAN_INTEREST_SETTING_KEY,
@@ -25,7 +25,7 @@ const RateSchema = z
 
 export async function GET() {
   try {
-    await requireUser(OFFICER_ROLES);
+    await requireUser(MEMBER_ROLES);
     const rate = await getLoanInterestRate();
     return NextResponse.json({ rate });
   } catch (error) {

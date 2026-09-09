@@ -166,6 +166,7 @@ export async function submitLoanRequest({
           userId: memberId,
           name: input.type === LoanType.SUPPLY ? "Farm Supply Loan" : "Cash Loan",
           amount: applyLoanInterest(input.amount, interestRate),
+          principalAmount: input.amount,
           interestRate,
           termMonths: input.termMonths,
           purpose: input.purpose,

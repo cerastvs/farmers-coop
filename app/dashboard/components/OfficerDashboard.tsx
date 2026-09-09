@@ -3593,6 +3593,7 @@ export default function OfficerDashboard({
   const [ratePassword, setRatePassword] = useState("");
   const [ratePassError, setRatePassError] = useState<string | null>(null);
   const [savingRate, setSavingRate] = useState(false);
+  const [loanApproveConfirm, setLoanApproveConfirm] = useState<Loan | null>(null);
   const [pendingFilter, setPendingFilter] = useState<Record<Section, boolean>>({
     applications: false,
     members: false,
@@ -3869,13 +3870,22 @@ export default function OfficerDashboard({
     } catch { alert("Failed to delete machine"); } finally { setDeleting(false); }
   }
 
-  async function handleLoanAction(loanId: string, action: "approve" | "reject", reason?: string) {
+  async function executeLoanAction(loanId: string, action: "approve" | "reject", reason?: string) {
     setBusy(loanId);
     try {
       const res = await fetch(`/api/secretary/loans/${loanId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, reason }) });
       const result = await res.json();
       if (res.ok) { await fetchData(); } else { alert(result.error || `Failed to ${action} loan`); }
     } catch { alert(`Failed to ${action} loan`); } finally { setBusy(null); }
+  }
+
+  function handleLoanAction(loanId: string, action: "approve" | "reject", reason?: string) {
+    if (action === "approve") {
+      const loan = data?.loans.find((l) => l.id === loanId) ?? null;
+      setLoanApproveConfirm(loan);
+      return;
+    }
+    void executeLoanAction(loanId, action, reason);
   }
 
   async function handlePaymentAction(paymentId: string, action: "verify" | "reject", reason?: string) {
@@ -4408,6 +4418,34 @@ export default function OfficerDashboard({
               <div className="flex gap-3 mt-5">
                 <button onClick={closeRateConfirm} disabled={savingRate} className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition">Cancel</button>
                 <button onClick={confirmRateSave} disabled={savingRate} className="flex-1 py-3 bg-[#1b5e3b] text-white hover:bg-[#154a2f] rounded-2xl font-bold transition disabled:opacity-50">{savingRate ? "Saving…" : "Confirm"}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loanApproveConfirm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
+            <div className="text-center">
+              <div className="mx-auto h-12 w-12 rounded-full bg-[#e8f5ec] flex items-center justify-center mb-4">
+                <CheckCircle size={20} className="text-[#1b5e3b]" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">Approve this loan?</h3>
+              <p className="text-sm text-gray-500 mb-5">
+                <span className="font-semibold text-gray-700">{loanApproveConfirm.borrower.name}</span> will receive a loan of{" "}
+                <span className="font-semibold text-gray-700"><Money value={loanApproveConfirm.principalAmount ?? loanApproveConfirm.amount} /></span>
+                {loanApproveConfirm.principalAmount !== null &&
+                  loanApproveConfirm.principalAmount > 0 &&
+                  Math.abs(loanApproveConfirm.amount - loanApproveConfirm.principalAmount) >= 0.005 && (
+                    <> (<Money value={loanApproveConfirm.amount} /> payable with {loanApproveConfirm.interestRate}% interest)</>
+                  )}. The loan will become active immediately.
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setLoanApproveConfirm(null)} disabled={busy === loanApproveConfirm.id} className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition">Cancel</button>
+                <button onClick={() => { const l = loanApproveConfirm; setLoanApproveConfirm(null); void executeLoanAction(l.id, "approve"); }} disabled={busy === loanApproveConfirm.id} className="flex-1 py-3 bg-[#1b5e3b] text-white hover:bg-[#154a2f] rounded-2xl font-bold transition disabled:opacity-50">
+                  {busy === loanApproveConfirm.id ? "Approving…" : "Confirm"}
+                </button>
               </div>
             </div>
           </div>

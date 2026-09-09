@@ -13,6 +13,7 @@ import {
   Clock,
   AlertTriangle,
   CheckCircle2,
+  CheckCircle,
   XCircle,
   TrendingUp,
   Banknote,
@@ -207,6 +208,7 @@ export default function TreasurerPage() {
     action: "approve" | "verify" | "reject";
   } | null>(null);
   const [rejectLoan, setRejectLoan] = useState<Loan | null>(null);
+  const [loanApproveConfirm, setLoanApproveConfirm] = useState<Loan | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
@@ -818,14 +820,7 @@ export default function TreasurerPage() {
                             <StatusBadge status={loan.status} />
                             <button
                               disabled={busy === loan.id}
-                              onClick={() =>
-                                mutate(
-                                  loan.id,
-                                  `/api/admin/loans/${loan.id}`,
-                                  { action: "approve" },
-                                  "Loan approved.",
-                                )
-                              }
+                              onClick={() => setLoanApproveConfirm(loan)}
                               className={buttonPrimary}
                             >
                               Approve
@@ -1115,14 +1110,7 @@ export default function TreasurerPage() {
                                 <div className="flex justify-end gap-1.5">
                                   <button
                                     disabled={busy === loan.id}
-                                    onClick={() =>
-                                      mutate(
-                                        loan.id,
-                                        `/api/admin/loans/${loan.id}`,
-                                        { action: "approve" },
-                                        "Loan approved.",
-                                      )
-                                    }
+                                    onClick={() => setLoanApproveConfirm(loan)}
                                     className="rounded-md bg-[#1b5e3b] px-2.5 py-1 text-[10px] font-semibold text-white transition-all hover:bg-[#15503a] disabled:opacity-40"
                                   >
                                     Approve
@@ -1634,6 +1622,46 @@ export default function TreasurerPage() {
           }
           onClose={() => setConfirmPayment(null)}
         />
+      )}
+      {loanApproveConfirm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
+            <div className="text-center">
+              <div className="mx-auto h-12 w-12 rounded-full bg-[#e8f5ec] flex items-center justify-center mb-4">
+                <CheckCircle size={20} className="text-[#1b5e3b]" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">Approve this loan?</h3>
+              <p className="text-sm text-gray-500 mb-5">
+                <span className="font-semibold text-gray-700">{loanApproveConfirm.borrower.name}</span> will receive a loan of{" "}
+                <span className="font-semibold text-gray-700"><Money value={loanApproveConfirm.principalAmount ?? loanApproveConfirm.amount} /></span>
+                {loanApproveConfirm.principalAmount !== null &&
+                  loanApproveConfirm.principalAmount > 0 &&
+                  Math.abs(loanApproveConfirm.amount - loanApproveConfirm.principalAmount) >= 0.005 && (
+                    <> (<Money value={loanApproveConfirm.amount} /> payable with {loanApproveConfirm.interestRate}% interest)</>
+                  )}. The loan will become active immediately.
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setLoanApproveConfirm(null)} disabled={busy === loanApproveConfirm.id} className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition">Cancel</button>
+                <button
+                  onClick={() => {
+                    const loan = loanApproveConfirm;
+                    setLoanApproveConfirm(null);
+                    void mutate(
+                      loan.id,
+                      `/api/admin/loans/${loan.id}`,
+                      { action: "approve" },
+                      "Loan approved.",
+                    );
+                  }}
+                  disabled={busy === loanApproveConfirm.id}
+                  className="flex-1 py-3 bg-[#1b5e3b] text-white hover:bg-[#154a2f] rounded-2xl font-bold transition disabled:opacity-50"
+                >
+                  {busy === loanApproveConfirm.id ? "Approving…" : "Confirm"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
       {rejectLoan && (
         <PaymentConfirmModal

@@ -59,6 +59,7 @@ export async function openSupplyLoan(
       type: LoanType.SUPPLY,
       status: LoanStatus.ACTIVE,
       amount: applyLoanInterest(request.totalPrice, interestRate),
+      principalAmount: request.totalPrice,
       interestRate,
       termMonths: SUPPLY_LOAN_DEFAULT_TERM_MONTHS,
       purpose: `Farm inputs loaned — ${request.quantity} × ${request.supply.productName}`,

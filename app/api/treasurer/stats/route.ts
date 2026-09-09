@@ -36,6 +36,8 @@ export async function GET() {
           name: l.name,
           type: l.type,
           amount: Number(l.amount),
+          principalAmount: l.principalAmount === null ? null : Number(l.principalAmount),
+          interestRate: Number(l.interestRate),
           remainingBalance: Math.max(Number(l.amount) - paid, 0),
           termMonths: l.termMonths,
           purpose: l.purpose,

@@ -5,11 +5,14 @@ import Link from "next/link";
 import { logout } from "../../login/actions";
 import { IconMenu, IconLeaf } from "@/components/icons";
 import { Bell } from "lucide-react";
+import { useUser } from "../../hooks/useUser";
 
 export function DashboardHeader() {
+  const { user } = useUser();
   const [menuOpen, setMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [userRole, setUserRole] = useState<string | null>(null);
+
+  const userRole = user?.role ?? null;
 
   useEffect(() => {
     fetch("/api/notifications")
@@ -19,10 +22,6 @@ export function DashboardHeader() {
           setUnreadCount(data.filter((n: { read: boolean }) => !n.read).length);
         }
       })
-      .catch(() => {});
-    fetch("/api/me")
-      .then((res) => res.json())
-      .then((data) => setUserRole(data.role ?? null))
       .catch(() => {});
   }, []);
 

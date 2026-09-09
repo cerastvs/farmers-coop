@@ -15,6 +15,7 @@ import {
 } from "@/lib/application-fee";
 import { apiErrorResponse, ApiError, requireUser } from "@/lib/api";
 import prisma from "@/lib/client";
+import { getApplicationFeeStatus } from "@/lib/services/dashboard";
 import {
   runReservedPaymentProofUpload,
   uploadPaymentProof,
@@ -24,76 +25,12 @@ export async function GET() {
   try {
     const actor = await requireUser([Role.APPLICANT]);
 
-    const application = await prisma.application.findFirst({
-      where: { userId: actor.userId },
-      select: {
-        id: true,
-        status: true,
-        rejectionReason: true,
-        rejectionDetails: true,
-        reviewedAt: true,
-        reviewedByUser: {
-          select: { id: true, name: true, username: true, role: true },
-        },
-      },
-    });
-    if (!application) {
+    const status = await getApplicationFeeStatus(actor.userId);
+    if (!status) {
       throw new ApiError(404, "Application not found");
     }
 
-    const payments = await prisma.payment.findMany({
-      where: {
-        applicationId: application.id,
-        type: PaymentType.APPLICATION_FEE,
-      },
-      orderBy: { createdAt: "desc" },
-      include: {
-        user: { select: { id: true, name: true, username: true, role: true } },
-        proofUploadedBy: {
-          select: { id: true, name: true, username: true, role: true },
-        },
-        verifiedByUser: {
-          select: { id: true, name: true, username: true, role: true },
-        },
-        declinedByUser: {
-          select: { id: true, name: true, username: true, role: true },
-        },
-      },
-    });
-
-    const serialize = (payment: (typeof payments)[number]) => ({
-      id: payment.id,
-      status: payment.status,
-      amount: Number(payment.amount),
-      paymentMethod: payment.paymentMethod,
-      referenceNo: payment.referenceNo,
-      receiptUrl: payment.receiptUrl,
-      createdAt: payment.createdAt.toISOString(),
-      verifiedAt: payment.verifiedAt?.toISOString() ?? null,
-      paidAt: payment.paidAt?.toISOString() ?? null,
-      rejectionReason: payment.rejectionReason,
-      proofUploadedBy: payment.proofUploadedBy,
-      proofUploadedAt: payment.proofUploadedAt?.toISOString() ?? null,
-      verifiedBy: payment.verifiedByUser,
-      declinedBy: payment.declinedByUser,
-      declinedAt: payment.declinedAt?.toISOString() ?? null,
-    });
-
-    return NextResponse.json({
-      application: {
-        id: application.id,
-        status: application.status,
-        rejectionReason: application.rejectionReason,
-        rejectionDetails: application.rejectionDetails,
-        reviewedAt: application.reviewedAt?.toISOString() ?? null,
-        reviewedBy: application.reviewedByUser,
-      },
-      fee: {
-        amount: getApplicationFeeAmount(),
-      },
-      payment: payments[0] ? serialize(payments[0]) : null,
-      history: payments.map(serialize),
-    });
+    return NextResponse.json(status);
   } catch (error) {
     return apiErrorResponse(error, "Failed to fetch application fee status");
   }

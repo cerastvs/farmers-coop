@@ -16,6 +16,7 @@ import {
   Upload,
   XCircle,
 } from "lucide-react";
+import { fetchWithTimeout } from "../hooks/fetchWithTimeout";
 
 type ApplicationFeeStatus =
   | "none"
@@ -70,7 +71,7 @@ export default function PaymentPage() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/application-fee");
+      const res = await fetchWithTimeout("/api/application-fee");
       if (res.status === 404) {
         setError("No membership application found for your account.");
         return;

@@ -8,6 +8,7 @@ import { LoanCard } from "./components/LoanCard";
 import { PaymentHistoryTable } from "./components/PaymentHistoryTable";
 import { IconChevronLeft } from "@/components/icons";
 import { Money } from "@/components/Money";
+import { fetchWithTimeout } from "../hooks/fetchWithTimeout";
 
 interface LoanData {
   id: string;
@@ -64,8 +65,8 @@ export default function ViewLoanPage() {
   const fetchData = useCallback(async () => {
     try {
       const [loanResponse, paymentResponse] = await Promise.all([
-        fetch("/api/loans"),
-        fetch("/api/payments"),
+        fetchWithTimeout("/api/loans"),
+        fetchWithTimeout("/api/payments"),
       ]);
       if (loanResponse.ok) {
         const data = await loanResponse.json();

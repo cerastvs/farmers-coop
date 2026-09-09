@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { fetchWithTimeout } from "./fetchWithTimeout";
 
 const ALERT_SEEN_KEYS = {
   rejectedLoans: "fc:seen:rejectedLoans",
@@ -41,7 +42,7 @@ export function markAlertsSeen(category: AlertCategory, ids: string[]) {
 export function useMarkAlertSeen(category: AlertCategory) {
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/dashboard/stats")
+    fetchWithTimeout("/api/dashboard/stats")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled || !data) return;

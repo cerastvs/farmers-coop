@@ -6,6 +6,7 @@ import { DashboardHeader } from "../components/DashboardHeader";
 import { IconChevronLeft } from "@/components/icons";
 import { Money } from "@/components/Money";
 import { useMarkAlertSeen } from "../hooks/useAlertSeen";
+import { fetchWithTimeout } from "../hooks/fetchWithTimeout";
 
 interface Supply {
   id: string;
@@ -39,7 +40,7 @@ export default function SuppliesPage() {
 
   const loadSupplies = useCallback(async () => {
     try {
-      const response = await fetch("/api/supplies");
+      const response = await fetchWithTimeout("/api/supplies");
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Unable to load supplies");
       setSupplies(data.supplies);

@@ -14,6 +14,7 @@ import { IconChevronLeft } from "@/components/icons";
 import { ImageModal } from "@/components/ImageModal";
 import { Tractor, X } from "lucide-react";
 import { useMarkAlertSeen } from "../hooks/useAlertSeen";
+import { fetchWithTimeout } from "../hooks/fetchWithTimeout";
 
 interface OtherRequest {
   id: string;
@@ -60,7 +61,7 @@ export default function RentMachinePage() {
 
   async function fetchMachines() {
     try {
-      const res = await fetch("/api/machines");
+      const res = await fetchWithTimeout("/api/machines");
       if (res.ok) {
         const data = await res.json();
         setMachines(data.machines);

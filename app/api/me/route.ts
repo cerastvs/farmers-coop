@@ -1,7 +1,7 @@
 // app/api/me/route.ts
 import { NextResponse } from "next/server";
-import prisma from "@/lib/client";
 import { getSession } from "@/lib/session";
+import { getDashboardUser } from "@/lib/services/dashboard";
 
 export async function GET() {
   const session = await getSession();
@@ -10,29 +10,11 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const [user, application] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: session.userId },
-      select: {
-        id: true,
-        name: true,
-        username: true,
-        role: true,
-      },
-    }),
-    prisma.application.findFirst({
-      where: { userId: session.userId },
-      select: { id: true, status: true },
-    }),
-  ]);
+  const user = await getDashboardUser(session.userId, session.hasApplied);
 
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  return NextResponse.json({
-    ...user,
-    hasApplied: session.hasApplied,
-    applicationStatus: application?.status ?? null,
-  });
+  return NextResponse.json(user);
 }

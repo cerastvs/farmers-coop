@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { DashboardHeader } from "../components/DashboardHeader";
+import { fetchWithTimeout } from "../hooks/fetchWithTimeout";
 import { Bell, CheckCheck, Trash2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
@@ -19,7 +20,7 @@ export default function NotificationsPage() {
 
   async function fetchNotifications() {
     try {
-      const res = await fetch("/api/notifications");
+      const res = await fetchWithTimeout("/api/notifications");
       if (res.ok) {
         const data = await res.json();
         setNotifications(data);

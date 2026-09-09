@@ -11,6 +11,7 @@ import {
 import { IconChevronLeft, IconInfoCircle } from "@/components/icons";
 import { Money } from "@/components/Money";
 import { useMarkAlertSeen } from "../hooks/useAlertSeen";
+import { fetchWithTimeout } from "../hooks/fetchWithTimeout";
 
 export default function ApplyLoanPage() {
   useMarkAlertSeen("rejectedLoans");
@@ -21,7 +22,7 @@ export default function ApplyLoanPage() {
 
   const fetchStats = async () => {
     try {
-      const res = await fetch("/api/dashboard/stats");
+      const res = await fetchWithTimeout("/api/dashboard/stats");
       if (res.ok) {
         const data = await res.json();
         setTotalDebt(data.totalDebt);
@@ -36,7 +37,7 @@ export default function ApplyLoanPage() {
 
   const fetchLoans = async () => {
     try {
-      const res = await fetch("/api/loans");
+      const res = await fetchWithTimeout("/api/loans");
       if (res.ok) {
         const data = await res.json();
         setLoans(data.loans ?? []);

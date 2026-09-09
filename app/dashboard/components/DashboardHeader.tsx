@@ -11,6 +11,7 @@ export function DashboardHeader() {
   const { user } = useUser();
   const [menuOpen, setMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [guarantorRejected, setGuarantorRejected] = useState(false);
 
   const userRole = user?.role ?? null;
 
@@ -24,6 +25,17 @@ export function DashboardHeader() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (userRole === "APPLICANT" || userRole === "MEMBER") {
+      fetch("/api/registration")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          setGuarantorRejected(data?.guarantorStatus === "REJECTED");
+        })
+        .catch(() => {});
+    }
+  }, [userRole]);
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[#174b36] text-white shadow-lg shadow-[#173a2b]/10">
@@ -60,9 +72,14 @@ export function DashboardHeader() {
           <Link
             href="/registration"
             onClick={() => setMenuOpen(false)}
-            className="block w-full px-4 py-3 text-left text-sm font-semibold text-[#315646] transition-colors hover:bg-[#f0f7eb]"
+            className="relative block w-full px-4 py-3 text-left text-sm font-semibold text-[#315646] transition-colors hover:bg-[#f0f7eb]"
           >
-            Edit Profile
+            <span className="inline-flex items-center gap-2">
+              Edit Profile
+              {guarantorRejected && (
+                <span className="inline-block h-2 w-2 rounded-full bg-red-500 ring-2 ring-red-200" />
+              )}
+            </span>
           </Link>
           {userRole === "APPLICANT" && (
             <Link

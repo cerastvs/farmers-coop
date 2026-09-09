@@ -98,6 +98,8 @@ export function GuarantorApprovalsCard({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<PendingGuarantor | null>(null);
+  const [rejecting, setRejecting] = useState<PendingGuarantor | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -140,20 +142,16 @@ export function GuarantorApprovalsCard({
     }
   }
 
-  async function reject(target: PendingGuarantor) {
+  async function reject(target: PendingGuarantor, reason: string) {
     setBusy(target.applicationId);
     try {
-      const reason = window.prompt("Enter a reason for rejecting this guarantor");
-      if (!reason?.trim()) {
-        setBusy(null);
-        return;
-      }
       await requestJson(`/api/admin/guarantors/${target.applicationId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "reject", reason: reason.trim() }),
+        body: JSON.stringify({ action: "reject", reason }),
       });
       removeFromList(target.applicationId);
+      setRejecting(null);
     } catch (error) {
       console.error("Failed to reject guarantor:", error);
     } finally {
@@ -224,7 +222,10 @@ export function GuarantorApprovalsCard({
                     </button>
                     <button
                       disabled={busy === item.applicationId}
-                      onClick={() => reject(item)}
+                      onClick={() => {
+                        setRejectReason("");
+                        setRejecting(item);
+                      }}
                       className={buttonDanger}
                     >
                       <XCircle size={13} />
@@ -342,6 +343,76 @@ export function GuarantorApprovalsCard({
                 className="flex-1 rounded-2xl bg-[#1b5e3b] py-3 font-bold text-white transition hover:bg-[#154a2f] disabled:opacity-50"
               >
                 {busy === confirming.applicationId ? "Approving…" : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rejecting && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
+                <XCircle size={20} className="text-red-600" />
+              </div>
+              <h3 className="mb-1 text-lg font-bold text-gray-900">
+                Reject this guarantor?
+              </h3>
+              <p className="mb-5 text-sm text-gray-500">
+                <span className="font-semibold text-gray-700">
+                  {rejecting.member.name}
+                </span>{" "}
+                (@{rejecting.member.username}) will be notified. They can update
+                their guarantor and submit it for review again.
+              </p>
+            </div>
+
+            <div className="mb-5 space-y-2.5 rounded-2xl border border-[#e2ebe6] bg-[#fafcfb] p-4">
+              <DetailRow
+                label="Guarantor"
+                value={guarantorFullName(rejecting.guarantor)}
+              />
+              <DetailRow
+                label="Contact number"
+                value={
+                  guarantorValue(rejecting.guarantor, "contact") || "—"
+                }
+              />
+              <DetailRow
+                label="Relationship"
+                value={
+                  guarantorValue(rejecting.guarantor, "relationship") || "—"
+                }
+              />
+            </div>
+
+            <label className="mb-1.5 block text-xs font-semibold text-[#3d5c47]">
+              Reason for rejection (required)
+            </label>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="State why this guarantor could not be approved"
+              rows={3}
+              autoFocus
+              className="mb-5 w-full resize-none rounded-2xl border border-red-200 bg-red-50/30 px-3.5 py-2.5 text-sm text-gray-700 outline-none transition placeholder:text-gray-400 focus:border-red-300 focus:ring-2 focus:ring-red-100"
+            />
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setRejecting(null)}
+                disabled={busy === rejecting.applicationId}
+                className="flex-1 rounded-2xl bg-gray-100 py-3 font-bold text-gray-600 transition hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => reject(rejecting, rejectReason.trim())}
+                disabled={busy === rejecting.applicationId || !rejectReason.trim()}
+                className="flex-1 rounded-2xl bg-red-600 py-3 font-bold text-white transition hover:bg-red-700 disabled:opacity-50"
+              >
+                {busy === rejecting.applicationId ? "Rejecting…" : "Confirm"}
               </button>
             </div>
           </div>

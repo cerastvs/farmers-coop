@@ -38,6 +38,7 @@ const DEFAULT_DOTS = {
   supplyAlerts: false,
   machineAlerts: false,
   loanDue: false,
+  guarantorRejected: false,
 };
 
 export function DashboardClient({
@@ -74,6 +75,7 @@ export function DashboardClient({
           machineAlerts:
             unseenAlertIds("machineAlerts", stats.machineRequestIds).length > 0,
           loanDue: stats.loanDueAlerts > 0,
+          guarantorRejected: stats.guarantorStatus === "REJECTED",
         }
       : DEFAULT_DOTS;
 
@@ -152,7 +154,7 @@ export function DashboardClient({
               iconBg="bg-green-100"
               iconColor="text-green-700"
               href="/dashboard/applyLoan"
-              dot={dots.rejectedLoans}
+              dot={dots.rejectedLoans || dots.guarantorRejected}
             />
             <QuickActionButton
               label="Rent Machine"

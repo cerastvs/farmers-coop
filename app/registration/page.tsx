@@ -101,10 +101,26 @@ function DynamicListField({
 
 export default function Registration() {
   const [loading, setLoading] = useState(false);
+  const [resubmitting, setResubmitting] = useState(false);
   const [application, setApplication] = useState<ApplicationWithLists | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isApplicant, setIsApplicant] = useState(false);
   const [farmOwnership, setFarmOwnership] = useState("");
+
+  const resubmitGuarantor = async () => {
+    setResubmitting(true);
+    try {
+      const res = await fetch("/api/guarantor/resubmit", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      const fresh = await fetch("/api/registration").then((r) => r.json());
+      if (fresh) setApplication(fresh);
+      alert(data.message || "Your guarantor has been resubmitted for review.");
+    } catch {
+      alert("Something went wrong");
+    } finally {
+      setResubmitting(false);
+    }
+  };
 
   useEffect(() => {
     fetch("/api/registration")
@@ -127,6 +143,19 @@ export default function Registration() {
   }, []);
 
   useEffect(() => {
+    if (!application) return;
+    if (
+      new URLSearchParams(window.location.search).get("focus") === "guarantor"
+    ) {
+      requestAnimationFrame(() => {
+        document
+          .getElementById("guarantor")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }, [application]);
+
+  useEffect(() => {
     fetch("/api/me")
       .then((res) => res.json())
       .then((data) => {
@@ -137,9 +166,13 @@ export default function Registration() {
 
   const isUpdate = !!application;
 
-  const guarantorNeedsReview =
-    !!application?.guarantorStatus &&
-    application.guarantorStatus !== "APPROVED";
+  const guarantorStatus = application?.guarantorStatus ?? null;
+  const guarantorRejected = guarantorStatus === "REJECTED";
+  const guarantorPending =
+    !!guarantorStatus && guarantorStatus !== "APPROVED" && !guarantorRejected;
+  const guarantorNeedsReview = guarantorPending || guarantorRejected;
+  const guarantorRejectionReason =
+    application?.guarantorRejectionReason ?? null;
 
   return (
     <div className="relative min-h-screen bg-[#edf5df] flex flex-col items-center px-4 py-10 md:px-8 md:py-12">
@@ -402,7 +435,19 @@ export default function Registration() {
             </div>
 
             {/* Guarantor */}
-            <SectionHeader label="Guarantor" />
+            <SectionHeader
+              id="guarantor"
+              label={
+                guarantorRejected ? (
+                  <span className="inline-flex items-center gap-2">
+                    Guarantor
+                    <span className="inline-block h-2 w-2 rounded-full bg-red-500 ring-2 ring-red-200" />
+                  </span>
+                ) : (
+                  "Guarantor"
+                )
+              }
+            />
 
             <div className="space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-x-8 md:gap-y-5">
               <p className="text-xs text-[#718176] md:col-span-2">
@@ -428,7 +473,8 @@ export default function Registration() {
                         : ""
                     }
                     error={errors.guarantor}
-                    accent={guarantorNeedsReview}
+                    accent={guarantorPending}
+                    reject={guarantorRejected}
                   />
                 </div>
                 <div className="col-span-2">
@@ -449,7 +495,8 @@ export default function Registration() {
                         : ""
                     }
                     error={errors.guarantor}
-                    accent={guarantorNeedsReview}
+                    accent={guarantorPending}
+                    reject={guarantorRejected}
                   />
                 </div>
               </div>
@@ -472,7 +519,8 @@ export default function Registration() {
                         : ""
                     }
                     error={errors.guarantor}
-                    accent={guarantorNeedsReview}
+                    accent={guarantorPending}
+                    reject={guarantorRejected}
                   />
                 </div>
                 <div className="col-span-2">
@@ -494,9 +542,11 @@ export default function Registration() {
                     className={`w-full rounded-xl border bg-[#fafcf8] px-3 py-2.5 text-sm text-[#173a2b] outline-none transition placeholder:text-[#9aa89e] focus:border-[#4f7e38] focus:ring-4 focus:ring-[#b9db9e]/35 ${
                       errors.guarantor
                         ? "border-red-400"
-                        : guarantorNeedsReview
-                          ? "border-[#e8993d] focus:border-[#e8993d] focus:ring-[#f3c98b]/40"
-                          : "border-[#dbe5d7]"
+                        : guarantorRejected
+                          ? "border-red-400 focus:border-red-400 focus:ring-red-200/40"
+                          : guarantorPending
+                            ? "border-[#e8993d] focus:border-[#e8993d] focus:ring-[#f3c98b]/40"
+                            : "border-[#dbe5d7]"
                     }`}
                   >
                     <option value="">None</option>
@@ -528,7 +578,8 @@ export default function Registration() {
                         : ""
                     }
                     error={errors.guarantor}
-                    accent={guarantorNeedsReview}
+                    accent={guarantorPending}
+                    reject={guarantorRejected}
                   />
                 </div>
                 <div>
@@ -549,7 +600,8 @@ export default function Registration() {
                         : ""
                     }
                     error={errors.guarantor}
-                    accent={guarantorNeedsReview}
+                    accent={guarantorPending}
+                    reject={guarantorRejected}
                   />
                 </div>
               </div>
@@ -557,18 +609,49 @@ export default function Registration() {
                 <FieldError error={errors.guarantor} />
               </div>
               {guarantorNeedsReview && (
-                <div className="flex items-start gap-2 rounded-xl border border-[#e8993d]/50 bg-[#fdf4e3] px-3.5 py-2.5 md:col-span-2">
-                  <span className="grid h-5 w-5 flex-none place-items-center rounded-full bg-[#e8993d] text-[10px] text-white">
+                <div
+                  className={`flex items-start gap-2 rounded-xl border px-3.5 py-2.5 md:col-span-2 ${
+                    guarantorRejected
+                      ? "border-red-300 bg-red-50"
+                      : "border-[#e8993d]/50 bg-[#fdf4e3]"
+                  }`}
+                >
+                  <span
+                    className={`grid h-5 w-5 flex-none place-items-center rounded-full text-[10px] text-white ${
+                      guarantorRejected ? "bg-red-500" : "bg-[#e8993d]"
+                    }`}
+                  >
                     !
                   </span>
-                  {application?.guarantorStatus === "REJECTED" ? (
-                    <p className="text-xs leading-relaxed text-[#8a5416]">
-                      Your guarantor was not approved. Please update your
-                      guarantor information above and save — it will be
-                      reviewed again by the president or treasurer.
-                    </p>
+                  {guarantorRejected ? (
+                    <div>
+                      <p className="text-xs leading-relaxed text-red-700">
+                        Your guarantor was not approved
+                        {guarantorRejectionReason
+                          ? ` because: ${guarantorRejectionReason}`
+                          : ""}
+                        . Update the details above or resubmit as-is for
+                        another review by the president or treasurer.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={resubmitGuarantor}
+                        disabled={resubmitting}
+                        className="mt-2.5 rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {resubmitting
+                          ? "Resubmitting…"
+                          : "Resubmit Guarantor for Review"}
+                      </button>
+                    </div>
                   ) : (
-                    <p className="text-xs leading-relaxed text-[#8a5416]">
+                    <p
+                      className={`text-xs leading-relaxed ${
+                        guarantorRejected
+                          ? "text-red-700"
+                          : "text-[#8a5416]"
+                      }`}
+                    >
                       Your guarantor has not been verified yet. Wait for the
                       president or treasurer to approve it before applying for
                       a loan.
@@ -629,9 +712,12 @@ export default function Registration() {
   );
 }
 
-function SectionHeader({ label }: { label: string }) {
+function SectionHeader({ label, id }: { label: React.ReactNode; id?: string }) {
   return (
-    <div className="flex items-center gap-2.5 mb-4 mt-8 first:mt-0">
+    <div
+      className="flex items-center gap-2.5 mb-4 mt-8 first:mt-0 scroll-mt-28"
+      id={id}
+    >
       <span className="h-2 w-2 rounded-sm bg-[#4f7e38]" />
       <h2 className="text-xs font-bold uppercase tracking-widest text-[#4f7e38]">
         {label}
@@ -648,6 +734,7 @@ function TextInput({
   defaultValue,
   error,
   accent,
+  reject,
 }: {
   name: string;
   type?: string;
@@ -656,12 +743,15 @@ function TextInput({
   defaultValue: string | number;
   error?: string;
   accent?: boolean;
+  reject?: boolean;
 }) {
   const borderClass = error
     ? "border-red-400"
-    : accent
-      ? "border-[#e8993d] focus:border-[#e8993d] focus:ring-[#f3c98b]/40"
-      : "border-[#dbe5d7]";
+    : reject
+      ? "border-red-400 focus:border-red-400 focus:ring-red-200/40"
+      : accent
+        ? "border-[#e8993d] focus:border-[#e8993d] focus:ring-[#f3c98b]/40"
+        : "border-[#dbe5d7]";
   return (
     <input
       type={type}

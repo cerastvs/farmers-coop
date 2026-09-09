@@ -78,11 +78,40 @@ export default function ApplyLoanPage() {
             <IconChevronLeft className="w-4 h-4" />
             Back to Dashboard
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">Apply for a Loan</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Apply for a Loan{" "}
+            {guarantorStatus === "REJECTED" && (
+              <span className="ml-1 inline-block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-red-200" />
+            )}
+          </h1>
           <p className="text-sm text-gray-500 mt-0.5">
             Select the loan type that best fits your farming needs
           </p>
         </div>
+
+        {hasGuarantor === false && guarantorStatus === "REJECTED" && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex gap-3 items-start animate-in fade-in slide-in-from-top-2">
+            <IconInfoCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-red-800">
+                Guarantor Rejected
+              </p>
+              <p className="text-xs text-red-700 mt-1 leading-relaxed">
+                Your guarantor was not approved. Update your guarantor through{" "}
+                <span className="font-semibold">Edit Profile</span> and wait for
+                the president or treasurer to review it before applying for a
+                loan.
+              </p>
+              <Link
+                href="/registration?focus=guarantor"
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-red-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-red-800"
+              >
+                <IconChevronLeft className="w-3.5 h-3.5 rotate-180" />
+                Update Guarantor
+              </Link>
+            </div>
+          </div>
+        )}
 
         {hasGuarantor === false && guarantorStatus === "PENDING" && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 items-start animate-in fade-in slide-in-from-top-2">
@@ -101,7 +130,9 @@ export default function ApplyLoanPage() {
           </div>
         )}
 
-        {hasGuarantor === false && guarantorStatus !== "PENDING" && (
+        {hasGuarantor === false &&
+          guarantorStatus !== "PENDING" &&
+          guarantorStatus !== "REJECTED" && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 items-start animate-in fade-in slide-in-from-top-2">
             <IconInfoCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
             <div>

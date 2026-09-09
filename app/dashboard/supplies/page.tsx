@@ -112,9 +112,26 @@ export default function SuppliesPage() {
           <Link href="/dashboard" className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-green-800 hover:underline">
             <IconChevronLeft className="h-4 w-4" /> Back to Dashboard
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">Farm Supplies</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Farm Supplies{" "}
+            {guarantorStatus === "REJECTED" && (
+              <span className="ml-1 inline-block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-red-200" />
+            )}
+          </h1>
           <p className="mt-1 text-sm text-gray-500">Request supplies for purchase or as a cooperative loan.</p>
         </div>
+
+        {hasGuarantor === false && guarantorStatus === "REJECTED" && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <p className="font-bold">Guarantor Rejected</p>
+            <p className="mt-1 text-xs leading-relaxed text-red-700">
+              Your guarantor was not approved. Update your guarantor through{" "}
+              <span className="font-semibold">Edit Profile</span> and wait for
+              the president or treasurer to review it. Purchases are still
+              available.
+            </p>
+          </div>
+        )}
 
         {hasGuarantor === false && guarantorStatus === "PENDING" && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
@@ -128,7 +145,9 @@ export default function SuppliesPage() {
           </div>
         )}
 
-        {hasGuarantor === false && guarantorStatus !== "PENDING" && (
+        {hasGuarantor === false &&
+          guarantorStatus !== "PENDING" &&
+          guarantorStatus !== "REJECTED" && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
             <p className="font-bold">Guarantor Required</p>
             <p className="mt-1 text-xs leading-relaxed text-amber-700">

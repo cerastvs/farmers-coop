@@ -22,6 +22,7 @@ export function ApplyLoanCard({ currentBalance, hasGuarantor, guarantorStatus, h
   const hasBalance = currentBalance !== null && currentBalance > 0;
   const missingGuarantor = hasGuarantor !== null && hasGuarantor === false;
   const guarantorPending = guarantorStatus === "PENDING";
+  const guarantorRejected = guarantorStatus === "REJECTED";
   const blocked = hasBalance || missingGuarantor || !!hasPendingRequest;
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
@@ -210,27 +211,36 @@ export function ApplyLoanCard({ currentBalance, hasGuarantor, guarantorStatus, h
               {message.text}
             </p>
           )}
-          <button
-            type="submit"
-            disabled={blocked || submitting || isLoading}
-            className={`w-full rounded-xl px-6 py-3 font-medium transition md:w-auto ${
-              blocked || submitting || isLoading
-                ? "cursor-not-allowed border border-gray-200 bg-gray-100 text-gray-400"
-                : "bg-green-700 text-white hover:bg-green-800"
-            }`}
-          >
-            {blocked
-              ? guarantorPending
-                ? "Guarantor Approval Pending"
-                : missingGuarantor
-                  ? "Add Your Guarantor"
-                  : hasPendingRequest
-                    ? "Request Under Review"
-                    : "Settlement Required"
-              : submitting
-                ? "Submitting…"
-                : "Submit Loan Request"}
-          </button>
+          {guarantorRejected ? (
+            <Link
+              href="/registration?focus=guarantor"
+              className="w-full rounded-xl bg-red-700 px-6 py-3 text-center font-medium text-white transition hover:bg-red-800 md:w-auto"
+            >
+              Update Guarantor
+            </Link>
+          ) : (
+            <button
+              type="submit"
+              disabled={blocked || submitting || isLoading}
+              className={`w-full rounded-xl px-6 py-3 font-medium transition md:w-auto ${
+                blocked || submitting || isLoading
+                  ? "cursor-not-allowed border border-gray-200 bg-gray-100 text-gray-400"
+                  : "bg-green-700 text-white hover:bg-green-800"
+              }`}
+            >
+              {blocked
+                ? guarantorPending
+                  ? "Guarantor Approval Pending"
+                  : missingGuarantor
+                    ? "Add Your Guarantor"
+                    : hasPendingRequest
+                      ? "Request Under Review"
+                      : "Settlement Required"
+                : submitting
+                  ? "Submitting…"
+                  : "Submit Loan Request"}
+            </button>
+          )}
         </form>
       </div>
     </div>

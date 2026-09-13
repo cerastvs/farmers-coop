@@ -329,12 +329,20 @@ async function generateLoansReport(filters: ReportFilters = {}) {
     generatedAt: new Date().toISOString(),
     totals: {
       loans: records.length,
-      principal: records.reduce((sum, loan) => sum + loan.amount, 0),
-      amountPaid: records.reduce((sum, loan) => sum + loan.amountPaid, 0),
-      outstandingBalance: records.reduce(
-        (sum, loan) => sum + loan.outstandingBalance,
-        0,
-      ),
+      // Rejected loan requests are excluded from principal, paid, and
+      // outstanding amounts; they are surfaced as their own totals.
+      principal: records
+        .filter((loan) => loan.status !== LoanStatus.REJECTED)
+        .reduce((sum, loan) => sum + loan.amount, 0),
+      amountPaid: records
+        .filter((loan) => loan.status !== LoanStatus.REJECTED)
+        .reduce((sum, loan) => sum + loan.amountPaid, 0),
+      outstandingBalance: records
+        .filter((loan) => loan.status !== LoanStatus.REJECTED)
+        .reduce(
+          (sum, loan) => sum + loan.outstandingBalance,
+          0,
+        ),
       requestsApproved: records.filter((l) => l.decision === "Approved").length,
       requestsRejected: records.filter((l) => l.decision === "Rejected").length,
       rejectedPayments: records.reduce(
@@ -741,14 +749,24 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
     (t) => t.type === SupplyTransactionType.LOAN,
   );
 
+  const activeLoanList = loanList.filter(
+    (l) => l.status !== "REJECTED",
+  );
+
   return {
     generatedAt: new Date().toISOString(),
     members: { users: users.length, list: users },
     loans: {
       count: loanList.length,
-      principal: loanList.reduce((sum, l) => sum + l.amount, 0),
-      amountPaid: loanList.reduce((sum, l) => sum + l.amountPaid, 0),
-      outstandingBalance: loanList.reduce((sum, l) => sum + l.outstandingBalance, 0),
+      // Rejected loan requests are excluded from principal, paid, and
+      // outstanding amounts; the rejected request count is reported separately.
+      principal: activeLoanList.reduce((sum, l) => sum + l.amount, 0),
+      amountPaid: activeLoanList.reduce((sum, l) => sum + l.amountPaid, 0),
+      outstandingBalance: activeLoanList.reduce(
+        (sum, l) => sum + l.outstandingBalance,
+        0,
+      ),
+      rejectedRequests: loanList.filter((l) => l.status === "REJECTED").length,
       byStatus: countsBy(
         loanList.map((l) => l.status),
         Object.values(LoanStatus),

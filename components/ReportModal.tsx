@@ -396,6 +396,19 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
             cell(l.due, l.due ? new Date(l.due as string).toLocaleDateString("en-PH") : "—"),
           ];
         });
+        const principalLoanRows = loanList
+          .filter((l) => l.status !== "REJECTED")
+          .map((l) => {
+            const u = (l.user ?? {}) as ReportData;
+            return [
+              cell(u.name),
+              cell(l.amount, money(l.amount)),
+              cell(l.amountPaid, money(l.amountPaid)),
+              cell(l.outstandingBalance, money(l.outstandingBalance)),
+              cell(l.status, humanize(l.status)),
+              cell(l.due, l.due ? new Date(l.due as string).toLocaleDateString("en-PH") : "—"),
+            ];
+          });
         const payCols = ["Name", "Type", "Method", "Amount", "Status", "Date"];
         const payRows = paymentList.map((p) => {
           const u = (p.user ?? {}) as ReportData;
@@ -457,7 +470,8 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {kvCard("Members", members.users ?? 0, () => showDetail("Members", ["Name", "Username", "Role", "Active"], memberDetailRows))}
               {kvCard("Loans", loans.count ?? 0, () => showDetail("Loans", loanCols, loanRows))}
-              {kvCard("Loan Principal", money(loans.principal), () => showDetail("Loan Principal", loanCols, loanRows))}
+              {kvCard("Loan Principal", money(loans.principal), () => showDetail("Loan Principal", loanCols, principalLoanRows))}
+              {kvCard("Rejected Requests", loans.rejectedRequests ?? 0)}
               {kvCard("Loan Paid", money(loans.amountPaid), () => showDetail("Loan Repayments", ["Name", "Amount Paid", "Status"], loanRepayRows))}
               {kvCard("Payments", payments.count ?? 0, () => showDetail("Payments", payCols, payRows))}
               {kvCard("Submitted Amount", money(payments.submittedAmount), () => showDetail("Submitted Payments", payCols, payRows))}
@@ -576,6 +590,20 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
             cell(l.due, l.due ? new Date(l.due as string).toLocaleDateString("en-PH") : "—"),
           ];
         });
+        const principalRows = loans
+          .filter((l) => l.status !== "REJECTED")
+          .map((l) => {
+            const b = (l.borrower ?? {}) as ReportData;
+            return [
+              cell(b.name),
+              cell(l.name),
+              cell(l.amount, money(l.amount)),
+              cell(l.amountPaid, money(l.amountPaid)),
+              cell(l.outstandingBalance, money(l.outstandingBalance)),
+              cell(l.status, humanize(l.status)),
+              cell(l.due, l.due ? new Date(l.due as string).toLocaleDateString("en-PH") : "—"),
+            ];
+          });
         const repayRows = loans.filter((l) => Number(l.amountPaid) > 0).map((l) => {
           const b = (l.borrower ?? {}) as ReportData;
           return [
@@ -585,7 +613,7 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
             cell(l.status, humanize(l.status)),
           ];
         });
-        const outstandingRows = loans.filter((l) => Number(l.outstandingBalance) > 0).map((l) => {
+        const outstandingRows = loans.filter((l) => Number(l.outstandingBalance) > 0 && l.status !== "REJECTED").map((l) => {
           const b = (l.borrower ?? {}) as ReportData;
           return [
             cell(b.name),
@@ -618,9 +646,10 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {kvCard("Loans", totals.loans ?? 0, () => showDetail("All Loans", loanCols, loanRows))}
-              {kvCard("Principal", money(totals.principal), () => showDetail("Loan Principal", loanCols, loanRows))}
+              {kvCard("Principal", money(totals.principal), () => showDetail("Loan Principal", loanCols, principalRows))}
               {kvCard("Paid", money(totals.amountPaid), () => showDetail("Loan Repayments", ["Borrower", "Amount", "Paid", "Status"], repayRows))}
               {kvCard("Outstanding", money(totals.outstandingBalance), () => showDetail("Outstanding Balances", ["Borrower", "Amount", "Outstanding", "Status"], outstandingRows))}
+              {kvCard("Rejected Requests", totals.rejectedRequests ?? 0)}
               {rejectedList.length > 0 &&
                 kvCard(
                   "Rejected Payments",

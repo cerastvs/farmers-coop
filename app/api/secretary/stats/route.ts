@@ -37,7 +37,7 @@ function isCurrentlyInUse(request: {
 
 export async function GET() {
   try {
-    await requireUser([Role.SECRETARY, Role.PRESIDENT]);
+    await requireUser([Role.SECRETARY, Role.PRESIDENT, Role.TREASURER]);
     const [
       applications,
       members,

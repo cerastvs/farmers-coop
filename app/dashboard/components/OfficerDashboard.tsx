@@ -3028,6 +3028,7 @@ function ReportsSection({
   onGenerate,
   onPreview,
   busy,
+  role,
 }: {
   items: ReportRecord[];
   expanded: boolean;
@@ -3035,6 +3036,7 @@ function ReportsSection({
   onGenerate: (type: string, title?: string, filters?: { from?: string; to?: string; memberId?: string; statuses?: string[] }) => Promise<ReportRecord | null>;
   onPreview: (type: string, filters?: { from?: string; to?: string; memberId?: string; statuses?: string[] }) => Promise<ReportRecord | null>;
   busy: string | null;
+  role?: OfficerRole;
 }) {
   const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
   const [reportType, setReportType] = useState("SUMMARY");
@@ -3084,6 +3086,10 @@ function ReportsSection({
     });
     setReportTitle(""); setStatuses("");
   }
+
+  const reportTypes = role === "TREASURER"
+    ? ["SUMMARY", "LOANS", "PAYMENTS", "SUPPLIES"]
+    : ["SUMMARY", "MEMBERS", "LOANS", "PAYMENTS", "SUPPLIES", "MACHINES", "AUDIT"];
 
   return (
     <>
@@ -3157,7 +3163,7 @@ function ReportsSection({
                   <div className="space-y-3 p-5">
                     <div className="flex gap-2">
                       <select value={reportType} onChange={(e) => setReportType(e.target.value)} className="rounded-lg border border-[#dce5d9] bg-white px-2 py-1.5 text-xs font-semibold outline-none">
-                        {["SUMMARY", "MEMBERS", "LOANS", "PAYMENTS", "SUPPLIES", "MACHINES", "AUDIT"].map((t) => <option key={t}>{t}</option>)}
+                        {reportTypes.map((t) => <option key={t}>{t}</option>)}
                       </select>
                       <input value={reportTitle} onChange={(e) => setReportTitle(e.target.value)} placeholder="Optional title" className="flex-1 rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none" />
                     </div>
@@ -3497,13 +3503,16 @@ interface OverdueItem {
 function OverdueSection({
   expanded,
   onToggle,
+  role,
 }: {
   expanded: boolean;
   onToggle: () => void;
+  role?: OfficerRole;
 }) {
   const [overdueItems, setOverdueItems] = useState<OverdueItem[]>([]);
   const [scanning, setScanning] = useState(false);
   const [expandedList, setExpandedList] = useState(false);
+  const showMachines = role !== "TREASURER";
 
   const fetchOverdue = useCallback(async () => {
     try {
@@ -3519,7 +3528,8 @@ function OverdueSection({
 
   useEffect(() => { fetchOverdue(); }, [fetchOverdue]);
 
-  const visible = expandedList ? overdueItems : overdueItems.slice(0, VISIBLE_COUNT);
+  const overdueItemsShown = showMachines ? overdueItems : overdueItems.filter((i) => i.kind === "loan");
+  const visible = expandedList ? overdueItemsShown : overdueItemsShown.slice(0, VISIBLE_COUNT);
 
   async function handleScan() {
     setScanning(true);
@@ -3536,13 +3546,15 @@ function OverdueSection({
   return (
     <SectionCard
       section="overdue"
-      count={overdueItems.length}
+      count={overdueItemsShown.length}
       expanded={expanded}
       onToggle={onToggle}
     >
+      {showMachines && (
       <div className="mb-3">
         <button disabled={scanning} onClick={handleScan} className="rounded-lg bg-red-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-red-700 transition disabled:opacity-50">{scanning ? "Scanning..." : "Run overdue scan"}</button>
       </div>
+      )}
       {visible.length > 0 ? (
         visible.map((item) => (
           <div key={`${item.kind}-${item.id}`} className="rounded-xl bg-[#fafdf7] border border-[#eef2e8] px-4 py-3">
@@ -3563,10 +3575,10 @@ function OverdueSection({
           </div>
         ))
       ) : (
-        <EmptyState text="No overdue items" />
+        <EmptyState text={showMachines ? "No overdue items" : "No overdue loans"} />
       )}
-      {!expandedList && overdueItems.length > VISIBLE_COUNT && (
-        <button onClick={() => setExpandedList(true)} className="mt-2 text-xs text-red-600 font-semibold hover:underline">Show all {overdueItems.length}</button>
+      {!expandedList && overdueItemsShown.length > VISIBLE_COUNT && (
+        <button onClick={() => setExpandedList(true)} className="mt-2 text-xs text-red-600 font-semibold hover:underline">Show all {overdueItemsShown.length}</button>
       )}
     </SectionCard>
   );
@@ -3590,7 +3602,7 @@ function StatCard({
   delay,
 }: {
   label: string;
-  value: string | number;
+  value: React.ReactNode;
   sub?: string;
   accent: string;
   icon: React.ElementType;
@@ -3644,19 +3656,72 @@ function SecretaryLoadingSkeleton() {
 
 type Tab = "overview" | Section | "admin-actions";
 
+type OfficerRole = "PRESIDENT" | "SECRETARY" | "TREASURER";
+
+const ROLE_META: Record<
+  OfficerRole,
+  {
+    workspaceLabel: string;
+    dashboardTitle: string;
+    avatarLetter: string;
+    subtitle: string;
+    hiddenSections: Section[];
+    showAdminActions: boolean;
+  }
+> = {
+  PRESIDENT: {
+    workspaceLabel: "President workspace",
+    dashboardTitle: "President dashboard",
+    avatarLetter: "P",
+    subtitle:
+      "Applications, members, loans, payments, machines, supplies, and announcements",
+    hiddenSections: [],
+    showAdminActions: true,
+  },
+  SECRETARY: {
+    workspaceLabel: "Secretary workspace",
+    dashboardTitle: "Secretary dashboard",
+    avatarLetter: "S",
+    subtitle: "Member profiles, report generation, and SMS / notifications",
+    hiddenSections: [
+      "applications",
+      "loans",
+      "payments",
+      "machines",
+      "supplies",
+      "announcements",
+      "overdue",
+    ],
+    showAdminActions: false,
+  },
+  TREASURER: {
+    workspaceLabel: "Treasurer workspace",
+    dashboardTitle: "Treasurer dashboard",
+    avatarLetter: "T",
+    subtitle: "Loan and payment management",
+    hiddenSections: [
+      "applications",
+      "members",
+      "machines",
+      "supplies",
+      "announcements",
+      "sms",
+    ],
+    showAdminActions: false,
+  },
+};
+
 export default function OfficerDashboard({
   role = "SECRETARY",
 }: {
-  role?: "SECRETARY" | "PRESIDENT";
+  role?: OfficerRole;
 }) {
-  const workspaceLabel = role === "PRESIDENT" ? "President workspace" : "Secretary workspace";
-  const dashboardTitle =
-    role === "PRESIDENT" ? "President dashboard" : "Secretary dashboard";
-  const avatarLetter = role === "PRESIDENT" ? "P" : "S";
-  const isSecretary = role === "SECRETARY";
-  const hiddenSections: Section[] = isSecretary ? ["applications"] : [];
+  const meta = ROLE_META[role];
+  const workspaceLabel = meta.workspaceLabel;
+  const dashboardTitle = meta.dashboardTitle;
+  const avatarLetter = meta.avatarLetter;
   const visibleSections = SECTIONS.filter(
-    (s) => !hiddenSections.includes(s),
+    (s) => !meta.hiddenSections.includes(s),
   );
   const [data, setData] = useState<SecretaryData | null>(null);
   const [guarantorPending, setGuarantorPending] = useState(0);
@@ -3865,6 +3930,7 @@ export default function OfficerDashboard({
       (p) => p.status === "PENDING" || p.status === "PENDING_APPROVAL",
     );
     const lowStock = data.supplies.filter((s) => s.stock <= 30);
+    const verifiedPayments = data.payments.filter((p) => p.status === "VERIFIED");
     return {
       pendingApps: pendingApps.length,
       activeLoans: activeLoans.length,
@@ -3874,6 +3940,11 @@ export default function OfficerDashboard({
       totalMembers: data.summary.totalMembers,
       overdueLoans: overdueLoans.length,
       lowStock: lowStock.length,
+      totalLoans: data.loans.length,
+      totalPayments: data.payments.length,
+      outstanding: activeLoans.reduce((s, l) => s + l.remainingBalance, 0),
+      totalReceived: verifiedPayments.reduce((s, p) => s + p.amount, 0),
+      overdueAmount: overdueLoans.reduce((s, l) => s + l.remainingBalance, 0),
     };
   }, [data, now]);
 
@@ -3934,19 +4005,23 @@ export default function OfficerDashboard({
   const recentActivity = useMemo(() => {
     if (!data) return [];
     const items: { id: string; text: string; time: string; kind: "application" | "loan" | "payment" | "machine" | "supply" }[] = [];
-    if (!isSecretary) {
+    if (role === "PRESIDENT") {
       data.applications.slice(0, 3).forEach((a) => {
         items.push({ id: `app-${a.id}`, text: `${a.fullName} — ${a.status.toLowerCase()} application`, time: new Date(a.createdAt).toLocaleDateString(), kind: "application" });
       });
     }
-    data.loans.slice(0, 4).forEach((l) => {
-      items.push({ id: `loan-${l.id}`, text: `${l.borrower.name} — ${l.status.toLowerCase()} ${l.name} loan`, time: new Date(l.createdAt).toLocaleDateString(), kind: "loan" });
-    });
-    data.payments.slice(0, 4).forEach((p) => {
-      items.push({ id: `pay-${p.id}`, text: `${p.user.name} — ₱${p.amount.toLocaleString()} ${p.status.toLowerCase()}`, time: new Date(p.createdAt).toLocaleDateString(), kind: "payment" });
-    });
+    if (visibleSections.includes("loans")) {
+      data.loans.slice(0, 4).forEach((l) => {
+        items.push({ id: `loan-${l.id}`, text: `${l.borrower.name} — ${l.status.toLowerCase()} ${l.name} loan`, time: new Date(l.createdAt).toLocaleDateString(), kind: "loan" });
+      });
+    }
+    if (visibleSections.includes("payments")) {
+      data.payments.slice(0, 4).forEach((p) => {
+        items.push({ id: `pay-${p.id}`, text: `${p.user.name} — ₱${p.amount.toLocaleString()} ${p.status.toLowerCase()}`, time: new Date(p.createdAt).toLocaleDateString(), kind: "payment" });
+      });
+    }
     return items.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 8);
-  }, [data, isSecretary]);
+  }, [data, role, visibleSections]);
 
   const searchLower = searchQuery.toLowerCase();
   const searchedMembers = useMemo(() => {
@@ -4124,7 +4199,7 @@ export default function OfficerDashboard({
 
   const ALL_TABS: { key: Tab; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
     { key: "overview", label: "Overview", icon: BarChart3 },
-    { key: "admin-actions", label: "Admin Actions", icon: HandHelping },
+    ...(meta.showAdminActions ? [{ key: "admin-actions" as Tab, label: "Admin Actions", icon: HandHelping }] : []),
     ...visibleSections.map((s) => ({ key: s as Tab, label: SECTION_META[s].label, icon: SECTION_META[s].icon })),
   ];
 
@@ -4172,7 +4247,7 @@ export default function OfficerDashboard({
       <main className="mx-auto max-w-[1400px] px-6 py-6">
         <div className="mb-6 animate-fadeIn">
           <h1 className="text-xl font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-display)" }}>{dashboardTitle}</h1>
-          <p className="mt-0.5 text-sm text-[#5a7267]">{isSecretary ? "Members, loans, payments, machines, supplies, announcements, and reports" : "Applications, members, loans, payments, machines, supplies, and announcements"}</p>
+          <p className="mt-0.5 text-sm text-[#5a7267]">{meta.subtitle}</p>
         </div>
 
         {notice && (
@@ -4183,12 +4258,25 @@ export default function OfficerDashboard({
 
         {stats && (
           <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            {!isSecretary && <StatCard label="Pending Applications" value={stats.pendingApps} sub="Awaiting review" accent="bg-amber-500" icon={FileText} delay={0} />}
-            <StatCard label="Active Loans" value={stats.activeLoans} sub={`${stats.pendingLoans} pending`} accent="bg-emerald-500" icon={Banknote} delay={50} />
-            <StatCard label="Pending Payments" value={stats.pendingPayments} sub="Need verification" accent="bg-blue-500" icon={ClipboardCheck} delay={100} />
-            <StatCard label="Machines In Use" value={stats.machinesInUse} sub="Currently borrowed" accent="bg-indigo-500" icon={Tractor} delay={150} />
-            <StatCard label="Total Members" value={stats.totalMembers} sub="Active cooperative" accent="bg-purple-500" icon={Users} delay={200} />
-            <StatCard label="Low Stock Items" value={stats.lowStock} sub="Below 30 units" accent="bg-orange-500" icon={Package} delay={250} />
+            {role === "TREASURER" ? (
+              <>
+                <StatCard label="Pending Loans" value={stats.pendingLoans} sub="Awaiting review" accent="bg-amber-500" icon={FileText} delay={0} />
+                <StatCard label="Active Loans" value={stats.activeLoans} sub={`${stats.totalLoans} total`} accent="bg-emerald-500" icon={Banknote} delay={50} />
+                <StatCard label="Outstanding" value={<Money value={stats.outstanding} />} sub="Remaining balance" accent="bg-blue-500" icon={TrendingUp} delay={100} />
+                <StatCard label="Overdue" value={stats.overdueLoans} sub={stats.overdueLoans > 0 ? "Requires attention" : "All on track"} accent={stats.overdueLoans > 0 ? "bg-red-500" : "bg-emerald-500"} icon={AlertTriangle} delay={150} />
+                <StatCard label="Pending Payments" value={stats.pendingPayments} sub="Need verification" accent="bg-blue-500" icon={ClipboardCheck} delay={200} />
+                <StatCard label="Payments Received" value={<Money value={stats.totalReceived} />} sub={`${stats.totalPayments} total`} accent="bg-emerald-500" icon={Banknote} delay={250} />
+              </>
+            ) : (
+              <>
+                {visibleSections.includes("applications") && <StatCard label="Pending Applications" value={stats.pendingApps} sub="Awaiting review" accent="bg-amber-500" icon={FileText} delay={0} />}
+                {visibleSections.includes("loans") && <StatCard label="Active Loans" value={stats.activeLoans} sub={`${stats.pendingLoans} pending`} accent="bg-emerald-500" icon={Banknote} delay={50} />}
+                {visibleSections.includes("payments") && <StatCard label="Pending Payments" value={stats.pendingPayments} sub="Need verification" accent="bg-blue-500" icon={ClipboardCheck} delay={100} />}
+                {visibleSections.includes("machines") && <StatCard label="Machines In Use" value={stats.machinesInUse} sub="Currently borrowed" accent="bg-indigo-500" icon={Tractor} delay={150} />}
+                {visibleSections.includes("members") && <StatCard label="Total Members" value={stats.totalMembers} sub="Active cooperative" accent="bg-purple-500" icon={Users} delay={200} />}
+                {visibleSections.includes("supplies") && <StatCard label="Low Stock Items" value={stats.lowStock} sub="Below 30 units" accent="bg-orange-500" icon={Package} delay={250} />}
+              </>
+            )}
           </div>
         )}
 
@@ -4221,7 +4309,7 @@ export default function OfficerDashboard({
           <div className="min-w-0 space-y-4">
             {activeTab === "overview" && data && (
               <>
-                {!isSecretary && (
+                {role === "PRESIDENT" && (
                 <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-fadeIn">
                   <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#5a7267]">Pending Applications</h3>
                   {data.applications.filter((a) => a.status === "PENDING").length === 0 ? (
@@ -4239,6 +4327,7 @@ export default function OfficerDashboard({
                 </div>
               )}
 
+                {visibleSections.includes("payments") && (
                 <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-fadeIn">
                   <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#5a7267]">Pending Payments</h3>
                   {data.payments.filter((p) => p.status === "PENDING" || p.status === "PENDING_APPROVAL").length === 0 ? (
@@ -4254,15 +4343,16 @@ export default function OfficerDashboard({
                     </div>
                   )}
                 </div>
+              )}
 
-                {stats && stats.overdueLoans > 0 && (
+                {visibleSections.includes("loans") && stats && stats.overdueLoans > 0 && (
                   <div className="rounded-xl border border-red-200 bg-red-50 p-5 shadow-sm animate-fadeIn">
                     <div className="flex items-center gap-2 mb-2"><AlertTriangle size={16} className="text-red-600" /><h3 className="text-xs font-semibold uppercase tracking-wider text-red-700">Overdue Loans</h3></div>
                     <p className="text-sm text-red-800">{stats.overdueLoans} loan{stats.overdueLoans > 1 ? "s" : ""} past due date</p>
                   </div>
                 )}
 
-                {stats && stats.lowStock > 0 && (
+                {visibleSections.includes("supplies") && stats && stats.lowStock > 0 && (
                   <div className="rounded-xl border border-orange-200 bg-orange-50 p-5 shadow-sm animate-fadeIn">
                     <div className="flex items-center gap-2 mb-2"><AlertTriangle size={16} className="text-orange-600" /><h3 className="text-xs font-semibold uppercase tracking-wider text-orange-700">Low Stock Alert</h3></div>
                     <p className="text-sm text-orange-800">{stats.lowStock} supply item{stats.lowStock > 1 ? "s" : ""} below 30 units</p>
@@ -4392,7 +4482,7 @@ export default function OfficerDashboard({
               <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
                 <div className="border-b border-[#e2ebe6] px-5 py-4"><h3 className="text-sm font-bold text-[#0f2318]">Reports & Analytics</h3><p className="text-[11px] text-[#5a7267]">{data.reports.length} reports generated</p></div>
                 <div className="p-4">
-                  <ReportsSection items={data.reports} expanded={true} onToggle={() => {}} onGenerate={handleGenerateReport} onPreview={handlePreviewReport} busy={busy} />
+                  <ReportsSection items={data.reports} expanded={true} onToggle={() => {}} onGenerate={handleGenerateReport} onPreview={handlePreviewReport} busy={busy} role={role} />
                 </div>
               </div>
             )}
@@ -4422,7 +4512,7 @@ export default function OfficerDashboard({
               <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
                 <div className="border-b border-[#e2ebe6] px-5 py-4"><h3 className="text-sm font-bold text-[#0f2318]">Overdue Obligations</h3><p className="text-[11px] text-[#5a7267]">Loans and machines past their due dates</p></div>
                 <div className="p-4">
-                  <OverdueSection expanded={true} onToggle={() => {}} />
+                  <OverdueSection expanded={true} onToggle={() => {}} role={role} />
                 </div>
               </div>
             )}
@@ -4434,19 +4524,45 @@ export default function OfficerDashboard({
               <div className="space-y-3">
                 {stats && (
                   <>
-                    {!isSecretary && (
-                    <>
-                      <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Pending Applications</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.pendingApps}</span></div>
-                      <div className="h-px bg-[#e2ebe6]" />
-                    </>
-                  )}
-                    <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Active Loans</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.activeLoans}</span></div>
-                    <div className="h-px bg-[#e2ebe6]" />
-                    <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Pending Payments</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.pendingPayments}</span></div>
-                    <div className="h-px bg-[#e2ebe6]" />
-                    <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Machines In Use</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.machinesInUse}</span></div>
-                    <div className="h-px bg-[#e2ebe6]" />
-                    <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Total Members</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.totalMembers}</span></div>
+                    {role === "TREASURER" ? (
+                      <>
+                        <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Total Loans</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.totalLoans}</span></div>
+                        <div className="h-px bg-[#e2ebe6]" />
+                        <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Total Payments</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.totalPayments}</span></div>
+                        <div className="h-px bg-[#e2ebe6]" />
+                        <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Collection Rate</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.outstanding > 0 ? `${Math.round((stats.totalReceived / (stats.totalReceived + stats.outstanding)) * 100)}%` : "100%"}</span></div>
+                        <div className="h-px bg-[#e2ebe6]" />
+                        <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Overdue Amount</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}><Money value={stats.overdueAmount} /></span></div>
+                      </>
+                    ) : (
+                      <>
+                        {visibleSections.includes("applications") && (
+                        <>
+                          <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Pending Applications</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.pendingApps}</span></div>
+                          <div className="h-px bg-[#e2ebe6]" />
+                        </>
+                      )}
+                        {visibleSections.includes("loans") && (<>
+                        <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Active Loans</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.activeLoans}</span></div>
+                        <div className="h-px bg-[#e2ebe6]" />
+                        </>
+                      )}
+                        {visibleSections.includes("payments") && (<>
+                        <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Pending Payments</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.pendingPayments}</span></div>
+                        <div className="h-px bg-[#e2ebe6]" />
+                        </>
+                      )}
+                        {visibleSections.includes("machines") && (<>
+                        <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Machines In Use</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.machinesInUse}</span></div>
+                        <div className="h-px bg-[#e2ebe6]" />
+                        </>
+                      )}
+                        {visibleSections.includes("members") && (<>
+                        <div className="flex items-center justify-between"><span className="text-xs text-[#5a7267]">Total Members</span><span className="font-mono text-sm font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-mono)" }}>{stats.totalMembers}</span></div>
+                        </>
+                      )}
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -4467,35 +4583,40 @@ export default function OfficerDashboard({
             <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-slideUp" style={{ animationDelay: "200ms" }}>
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#5a7267]">Today&apos;s Priorities</h3>
               <div className="space-y-2">
-                {!isSecretary && stats && stats.pendingApps > 0 && (
+                {visibleSections.includes("applications") && stats && stats.pendingApps > 0 && (
                   <button onClick={() => openSection("applications")} className="flex w-full items-center gap-2.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-left transition hover:bg-amber-100/70 active:scale-[0.99]">
                     <FileText size={14} className="text-amber-600 shrink-0" />
                     <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-amber-800">{stats.pendingApps} application{stats.pendingApps > 1 ? "s" : ""} to review</p></div>
                     <ArrowUpRight size={12} className="text-amber-500 shrink-0" />
                   </button>
                 )}
-                {stats && stats.pendingPayments > 0 && (
+                {visibleSections.includes("payments") && stats && stats.pendingPayments > 0 && (
                   <button onClick={() => openSection("payments")} className="flex w-full items-center gap-2.5 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2.5 text-left transition hover:bg-blue-100/70 active:scale-[0.99]">
                     <ClipboardCheck size={14} className="text-blue-600 shrink-0" />
                     <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-blue-800">{stats.pendingPayments} payment{stats.pendingPayments > 1 ? "s" : ""} to verify</p></div>
                     <ArrowUpRight size={12} className="text-blue-500 shrink-0" />
                   </button>
                 )}
-                {stats && stats.pendingLoans > 0 && (
+                {visibleSections.includes("loans") && stats && stats.pendingLoans > 0 && (
                   <button onClick={() => openSection("loans")} className="flex w-full items-center gap-2.5 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2.5 text-left transition hover:bg-emerald-100/70 active:scale-[0.99]">
                     <Banknote size={14} className="text-emerald-600 shrink-0" />
                     <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-emerald-800">{stats.pendingLoans} loan{stats.pendingLoans > 1 ? "s" : ""} to process</p></div>
                     <ArrowUpRight size={12} className="text-emerald-500 shrink-0" />
                   </button>
                 )}
-                {stats && stats.overdueLoans > 0 && (
+                {visibleSections.includes("loans") && stats && stats.overdueLoans > 0 && (
                   <button onClick={() => openSection("loans")} className="flex w-full items-center gap-2.5 rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-left transition hover:bg-red-100/70 active:scale-[0.99]">
                     <AlertTriangle size={14} className="text-red-600 shrink-0" />
                     <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-red-800">{stats.overdueLoans} overdue loan{stats.overdueLoans > 1 ? "s" : ""}</p></div>
                     <ArrowUpRight size={12} className="text-red-500 shrink-0" />
                   </button>
                 )}
-                {(!stats || (stats.pendingApps === 0 && stats.pendingPayments === 0 && stats.pendingLoans === 0 && stats.overdueLoans === 0) || (isSecretary && stats.pendingPayments === 0 && stats.pendingLoans === 0 && stats.overdueLoans === 0)) && (
+                {(!stats || !(
+                  (visibleSections.includes("applications") && stats.pendingApps > 0) ||
+                  (visibleSections.includes("payments") && stats.pendingPayments > 0) ||
+                  (visibleSections.includes("loans") && stats.pendingLoans > 0) ||
+                  (visibleSections.includes("loans") && stats.overdueLoans > 0)
+                )) && (
                   <div className="py-3 text-center"><CheckCircle2 size={24} className="mx-auto text-emerald-400" /><p className="mt-2 text-xs text-[#5a7267]">All caught up!</p></div>
                 )}
               </div>

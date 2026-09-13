@@ -15,7 +15,12 @@ import { z } from "zod";
 
 const ReviewSchema = z.object({
   action: z.enum(["approve", "reject"]),
-  reason: z.string().trim().min(1).max(500).optional(),
+  reason: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .transform((val) => (val ? val : undefined)),
 }).strict();
 
 export async function PATCH(
@@ -28,10 +33,6 @@ export async function PATCH(
     if (!result.success) {
       throw new ApiError(400, result.error.issues[0].message);
     }
-    if (result.data.action === "reject" && !result.data.reason) {
-      throw new ApiError(400, "A rejection reason is required");
-    }
-
     const { id: rawId } = await params;
     const id = requireUuid(rawId, "Loan ID");
 
@@ -53,7 +54,9 @@ export async function PATCH(
             reviewedBy: actor.userId,
             reviewedAt: new Date(),
             rejectionReason:
-              nextStatus === LoanStatus.REJECTED ? result.data.reason : null,
+              nextStatus === LoanStatus.REJECTED
+                ? result.data.reason ?? null
+                : null,
           },
         });
         if (claimed.count !== 1) {
@@ -93,7 +96,9 @@ export async function PATCH(
           message:
             finalStatus === LoanStatus.ACTIVE
               ? `Your ₱${Number(loan.amount).toLocaleString()} loan is now active.`
-              : `Your loan request was rejected. Reason: ${result.data.reason}`,
+              : result.data.reason
+              ? `Your loan request was rejected. Reason: ${result.data.reason}`
+              : `Your loan request was rejected.`,
         });
         await writeAudit(tx, {
           userId: actor.userId,

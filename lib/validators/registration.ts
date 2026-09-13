@@ -27,9 +27,9 @@ const parseStringArray = (val: unknown): unknown => {
 
 export const ApplicationSchema = z.object({
   firstName: z.string().min(1, "First name is required").transform(titleCaseSanitize),
-  middleName: z.string().optional().transform((val) => (val ? titleCaseSanitize(val) : "")),
+  middleName: z.string().nullish().transform((val) => (val ? titleCaseSanitize(val) : "")),
   lastName: z.string().min(1, "Last name is required").transform(titleCaseSanitize),
-  extensionName: z.string().optional().transform((val) => (val ? titleCaseSanitize(val) : "")),
+  extensionName: z.string().nullish().transform((val) => (val ? titleCaseSanitize(val) : "")),
 
   birthDate: z
     .string()
@@ -88,7 +88,7 @@ export const ApplicationSchema = z.object({
 
   farmOwnershipDetails: z
     .string()
-    .optional()
+    .nullish()
     .transform((val) => (val ? titleCaseSanitize(val) : "")),
 
   farmMachinery: z.preprocess(
@@ -101,9 +101,9 @@ export const ApplicationSchema = z.object({
   guarantor: z
     .object({
       firstName: z.string().min(1, "Guarantor first name is required").transform(titleCaseSanitize),
-      middleName: z.string().optional().transform((val) => (val ? titleCaseSanitize(val) : "")),
+      middleName: z.string().nullish().transform((val) => (val ? titleCaseSanitize(val) : "")),
       lastName: z.string().min(1, "Guarantor last name is required").transform(titleCaseSanitize),
-      extensionName: z.string().optional().transform((val) => (val ? titleCaseSanitize(val) : "")),
+      extensionName: z.string().nullish().transform((val) => (val ? titleCaseSanitize(val) : "")),
       contact: z
         .string()
         .min(10, "Guarantor contact is too short")

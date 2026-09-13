@@ -3,11 +3,18 @@ import type { FormEvent } from "react";
 import { ApplicationSchema } from "@/lib/validators/registration";
 import { refreshSession } from "./server-actions";
 
+export interface SubmitResult {
+  kind: "success" | "error";
+  message: string;
+  redirect?: string;
+}
+
 export async function handleSubmit(
   e: FormEvent<HTMLFormElement>,
   setLoading: (args: boolean) => void,
   setErrors: (args: Record<string, string>) => void,
   isUpdate: boolean = false,
+  onResult?: (result: SubmitResult) => void,
 ) {
   e.preventDefault();
   const form = e.currentTarget;
@@ -96,20 +103,23 @@ export async function handleSubmit(
     const data = await res.json();
 
     if (!res.ok) {
-      alert(data.error);
+      onResult?.({ kind: "error", message: data.error });
       return;
     }
 
     await refreshSession();
 
     if (isUpdate) {
-      alert("Profile updated!");
+      onResult?.({ kind: "success", message: "Profile updated!" });
     } else {
-      alert("Application submitted!");
-      window.location.href = "/dashboard/payment";
+      onResult?.({
+        kind: "success",
+        message: "Application submitted!",
+        redirect: "/dashboard/payment",
+      });
     }
   } catch {
-    alert("Something went wrong");
+    onResult?.({ kind: "error", message: "Something went wrong" });
   } finally {
     setLoading(false);
   }

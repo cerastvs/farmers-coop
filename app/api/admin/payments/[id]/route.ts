@@ -20,7 +20,12 @@ import { z } from "zod";
 
 const VerifySchema = z.object({
   action: z.enum(["verify", "reject"]),
-  reason: z.string().trim().min(1).max(500).optional(),
+  reason: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .transform((val) => (val ? val : undefined)),
 }).strict();
 
 export async function PATCH(
@@ -33,10 +38,6 @@ export async function PATCH(
     if (!result.success) {
       throw new ApiError(400, result.error.issues[0].message);
     }
-    if (result.data.action === "reject" && !result.data.reason) {
-      throw new ApiError(400, "A rejection reason is required");
-    }
-
     const { id: rawId } = await params;
     const id = requireUuid(rawId, "Payment ID");
 
@@ -88,7 +89,7 @@ export async function PATCH(
             verifiedAt: new Date(),
             rejectionReason:
               nextStatus === PaymentStatus.REJECTED
-                ? result.data.reason
+                ? result.data.reason ?? null
                 : null,
           },
         });
@@ -109,7 +110,9 @@ export async function PATCH(
           message:
             nextStatus === PaymentStatus.VERIFIED
               ? `Your ₱${Number(payment.amount).toLocaleString()} payment was applied to your loan.`
-              : `Your payment was rejected. Reason: ${result.data.reason}`,
+              : result.data.reason
+              ? `Your payment was rejected. Reason: ${result.data.reason}`
+              : `Your payment was rejected.`,
         });
         await writeAudit(tx, {
           userId: actor.userId,

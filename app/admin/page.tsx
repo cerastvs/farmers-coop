@@ -281,6 +281,13 @@ export default function AdminPage() {
   const [onsiteProof, setOnsiteProof] = useState<File | null>(null);
   const [onsiteRemarks, setOnsiteRemarks] = useState("");
   const onsiteInputRef = useRef<HTMLInputElement>(null);
+  const [reasonModal, setReasonModal] = useState<{
+    header: string;
+    sub: string;
+    onConfirm: (reason?: string) => void;
+  } | null>(null);
+  const [reasonDraft, setReasonDraft] = useState("");
+  const [deletePost, setDeletePost] = useState<Post | null>(null);
   const [addSupplyImage, setAddSupplyImage] = useState<File | null>(null);
   const [addSupplyPreview, setAddSupplyPreview] = useState<string | null>(null);
   const addSupplyFileRef = useRef<HTMLInputElement>(null);
@@ -383,8 +390,9 @@ export default function AdminPage() {
     }
   }
 
-  function rejectReason() {
-    return window.prompt("Enter the reason for rejection:");
+  function askReason(header: string, sub: string, onConfirm: (reason?: string) => void) {
+    setReasonDraft("");
+    setReasonModal({ header, sub, onConfirm });
   }
 
   async function mutateSupply(key: string, url: string, fd: FormData, success: string, method = "PATCH") {
@@ -501,10 +509,7 @@ export default function AdminPage() {
                       {loan.status === "PENDING" && (
                         <ActionRow>
                           <button disabled={busy === loan.id} onClick={() => mutate(loan.id, `/api/admin/loans/${loan.id}`, { action: "approve" }, "Loan approved and activated.")} className={buttonClass}>Approve</button>
-                          <button disabled={busy === loan.id} onClick={() => {
-                            const reason = rejectReason();
-                            if (reason) void mutate(loan.id, `/api/admin/loans/${loan.id}`, { action: "reject", reason }, "Loan rejected.");
-                          }} className={secondaryButton}>Reject</button>
+                          <button disabled={busy === loan.id} onClick={() => askReason("Reject loan request?", "Confirm rejection of this loan request. The reason is optional.", (reason) => void mutate(loan.id, `/api/admin/loans/${loan.id}`, { action: "reject", reason }, "Loan rejected."))} className={secondaryButton}>Reject</button>
                         </ActionRow>
                       )}
                     </Record>
@@ -547,10 +552,7 @@ export default function AdminPage() {
                         {payment.status === "PENDING" && (
                           <ActionRow>
                             <button disabled={busy === payment.id || !hasPaymentEvidence} onClick={() => mutate(payment.id, `/api/admin/payments/${payment.id}`, { action: "verify" }, "Payment verified.")} className={buttonClass}>Verify</button>
-                            <button disabled={busy === payment.id} onClick={() => {
-                              const reason = rejectReason();
-                              if (reason) void mutate(payment.id, `/api/admin/payments/${payment.id}`, { action: "reject", reason }, "Payment rejected.");
-                            }} className={secondaryButton}>Reject</button>
+                            <button disabled={busy === payment.id} onClick={() => askReason("Reject payment?", "Confirm rejection of this payment proof. The reason is optional.", (reason) => void mutate(payment.id, `/api/admin/payments/${payment.id}`, { action: "reject", reason }, "Payment rejected."))} className={secondaryButton}>Reject</button>
                           </ActionRow>
                         )}
                       </Record>
@@ -644,10 +646,7 @@ export default function AdminPage() {
                         {pending && (
                           <ActionRow>
                             <button disabled={busy === fee.id} onClick={() => mutate(fee.id, `/api/admin/application-payments/${fee.id}`, { action: "approve" }, "Payment approved and application advanced.")} className={buttonClass}>Approve</button>
-                            <button disabled={busy === fee.id} onClick={() => {
-                              const reason = window.prompt("Optional reason for declining:", "");
-                              if (reason !== null) void mutate(fee.id, `/api/admin/application-payments/${fee.id}`, { action: "decline", reason: reason.trim() || undefined }, "Payment proof declined.");
-                            }} className={secondaryButton}>Decline</button>
+                            <button disabled={busy === fee.id} onClick={() => askReason("Decline payment proof?", "The application will stay pending payment. The reason is optional.", (reason) => void mutate(fee.id, `/api/admin/application-payments/${fee.id}`, { action: "decline", reason }, "Payment proof declined."))} className={secondaryButton}>Decline</button>
                           </ActionRow>
                         )}
                       </Record>
@@ -869,10 +868,7 @@ export default function AdminPage() {
                           <ActionRow>
                             {request.status === "PENDING" && <button className={buttonClass} disabled={busy === request.id} onClick={() => mutate(request.id, `/api/admin/supply-requests/${request.id}`, { action: "approve" }, "Supply request approved.")}>Approve</button>}
                             {request.status === "APPROVED" && <button className={buttonClass} disabled={busy === request.id} onClick={() => mutate(request.id, `/api/admin/supply-requests/${request.id}`, { action: "complete" }, "Supply request completed.")}>Complete</button>}
-                            {request.status === "PENDING" && <button className={secondaryButton} disabled={busy === request.id} onClick={() => {
-                              const reason = rejectReason();
-                              if (reason) void mutate(request.id, `/api/admin/supply-requests/${request.id}`, { action: "reject", reason }, "Supply request rejected.");
-                            }}>Reject</button>}
+                            {request.status === "PENDING" && <button className={secondaryButton} disabled={busy === request.id} onClick={() => askReason("Reject supply request?", "Confirm rejection of this supply request. The reason is optional.", (reason) => void mutate(request.id, `/api/admin/supply-requests/${request.id}`, { action: "reject", reason }, "Supply request rejected."))}>Reject</button>}
                           </ActionRow>
                         </div>
                       ))}
@@ -1025,9 +1021,7 @@ export default function AdminPage() {
                     <Record key={post.id} title={post.title} meta={post.content ?? "No content"} status={post.published ? "PUBLISHED" : "DRAFT"}>
                       <ActionRow>
                         <button className={secondaryButton} disabled={busy === post.id} onClick={() => mutate(post.id, `/api/posts/${post.id}`, { published: !post.published }, post.published ? "Announcement unpublished." : "Announcement published.")}>{post.published ? "Unpublish" : "Publish"}</button>
-                        <button className={`${secondaryButton} text-red-600`} disabled={busy === post.id} onClick={() => {
-                          if (window.confirm("Delete this announcement?")) void mutate(post.id, `/api/posts/${post.id}`, {}, "Announcement deleted.", "DELETE");
-                        }}>Delete</button>
+                        <button className={`${secondaryButton} text-red-600`} disabled={busy === post.id} onClick={() => setDeletePost(post)}>Delete</button>
                       </ActionRow>
                     </Record>
                   ))}
@@ -1091,6 +1085,51 @@ export default function AdminPage() {
               <button className={buttonClass} disabled={busy === onsiteTarget.id} onClick={() => void recordOnsite()}>
                 {busy === onsiteTarget.id ? "Recording…" : "Confirm Payment"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reasonModal && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setReasonModal(null)}>
+          <div className="w-full max-w-sm rounded-3xl border border-[#dce5d9] bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-black text-[#173a2b]">{reasonModal.header}</h2>
+            <p className="mt-1 text-sm text-[#718176]">{reasonModal.sub}</p>
+            <textarea
+              autoFocus
+              value={reasonDraft}
+              onChange={(e) => setReasonDraft(e.target.value)}
+              placeholder="Reason (optional)"
+              rows={3}
+              maxLength={500}
+              className="mt-3 w-full rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-[#173a2b] outline-none placeholder:text-[#b08a8a] focus:border-red-400 resize-none"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button className={secondaryButton} onClick={() => setReasonModal(null)}>Cancel</button>
+              <button className={`${buttonClass} bg-red-600 hover:bg-red-700`} onClick={() => {
+                const reason = reasonDraft.trim();
+                const cb = reasonModal.onConfirm;
+                setReasonModal(null);
+                setReasonDraft("");
+                cb(reason || undefined);
+              }}>Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deletePost && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setDeletePost(null)}>
+          <div className="w-full max-w-sm rounded-3xl border border-[#dce5d9] bg-white p-6 text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-black text-[#173a2b]">Delete this announcement?</h2>
+            <p className="mt-1 text-sm text-[#718176]">This will permanently remove &quot;{deletePost.title}&quot;.</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button className={secondaryButton} disabled={busy === deletePost.id} onClick={() => setDeletePost(null)}>Cancel</button>
+              <button className={`${buttonClass} bg-red-600 hover:bg-red-700`} disabled={busy === deletePost.id} onClick={() => {
+                const toDelete = deletePost;
+                setDeletePost(null);
+                void mutate(toDelete.id, `/api/posts/${toDelete.id}`, {}, "Announcement deleted.", "DELETE");
+              }}>Delete</button>
             </div>
           </div>
         </div>

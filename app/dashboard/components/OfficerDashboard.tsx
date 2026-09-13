@@ -15,7 +15,8 @@ import {
   FileText,
   Users,
   Package,
-  Tractor,
+Tractor,
+  PackageCheck,
   ChevronDown,
   ChevronUp,
   Banknote,
@@ -164,7 +165,20 @@ interface SupplyRequest {
   type: string;
   status: string;
   rejectionReason: string | null;
-  user: { name: string; username: string };
+  user: {
+    name: string;
+    username: string;
+    member?: {
+      fullName: string | null;
+      contact: string | null;
+      address: string | null;
+      farmSize: number | null;
+      yearsFarming: number | null;
+      crops: string[];
+      guarantor: Record<string, unknown> | null;
+      guarantorStatus: string | null;
+    } | null;
+  };
 }
 
 interface PaymentSubmission {
@@ -2700,7 +2714,8 @@ function SuppliesSection({
   onToggle,
   onAddSupply,
   onUpdateSupply,
-  onActionRequest,
+  onConfirmRequest,
+  onRejectRequest,
   busy,
   canComplete,
 }: {
@@ -2709,7 +2724,8 @@ function SuppliesSection({
   onToggle: () => void;
   onAddSupply: (formData: FormData) => void;
   onUpdateSupply: (id: string, formData: FormData) => void;
-  onActionRequest: (id: string, action: "approve" | "complete" | "reject", reason?: string) => void;
+  onConfirmRequest: (supplyName: string, request: SupplyRequest, action: "approve" | "complete") => void;
+  onRejectRequest: (supplyName: string, request: SupplyRequest) => void;
   busy: string | null;
   canComplete: boolean;
 }) {
@@ -2888,12 +2904,12 @@ function SuppliesSection({
                         <div className="flex gap-1.5 mt-1.5">
                           {t.status === "PENDING" && (
                             <>
-                              <button disabled={busy === t.id} onClick={() => onActionRequest(t.id, "approve")} className="rounded-md bg-green-600 px-2 py-0.5 text-[10px] font-bold text-white disabled:opacity-50">Approve</button>
-                              <button disabled={busy === t.id} onClick={() => { const r = window.prompt("Rejection reason:"); if (r) onActionRequest(t.id, "reject", r); }} className="rounded-md border border-red-200 px-2 py-0.5 text-[10px] font-bold text-red-600 disabled:opacity-50">Reject</button>
+                              <button disabled={busy === t.id} onClick={() => onConfirmRequest(supply.name, t, "approve")} className="rounded-md bg-green-600 px-2 py-0.5 text-[10px] font-bold text-white disabled:opacity-50">Approve</button>
+                              <button disabled={busy === t.id} onClick={() => onRejectRequest(supply.name, t)} className="rounded-md border border-red-200 px-2 py-0.5 text-[10px] font-bold text-red-600 disabled:opacity-50">Reject</button>
                             </>
                           )}
                           {t.status === "APPROVED" && canComplete && (
-                            <button disabled={busy === t.id} onClick={() => onActionRequest(t.id, "complete")} className="rounded-md bg-[#1b5e3b] px-2 py-0.5 text-[10px] font-bold text-white disabled:opacity-50">Picked Up</button>
+                            <button disabled={busy === t.id} onClick={() => onConfirmRequest(supply.name, t, "complete")} className="rounded-md bg-[#1b5e3b] px-2 py-0.5 text-[10px] font-bold text-white disabled:opacity-50">Picked Up</button>
                           )}
                         </div>
                       </div>
@@ -3203,11 +3219,18 @@ function AnnouncementsSection({
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [publishNow, setPublishNow] = useState(false);
+  const [deletePost, setDeletePost] = useState<PostRecord | null>(null);
 
   function handleCreate() {
     if (!title.trim()) return;
     onCreate(title.trim(), content.trim(), publishNow);
     setTitle(""); setContent(""); setPublishNow(false); setShowForm(false);
+  }
+
+  function handleDelete() {
+    if (!deletePost) return;
+    onDelete(deletePost.id);
+    setDeletePost(null);
   }
 
   return (
@@ -3248,12 +3271,37 @@ function AnnouncementsSection({
             </div>
             <div className="flex gap-2 mt-2">
               <button disabled={busy === post.id} onClick={() => onTogglePublish(post.id, post.published)} className="rounded-lg border border-[#dce5d9] px-3 py-1 text-[11px] font-bold text-[#315646] hover:bg-[#edf5df] disabled:opacity-50">{post.published ? "Unpublish" : "Publish"}</button>
-              <button disabled={busy === post.id} onClick={() => { if (window.confirm("Delete this announcement?")) onDelete(post.id); }} className="rounded-lg border border-red-200 px-3 py-1 text-[11px] font-bold text-red-600 hover:bg-red-50 disabled:opacity-50">Delete</button>
+              <button disabled={busy === post.id} onClick={() => setDeletePost(post)} className="rounded-lg border border-red-200 px-3 py-1 text-[11px] font-bold text-red-600 hover:bg-red-50 disabled:opacity-50">Delete</button>
             </div>
           </div>
         ))
       ) : (
         <EmptyState text="No announcements found" />
+      )}
+      {deletePost && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
+            <div className="text-center">
+              <div className="mx-auto h-12 w-12 rounded-full bg-red-50 flex items-center justify-center mb-4">
+                <Trash2 size={20} className="text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">Delete this announcement?</h3>
+              <p className="text-sm text-gray-500 mb-6">This will permanently remove &quot;{deletePost.title}&quot;.</p>
+              <div className="flex gap-2">
+                <button onClick={() => setDeletePost(null)} className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={busy === deletePost.id}
+                  className="flex-1 py-3 bg-red-600 text-white hover:bg-red-700 rounded-2xl font-bold transition disabled:opacity-50"
+                >
+                  {busy === deletePost.id ? "Deleting…" : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </SectionCard>
   );
@@ -3285,6 +3333,8 @@ function SmsSection({
   const [busy, setBusy] = useState<string | null>(null);
   const [localMessages, setLocalMessages] = useState<SmsMessage[]>([]);
   const [expandedList, setExpandedList] = useState(false);
+  const [failId, setFailId] = useState<string | null>(null);
+  const [failReason, setFailReason] = useState("");
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -3322,28 +3372,36 @@ function SmsSection({
 
   async function handlePatch(id: string, action: "send" | "fail") {
     if (action === "fail") {
-      const error = window.prompt("Failure reason (optional):");
-      if (error === null) return;
-      setBusy(id);
-      try {
-        const res = await fetch(`/api/secretary/sms/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "fail", error: error || undefined }),
-        });
-        if (res.ok) await fetchMessages();
-      } finally { setBusy(null); }
-    } else {
-      setBusy(id);
-      try {
-        const res = await fetch(`/api/secretary/sms/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "send" }),
-        });
-        if (res.ok) await fetchMessages();
-      } finally { setBusy(null); }
+      setFailId(id);
+      setFailReason("");
+      return;
     }
+    setBusy(id);
+    try {
+      const res = await fetch(`/api/secretary/sms/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "send" }),
+      });
+      if (res.ok) await fetchMessages();
+    } finally { setBusy(null); }
+  }
+
+  async function confirmFail() {
+    if (!failId) return;
+    setBusy(failId);
+    try {
+      const res = await fetch(`/api/secretary/sms/${failId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "fail", error: failReason.trim() || undefined }),
+      });
+      if (res.ok) {
+        setFailId(null);
+        setFailReason("");
+        await fetchMessages();
+      }
+    } finally { setBusy(null); }
   }
 
   return (
@@ -3386,6 +3444,40 @@ function SmsSection({
       )}
       {!expandedList && localMessages.length > VISIBLE_COUNT && (
         <button onClick={() => setExpandedList(true)} className="mt-2 text-xs text-cyan-600 font-semibold hover:underline">Show all {localMessages.length}</button>
+      )}
+
+      {failId && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
+            <div className="text-center">
+              <div className="mx-auto h-12 w-12 rounded-full bg-red-50 flex items-center justify-center mb-4">
+                <XCircle size={20} className="text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">Mark as failed?</h3>
+              <p className="text-sm text-gray-500 mb-4">Provide a reason for the failure (optional).</p>
+              <textarea
+                autoFocus
+                value={failReason}
+                onChange={(e) => setFailReason(e.target.value)}
+                placeholder="Failure reason (optional)"
+                rows={3}
+                className="w-full rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-gray-800 outline-none focus:border-red-400 resize-none mb-4"
+              />
+              <div className="flex gap-2">
+                <button onClick={() => setFailId(null)} className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition">
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmFail}
+                  disabled={busy === failId}
+                  className="flex-1 py-3 bg-red-600 text-white hover:bg-red-700 rounded-2xl font-bold transition disabled:opacity-50"
+                >
+                  {busy === failId ? "Marking…" : "Confirm"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </SectionCard>
   );
@@ -3582,6 +3674,16 @@ export default function OfficerDashboard({
   const [deleting, setDeleting] = useState(false);
   const [detailApp, setDetailApp] = useState<Application | null>(null);
   const [viewRequest, setViewRequest] = useState<MachineRequestInfo | null>(null);
+  const [confirmSupply, setConfirmSupply] = useState<{
+    supplyName: string;
+    request: SupplyRequest;
+    action: "approve" | "complete";
+  } | null>(null);
+  const [rejectSupply, setRejectSupply] = useState<{
+    supplyName: string;
+    request: SupplyRequest;
+  } | null>(null);
+  const [supplyRejectReason, setSupplyRejectReason] = useState("");
   const [viewRejectedRequest, setViewRejectedRequest] = useState<MachineRequestInfo | null>(null);
   const [imageModal, setImageModal] = useState<{ src: string; alt: string } | null>(null);
   const [confirmPayment, setConfirmPayment] = useState<{
@@ -3871,8 +3973,8 @@ export default function OfficerDashboard({
           setDetailMachine((prev) => prev ? { ...prev, requests: prev.requests.map((r) => r.id === requestId ? { ...r, status: newStatus, rejectionReason: action === "reject" ? (message ?? r.rejectionReason) : r.rejectionReason } : r) } : null);
           setViewRequest((prev) => { if (!prev || prev.id !== requestId) return prev; return { ...prev, status: newStatus, rejectionReason: action === "reject" ? (message ?? prev.rejectionReason) : prev.rejectionReason }; });
         }
-      } else { alert(result.error || `Failed to ${action} request`); }
-    } catch { alert(`Failed to ${action} request`); }
+      } else { setNotice({ kind: "error", text: result.error || `Failed to ${action} request` }); }
+    } catch { setNotice({ kind: "error", text: `Failed to ${action} request` }); }
   }
 
   function handleAddMachine() { setFormMachine(null); setShowForm(true); }
@@ -3883,8 +3985,8 @@ export default function OfficerDashboard({
     try {
       const res = await fetch(`/api/machines/${deleteConfirm.id}`, { method: "DELETE" });
       const result = await res.json();
-      if (res.ok) { setDeleteConfirm(null); fetchData(); } else { alert(result.error || "Failed to delete machine"); }
-    } catch { alert("Failed to delete machine"); } finally { setDeleting(false); }
+      if (res.ok) { setDeleteConfirm(null); fetchData(); } else { setNotice({ kind: "error", text: result.error || "Failed to delete machine" }); }
+    } catch { setNotice({ kind: "error", text: "Failed to delete machine" }); } finally { setDeleting(false); }
   }
 
   async function executeLoanAction(loanId: string, action: "approve" | "reject", reason?: string) {
@@ -3892,8 +3994,8 @@ export default function OfficerDashboard({
     try {
       const res = await fetch(`/api/secretary/loans/${loanId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, reason }) });
       const result = await res.json();
-      if (res.ok) { await fetchData(); } else { alert(result.error || `Failed to ${action} loan`); }
-    } catch { alert(`Failed to ${action} loan`); } finally { setBusy(null); }
+      if (res.ok) { await fetchData(); } else { setNotice({ kind: "error", text: result.error || `Failed to ${action} loan` }); }
+    } catch { setNotice({ kind: "error", text: `Failed to ${action} loan` }); } finally { setBusy(null); }
   }
 
   function handleLoanAction(loanId: string, action: "approve" | "reject", reason?: string) {
@@ -3918,8 +4020,8 @@ export default function OfficerDashboard({
         : { action, reason };
       const res = await fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const result = await res.json();
-      if (res.ok) { await fetchData(); } else { alert(result.error || `Failed to ${action} payment`); }
-    } catch { alert(`Failed to ${action} payment`); } finally { setBusy(null); }
+      if (res.ok) { await fetchData(); } else { setNotice({ kind: "error", text: result.error || `Failed to ${action} payment` }); }
+    } catch { setNotice({ kind: "error", text: `Failed to ${action} payment` }); } finally { setBusy(null); }
   }
 
   async function handleMemberEdit(memberId: string, payload: { name: string; role: string; active: boolean }) {
@@ -3927,8 +4029,8 @@ export default function OfficerDashboard({
     try {
       const res = await fetch(`/api/admin/members/${memberId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const result = await res.json();
-      if (res.ok) { await fetchData(); } else { alert(result.error || "Failed to update member"); }
-    } catch { alert("Failed to update member"); } finally { setBusy(null); }
+      if (res.ok) { await fetchData(); } else { setNotice({ kind: "error", text: result.error || "Failed to update member" }); }
+    } catch { setNotice({ kind: "error", text: "Failed to update member" }); } finally { setBusy(null); }
   }
 
   async function handleAddSupply(fd: FormData) {
@@ -3936,8 +4038,8 @@ export default function OfficerDashboard({
     try {
       const res = await fetch("/api/admin/supplies", { method: "POST", body: fd });
       const result = await res.json();
-      if (res.ok) { await fetchData(); } else { alert(result.error || "Failed to add supply"); }
-    } catch { alert("Failed to add supply"); } finally { setBusy(null); }
+      if (res.ok) { await fetchData(); } else { setNotice({ kind: "error", text: result.error || "Failed to add supply" }); }
+    } catch { setNotice({ kind: "error", text: "Failed to add supply" }); } finally { setBusy(null); }
   }
 
   async function handleUpdateSupply(supplyId: string, fd: FormData) {
@@ -3945,8 +4047,8 @@ export default function OfficerDashboard({
     try {
       const res = await fetch(`/api/admin/supplies/${supplyId}`, { method: "PATCH", body: fd });
       const result = await res.json();
-      if (res.ok) { await fetchData(); } else { alert(result.error || "Failed to update supply"); }
-    } catch { alert("Failed to update supply"); } finally { setBusy(null); }
+      if (res.ok) { await fetchData(); } else { setNotice({ kind: "error", text: result.error || "Failed to update supply" }); }
+    } catch { setNotice({ kind: "error", text: "Failed to update supply" }); } finally { setBusy(null); }
   }
 
   async function handleSupplyRequestAction(requestId: string, action: "approve" | "complete" | "reject", reason?: string) {
@@ -3954,8 +4056,14 @@ export default function OfficerDashboard({
     try {
       const res = await fetch(`/api/admin/supply-requests/${requestId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, reason }) });
       const result = await res.json();
-      if (res.ok) { await fetchData(); } else { alert(result.error || `Failed to ${action} request`); }
-    } catch { alert(`Failed to ${action} request`); } finally { setBusy(null); }
+      if (res.ok) {
+        await fetchData();
+      } else {
+        setNotice({ kind: "error", text: result.error || `Failed to ${action} request` });
+      }
+    } catch {
+      setNotice({ kind: "error", text: `Failed to ${action} request` });
+    } finally { setBusy(null); }
   }
 
   async function handleGenerateReport(type: string, title?: string, filters?: { from?: string; to?: string; memberId?: string; statuses?: string[] }) {
@@ -3963,8 +4071,8 @@ export default function OfficerDashboard({
     try {
       const res = await fetch("/api/admin/reports", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, title, ...(filters ?? {}) }) });
       const result = await res.json();
-      if (res.ok) { await fetchData(); return result as ReportRecord; } else { alert(result.error || "Failed to generate report"); }
-    } catch { alert("Failed to generate report"); } finally { setBusy(null); }
+      if (res.ok) { await fetchData(); return result as ReportRecord; } else { setNotice({ kind: "error", text: result.error || "Failed to generate report" }); }
+    } catch { setNotice({ kind: "error", text: "Failed to generate report" }); } finally { setBusy(null); }
     return null;
   }
 
@@ -3988,24 +4096,24 @@ export default function OfficerDashboard({
     try {
       const res = await fetch("/api/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, content, published }) });
       const result = await res.json();
-      if (res.ok) { await fetchData(); } else { alert(result.error || "Failed to create announcement"); }
-    } catch { alert("Failed to create announcement"); } finally { setBusy(null); }
+      if (res.ok) { await fetchData(); } else { setNotice({ kind: "error", text: result.error || "Failed to create announcement" }); }
+    } catch { setNotice({ kind: "error", text: "Failed to create announcement" }); } finally { setBusy(null); }
   }
 
   async function handleTogglePublish(postId: string, currentPublished: boolean) {
     setBusy(postId);
     try {
       const res = await fetch(`/api/posts/${postId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ published: !currentPublished }) });
-      if (res.ok) { await fetchData(); } else { const r = await res.json(); alert(r.error || "Failed to update announcement"); }
-    } catch { alert("Failed to update announcement"); } finally { setBusy(null); }
+      if (res.ok) { await fetchData(); } else { const r = await res.json(); setNotice({ kind: "error", text: r.error || "Failed to update announcement" }); }
+    } catch { setNotice({ kind: "error", text: "Failed to update announcement" }); } finally { setBusy(null); }
   }
 
   async function handleDeletePost(postId: string) {
     setBusy(postId);
     try {
       const res = await fetch(`/api/posts/${postId}`, { method: "DELETE" });
-      if (res.ok) { await fetchData(); } else { const r = await res.json(); alert(r.error || "Failed to delete announcement"); }
-    } catch { alert("Failed to delete announcement"); } finally { setBusy(null); }
+      if (res.ok) { await fetchData(); } else { const r = await res.json(); setNotice({ kind: "error", text: r.error || "Failed to delete announcement" }); }
+    } catch { setNotice({ kind: "error", text: "Failed to delete announcement" }); } finally { setBusy(null); }
   }
 
   if (loading) return <SecretaryLoadingSkeleton />;
@@ -4275,7 +4383,7 @@ export default function OfficerDashboard({
                   <PendingOnlyToggle active={pendingFilter.supplies} count={badges.supplies} onToggle={() => togglePendingFilter("supplies")} />
                 </div>
                 <div className="p-4">
-                  <SuppliesSection items={pendingFilter.supplies ? data.supplies.filter((s) => s.transactions.some((t) => t.status === "PENDING")) : data.supplies} expanded={true} onToggle={() => {}} onAddSupply={handleAddSupply} onUpdateSupply={handleUpdateSupply} onActionRequest={handleSupplyRequestAction} busy={busy} canComplete={role === "PRESIDENT"} />
+                  <SuppliesSection items={pendingFilter.supplies ? data.supplies.filter((s) => s.transactions.some((t) => t.status === "PENDING")) : data.supplies} expanded={true} onToggle={() => {}} onAddSupply={handleAddSupply} onUpdateSupply={handleUpdateSupply} onConfirmRequest={(supplyName, request, action) => setConfirmSupply({ supplyName, request, action })} onRejectRequest={(supplyName, request) => { setSupplyRejectReason(""); setRejectSupply({ supplyName, request }); }} busy={busy} canComplete={role === "PRESIDENT"} />
                 </div>
               </div>
             )}
@@ -4465,6 +4573,227 @@ export default function OfficerDashboard({
                   {busy === loanApproveConfirm.id ? "Approving…" : "Confirm"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmSupply && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl">
+            <div className="text-center">
+              <div className={`mx-auto h-12 w-12 rounded-full flex items-center justify-center mb-4 ${confirmSupply.action === "approve" ? "bg-[#e8f5ec]" : "bg-[#eef3ea]"}`}>
+                {confirmSupply.action === "approve" ? (
+                  <CheckCircle size={20} className="text-[#1b5e3b]" />
+                ) : (
+                  <PackageCheck size={20} className="text-[#1b5e3b]" />
+                )}
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">
+                {confirmSupply.action === "approve"
+                  ? "Approve this supply request?"
+                  : "Mark as picked up?"}
+              </h3>
+              <p className="text-sm text-gray-500 mb-5">
+                <span className="font-semibold text-gray-700">{confirmSupply.request.user.name}</span>{" "}
+                ({confirmSupply.supplyName} × {confirmSupply.request.quantity} · {confirmSupply.request.type})
+                {" "}—{" "}total <span className="font-semibold text-gray-700"><Money value={confirmSupply.request.totalPrice} /></span>.
+                {confirmSupply.action === "complete"
+                  ? " Stock will be deducted after pickup."
+                  : " The member will be notified once approved."}
+              </p>
+            </div>
+
+            <div className="mb-5 max-h-[45vh] space-y-3 overflow-y-auto rounded-2xl border border-[#e2ebe6] bg-[#fafcfb] p-4 text-sm">
+              <div>
+                <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-[#1b5e3b]">
+                  Requestee
+                </p>
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-[#5a7267]">Full name</span>
+                    <span className="font-semibold text-[#0f2318]">
+                      {confirmSupply.request.user.member?.fullName || confirmSupply.request.user.name}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-[#5a7267]">Username</span>
+                    <span className="font-semibold text-[#0f2318]">@{confirmSupply.request.user.username}</span>
+                  </div>
+                  {confirmSupply.request.user.member?.contact && (
+                    <div className="flex justify-between gap-3">
+                      <span className="text-[#5a7267]">Contact</span>
+                      <span className="font-semibold text-[#0f2318]">{confirmSupply.request.user.member.contact}</span>
+                    </div>
+                  )}
+                  {confirmSupply.request.user.member?.address && (
+                    <div className="flex justify-between gap-3">
+                      <span className="text-[#5a7267]">Address</span>
+                      <span className="text-right font-semibold text-[#0f2318]">{confirmSupply.request.user.member.address}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {confirmSupply.request.user.member?.farmSize != null && (
+                <div className="border-t border-[#eef2e8] pt-3">
+                  <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-[#1b5e3b]">
+                    Farm Details
+                  </p>
+                  <div className="space-y-1 text-xs">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-[#5a7267]">Farm size</span>
+                      <span className="font-semibold text-[#0f2318]">{confirmSupply.request.user.member.farmSize} ha</span>
+                    </div>
+                    {confirmSupply.request.user.member.yearsFarming != null && (
+                      <div className="flex justify-between gap-3">
+                        <span className="text-[#5a7267]">Years farming</span>
+                        <span className="font-semibold text-[#0f2318]">{confirmSupply.request.user.member.yearsFarming} yrs</span>
+                      </div>
+                    )}
+                    {confirmSupply.request.user.member.crops.length > 0 && (
+                      <div className="flex justify-between gap-3">
+                        <span className="text-[#5a7267]">Crops</span>
+                        <span className="inline-flex flex-wrap justify-end gap-1">
+                          {confirmSupply.request.user.member.crops.map((c) => (
+                            <span key={c} className="rounded-md bg-[#eef3ea] px-1.5 py-0.5 text-[10px] font-medium text-[#1b5e3b]">{c}</span>
+                          ))}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {confirmSupply.request.user.member?.guarantor &&
+                Object.keys(confirmSupply.request.user.member.guarantor).length > 0 && (
+                  <div className="border-t border-[#eef2e8] pt-3">
+                    <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#1b5e3b]">
+                      Guarantor
+                      {confirmSupply.request.user.member.guarantorStatus === "APPROVED" ? (
+                        <span className="rounded-full bg-green-100 px-1.5 py-px text-[9px] font-bold text-green-700">VERIFIED</span>
+                      ) : confirmSupply.request.user.member.guarantorStatus === "PENDING" ? (
+                        <span className="rounded-full bg-amber-100 px-1.5 py-px text-[9px] font-bold text-amber-700">PENDING</span>
+                      ) : confirmSupply.request.user.member.guarantorStatus === "REJECTED" ? (
+                        <span className="rounded-full bg-red-100 px-1.5 py-px text-[9px] font-bold text-red-600">REJECTED</span>
+                      ) : null}
+                    </p>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between gap-3">
+                        <span className="text-[#5a7267]">Full name</span>
+                        <span className="font-semibold text-[#0f2318]">
+                          {[
+                            String(confirmSupply.request.user.member.guarantor.firstName ?? ""),
+                            String(confirmSupply.request.user.member.guarantor.middleName ?? ""),
+                            String(confirmSupply.request.user.member.guarantor.lastName ?? ""),
+                            String(confirmSupply.request.user.member.guarantor.extensionName ?? ""),
+                          ]
+                            .map((v) => v.trim())
+                            .filter(Boolean)
+                            .join(" ") || "—"}
+                        </span>
+                      </div>
+                      {String(confirmSupply.request.user.member.guarantor.contact ?? "").trim() && (
+                        <div className="flex justify-between gap-3">
+                          <span className="text-[#5a7267]">Contact</span>
+                          <span className="font-semibold text-[#0f2318]">{String(confirmSupply.request.user.member.guarantor.contact)}</span>
+                        </div>
+                      )}
+                      {String(confirmSupply.request.user.member.guarantor.relationship ?? "").trim() && (
+                        <div className="flex justify-between gap-3">
+                          <span className="text-[#5a7267]">Relationship</span>
+                          <span className="font-semibold text-[#0f2318]">{String(confirmSupply.request.user.member.guarantor.relationship)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmSupply(null)} disabled={busy === confirmSupply.request.id} className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const { request, action } = confirmSupply;
+                  setConfirmSupply(null);
+                  void handleSupplyRequestAction(request.id, action);
+                }}
+                disabled={busy === confirmSupply.request.id}
+                className="flex-1 py-3 bg-[#1b5e3b] text-white hover:bg-[#154a2f] rounded-2xl font-bold transition disabled:opacity-50"
+              >
+                {busy === confirmSupply.request.id
+                  ? confirmSupply.action === "complete"
+                    ? "Marking…"
+                    : "Approving…"
+                  : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rejectSupply && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl">
+            <div className="text-center">
+              <div className="mx-auto h-12 w-12 rounded-full bg-red-50 flex items-center justify-center mb-4">
+                <XCircle size={20} className="text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">Reject this supply request?</h3>
+              <p className="text-sm text-gray-500 mb-5">
+                <span className="font-semibold text-gray-700">{rejectSupply.request.user.name}</span>{" "}
+                ({rejectSupply.supplyName} × {rejectSupply.request.quantity} · {rejectSupply.request.type})
+                {" "}—{" "}total <span className="font-semibold text-gray-700"><Money value={rejectSupply.request.totalPrice} /></span>.
+                The member will be notified.
+              </p>
+            </div>
+
+            <div className="mb-5 space-y-2.5 rounded-2xl border border-[#e2ebe6] bg-[#fafcfb] p-4">
+              <div className="flex justify-between gap-3 text-xs">
+                <span className="text-[#5a7267]">Requestee</span>
+                <span className="font-semibold text-[#0f2318]">{rejectSupply.request.user.member?.fullName || rejectSupply.request.user.name}</span>
+              </div>
+              <div className="flex justify-between gap-3 text-xs">
+                <span className="text-[#5a7267]">Username</span>
+                <span className="font-semibold text-[#0f2318]">@{rejectSupply.request.user.username}</span>
+              </div>
+              {rejectSupply.request.user.member?.contact && (
+                <div className="flex justify-between gap-3 text-xs">
+                  <span className="text-[#5a7267]">Contact</span>
+                  <span className="font-semibold text-[#0f2318]">{rejectSupply.request.user.member.contact}</span>
+                </div>
+              )}
+            </div>
+
+            <label className="mb-1.5 block text-xs font-semibold text-[#3d5c47]">
+              Reason for rejection <span className="font-normal text-[#8fa594]">(optional)</span>
+            </label>
+            <textarea
+              value={supplyRejectReason}
+              onChange={(e) => setSupplyRejectReason(e.target.value)}
+              placeholder="State why this request could not be approved (optional)"
+              rows={3}
+              autoFocus
+              className="mb-5 w-full resize-none rounded-2xl border border-red-200 bg-red-50/30 px-3.5 py-2.5 text-sm text-gray-700 outline-none transition placeholder:text-gray-400 focus:border-red-300 focus:ring-2 focus:ring-red-100"
+            />
+
+            <div className="flex gap-3">
+              <button onClick={() => setRejectSupply(null)} disabled={busy === rejectSupply.request.id} className="flex-1 py-3 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-2xl font-bold transition">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const { request } = rejectSupply;
+                  setRejectSupply(null);
+                  void handleSupplyRequestAction(request.id, "reject", supplyRejectReason.trim());
+                }}
+                disabled={busy === rejectSupply.request.id}
+                className="flex-1 py-3 bg-red-600 text-white hover:bg-red-700 rounded-2xl font-bold transition disabled:opacity-50"
+              >
+                {busy === rejectSupply.request.id ? "Rejecting…" : "Confirm"}
+              </button>
             </div>
           </div>
         </div>

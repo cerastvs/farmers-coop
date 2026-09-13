@@ -16,7 +16,12 @@ import { z } from "zod";
 
 const ReviewSchema = z.object({
   action: z.enum(["approve", "reject", "complete"]),
-  reason: z.string().trim().min(1).max(500).optional(),
+  reason: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .transform((val) => (val ? val : undefined)),
 }).strict();
 
 export async function PATCH(
@@ -28,9 +33,6 @@ export async function PATCH(
     const result = ReviewSchema.safeParse(await readJsonBody(req));
     if (!result.success) {
       throw new ApiError(400, result.error.issues[0].message);
-    }
-    if (result.data.action === "reject" && !result.data.reason) {
-      throw new ApiError(400, "A rejection reason is required");
     }
     if (result.data.action === "complete" && actor.userRole !== Role.PRESIDENT) {
       throw new ApiError(
@@ -70,7 +72,7 @@ export async function PATCH(
             reviewedAt: new Date(),
             rejectionReason:
               nextStatus === TransactionStatus.REJECTED
-                ? result.data.reason
+                ? result.data.reason ?? null
                 : null,
           },
         });
@@ -94,7 +96,9 @@ export async function PATCH(
           title: `Supply request ${nextStatus.toLowerCase()}`,
           message:
             nextStatus === TransactionStatus.REJECTED
-              ? `Your request for ${request.supply.productName} was rejected. Reason: ${result.data.reason}`
+              ? result.data.reason
+                ? `Your request for ${request.supply.productName} was rejected. Reason: ${result.data.reason}`
+                : `Your request for ${request.supply.productName} was rejected.`
               : `Your request for ${request.quantity} ${request.supply.productName} is now ${nextStatus.toLowerCase()}.`,
         });
         await writeAudit(tx, {

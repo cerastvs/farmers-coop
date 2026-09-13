@@ -134,7 +134,26 @@ export async function GET() {
           transactions: {
             orderBy: { createdAt: "desc" },
             include: {
-              user: { select: { id: true, name: true, username: true } },
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  username: true,
+                  applications: {
+                    select: {
+                      fullName: true,
+                      contact: true,
+                      address: true,
+                      farmSize: true,
+                      yearsFarming: true,
+                      guarantor: true,
+                      guarantorStatus: true,
+                      crops: { select: { name: true } },
+                    },
+                    take: 1,
+                  },
+                },
+              },
             },
           },
         },
@@ -298,7 +317,22 @@ export async function GET() {
           type: t.type,
           status: String(t.status),
           rejectionReason: t.rejectionReason,
-          user: { name: t.user.name || "Unknown", username: t.user.username },
+          user: {
+            name: t.user.name || "Unknown",
+            username: t.user.username,
+            member: {
+              fullName: t.user.applications[0]?.fullName ?? null,
+              contact: t.user.applications[0]?.contact ?? null,
+              address: t.user.applications[0]?.address ?? null,
+              farmSize: t.user.applications[0]?.farmSize ?? null,
+              yearsFarming: t.user.applications[0]?.yearsFarming ?? null,
+              crops:
+                t.user.applications[0]?.crops.map((c) => c.name) ?? [],
+              guarantor: t.user.applications[0]?.guarantor ?? null,
+              guarantorStatus:
+                t.user.applications[0]?.guarantorStatus ?? null,
+            },
+          },
         })),
       })),
       payments: payments.map((p) => ({

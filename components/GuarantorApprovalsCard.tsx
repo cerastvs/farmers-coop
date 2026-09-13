@@ -165,7 +165,7 @@ export function GuarantorApprovalsCard({
     }
   }
 
-  async function reject(target: PendingGuarantor, reason: string) {
+  async function reject(target: PendingGuarantor, reason?: string) {
     setBusy(target.applicationId);
     try {
       await requestJson(`/api/admin/guarantors/${target.applicationId}`, {
@@ -548,12 +548,12 @@ export function GuarantorApprovalsCard({
             </div>
 
             <label className="mb-1.5 block text-xs font-semibold text-[#3d5c47]">
-              Reason for rejection (required)
+              Reason for rejection <span className="font-normal text-[#8fa594]">(optional)</span>
             </label>
             <textarea
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="State why this guarantor could not be approved"
+              placeholder="State why this guarantor could not be approved (optional)"
               rows={3}
               autoFocus
               className="mb-5 w-full resize-none rounded-2xl border border-red-200 bg-red-50/30 px-3.5 py-2.5 text-sm text-gray-700 outline-none transition placeholder:text-gray-400 focus:border-red-300 focus:ring-2 focus:ring-red-100"
@@ -568,8 +568,8 @@ export function GuarantorApprovalsCard({
                 Cancel
               </button>
               <button
-                onClick={() => reject(rejecting, rejectReason.trim())}
-                disabled={busy === rejecting.applicationId || !rejectReason.trim()}
+                onClick={() => reject(rejecting, rejectReason.trim() || undefined)}
+                disabled={busy === rejecting.applicationId}
                 className="flex-1 rounded-2xl bg-red-600 py-3 font-bold text-white transition hover:bg-red-700 disabled:opacity-50"
               >
                 {busy === rejecting.applicationId ? "Rejecting…" : "Confirm"}

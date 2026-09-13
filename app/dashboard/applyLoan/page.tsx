@@ -145,6 +145,13 @@ export default function ApplyLoanPage() {
                 <span className="font-semibold">Edit Profile</span> in your
                 dashboard, then return here to apply.
               </p>
+              <Link
+                href="/registration?focus=guarantor"
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[#b45309] px-4 py-2 text-xs font-semibold text-white transition hover:bg-amber-700"
+              >
+                <IconChevronLeft className="w-3.5 h-3.5 rotate-180" />
+                Add Guarantor
+              </Link>
             </div>
           </div>
         )}

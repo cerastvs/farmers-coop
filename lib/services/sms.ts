@@ -65,7 +65,7 @@ export async function sendSmsRecord(
 export async function failSmsRecord(
   tx: Prisma.TransactionClient,
   smsId: string,
-  error: string,
+  error: string | null,
 ) {
   const updated = await tx.smsMessage.updateMany({
     where: { id: smsId, status: SmsStatus.PENDING },

@@ -10,13 +10,14 @@ import { z } from "zod";
 const UpdateSmsSchema = z
   .object({
     action: z.enum(["send", "fail"]),
-    error: z.string().trim().max(500).optional(),
+    error: z
+      .string()
+      .trim()
+      .max(500)
+      .optional()
+      .transform((val) => (val ? val : undefined)),
   })
-  .strict()
-  .refine(
-    (value) => value.action !== "fail" || Boolean(value.error),
-    "An error message is required when marking an SMS as failed",
-  );
+  .strict();
 
 export async function PATCH(
   req: NextRequest,
@@ -35,7 +36,7 @@ export async function PATCH(
       if (result.data.action === "send") {
         updated = await sendSmsRecord(tx, id, actor.userId);
       } else {
-        updated = await failSmsRecord(tx, id, result.data.error!);
+        updated = await failSmsRecord(tx, id, result.data.error ?? null);
       }
       await writeAudit(tx, {
         userId: actor.userId,

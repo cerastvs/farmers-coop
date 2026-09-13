@@ -12,7 +12,12 @@ import { z } from "zod";
 
 const ReviewSchema = z.object({
   action: z.enum(["approve", "reject"]),
-  reason: z.string().trim().min(1).max(500).optional(),
+  reason: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .transform((val) => (val ? val : undefined)),
 }).strict();
 
 export async function PATCH(
@@ -25,10 +30,6 @@ export async function PATCH(
     if (!result.success) {
       throw new ApiError(400, result.error.issues[0].message);
     }
-    if (result.data.action === "reject" && !result.data.reason) {
-      throw new ApiError(400, "A rejection reason is required");
-    }
-
     const { id: rawId } = await params;
 
     const resultRecord = await prisma.$transaction(
@@ -55,7 +56,7 @@ export async function PATCH(
             guarantorReviewedAt: new Date(),
             guarantorRejectionReason:
               nextStatus === GuarantorStatus.REJECTED
-                ? result.data.reason
+                ? result.data.reason ?? null
                 : null,
           },
         });
@@ -75,7 +76,9 @@ export async function PATCH(
             message:
               nextStatus === GuarantorStatus.APPROVED
                 ? "Your guarantor has been verified and approved. You can now apply for loans."
-                : `Your guarantor request was rejected. Reason: ${result.data.reason}. Please update your guarantor in Edit Profile and wait for review.`,
+                : result.data.reason
+                ? `Your guarantor request was rejected. Reason: ${result.data.reason}. Please update your guarantor in Edit Profile and wait for review.`
+                : `Your guarantor request was rejected. Please update your guarantor in Edit Profile and wait for review.`,
           },
         });
 

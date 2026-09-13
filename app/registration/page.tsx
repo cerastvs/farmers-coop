@@ -102,6 +102,10 @@ function DynamicListField({
 export default function Registration() {
   const [loading, setLoading] = useState(false);
   const [resubmitting, setResubmitting] = useState(false);
+  const [resubmitModal, setResubmitModal] = useState<{
+    kind: "success" | "error";
+    message: string;
+  } | null>(null);
   const [application, setApplication] = useState<ApplicationWithLists | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isApplicant, setIsApplicant] = useState(false);
@@ -114,9 +118,20 @@ export default function Registration() {
       const data = await res.json().catch(() => ({}));
       const fresh = await fetch("/api/registration").then((r) => r.json());
       if (fresh) setApplication(fresh);
-      alert(data.message || "Your guarantor has been resubmitted for review.");
+      if (!res.ok) {
+        setResubmitModal({
+          kind: "error",
+          message: data.error || "Failed to resubmit guarantor",
+        });
+      } else {
+        setResubmitModal({
+          kind: "success",
+          message:
+            data.message || "Your guarantor has been resubmitted for review.",
+        });
+      }
     } catch {
-      alert("Something went wrong");
+      setResubmitModal({ kind: "error", message: "Something went wrong" });
     } finally {
       setResubmitting(false);
     }
@@ -708,6 +723,45 @@ export default function Registration() {
         </div>
         </div>
       </div>
+
+      {resubmitModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+            <div
+              className={`mb-3 flex h-11 w-11 items-center justify-center rounded-full ${
+                resubmitModal.kind === "error"
+                  ? "bg-red-50"
+                  : "bg-[#f0f7eb]"
+              }`}
+            >
+              {resubmitModal.kind === "error" ? (
+                <span className="text-xl text-red-600">!</span>
+              ) : (
+                <span className="text-xl text-[#4f7e38]">✓</span>
+              )}
+            </div>
+            <h3 className="text-base font-bold text-[#173a2b]">
+              {resubmitModal.kind === "error"
+                ? "Resubmission Failed"
+                : "Guarantor Resubmitted"}
+            </h3>
+            <p className="mt-1.5 text-sm leading-relaxed text-[#5b6e62]">
+              {resubmitModal.message}
+            </p>
+            <button
+              type="button"
+              onClick={() => setResubmitModal(null)}
+              className={`mt-5 w-full rounded-xl py-3 font-bold text-white transition ${
+                resubmitModal.kind === "error"
+                  ? "bg-red-600 hover:bg-red-700"
+                  : "bg-[#174b36] hover:bg-[#0e3b2a]"
+              }`}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

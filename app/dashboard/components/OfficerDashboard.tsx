@@ -3567,6 +3567,7 @@ export default function OfficerDashboard({
     (s) => !hiddenSections.includes(s),
   );
   const [data, setData] = useState<SecretaryData | null>(null);
+  const [guarantorPending, setGuarantorPending] = useState(0);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -3620,6 +3621,19 @@ export default function OfficerDashboard({
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/guarantors")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled) setGuarantorPending(data?.pending?.length ?? 0);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (role !== "PRESIDENT") return;
@@ -3789,7 +3803,9 @@ export default function OfficerDashboard({
     return {
       applications: data.applications.filter((a) => a.status === "PENDING").length,
       members: 0,
-      loans: data.loans.filter((l) => l.status === "PENDING").length,
+      loans:
+        data.loans.filter((l) => l.status === "PENDING").length +
+        guarantorPending,
       payments: data.payments.filter(
         (p) => p.status === "PENDING" || p.status === "PENDING_APPROVAL",
       ).length,
@@ -3800,7 +3816,7 @@ export default function OfficerDashboard({
       sms: 0,
       overdue: 0,
     };
-  }, [data]);
+  }, [data, guarantorPending]);
 
   function togglePendingFilter(section: Section) {
     setPendingFilter((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -4179,7 +4195,7 @@ export default function OfficerDashboard({
 
             {activeTab === "loans" && data && (
               <>
-                <GuarantorApprovalsCard />
+                <GuarantorApprovalsCard onCountChange={setGuarantorPending} />
                 {role === "PRESIDENT" && (
                   <div className="mb-4 rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-fadeIn">
                     <div className="flex items-start justify-between gap-3">

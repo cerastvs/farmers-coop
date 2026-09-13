@@ -1,11 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle, CheckCircle2, XCircle } from "lucide-react";
+import {
+  CheckCircle,
+  CheckCircle2,
+  Eye,
+  XCircle,
+} from "lucide-react";
 
 interface PendingGuarantor {
   applicationId: string;
-  member: { id: string; name: string; username: string };
+  member: { id: string; name: string; username: string; role?: string };
   farm?: {
     fullName: string;
     farmSize: number;
@@ -18,6 +23,8 @@ interface PendingGuarantor {
   } | null;
   guarantor: Record<string, unknown>;
   submittedAt: string;
+  reviewedAt?: string | null;
+  rejectionReason?: string | null;
 }
 
 const buttonPrimary =
@@ -35,6 +42,21 @@ async function requestJson(url: string, options?: RequestInit) {
 
 function guarantorValue(guarantor: Record<string, unknown>, key: string) {
   return String(guarantor[key] ?? "").trim();
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "—";
+  try {
+    return new Date(value).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return value;
+  }
 }
 
 function guarantorFullName(guarantor: Record<string, unknown>) {
@@ -100,6 +122,7 @@ export function GuarantorApprovalsCard({
   const [confirming, setConfirming] = useState<PendingGuarantor | null>(null);
   const [rejecting, setRejecting] = useState<PendingGuarantor | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [viewing, setViewing] = useState<PendingGuarantor | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -183,10 +206,16 @@ export function GuarantorApprovalsCard({
         <div className="flex items-center justify-between border-b border-[#f0f3ed] px-5 py-4">
           <div>
             <h2
-              className="text-sm font-bold text-[#0f2318]"
+              className="flex items-center gap-2 text-sm font-bold text-[#0f2318]"
               style={{ fontFamily: "var(--font-display)" }}
             >
               Guarantor approvals needed
+              {pending.length > 0 && (
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-600" />
+                </span>
+              )}
             </h2>
             <p className="text-xs text-[#5a7267]">{pending.length} pending</p>
           </div>
@@ -197,7 +226,8 @@ export function GuarantorApprovalsCard({
             {pending.slice(0, 4).map((item) => (
               <div
                 key={item.applicationId}
-                className="px-5 py-3 transition-colors hover:bg-[#fafcfb]"
+                onClick={() => setViewing(item)}
+                className="cursor-pointer px-5 py-3 transition-colors hover:bg-[#fafcfb]"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -211,27 +241,17 @@ export function GuarantorApprovalsCard({
                       {guarantorValue(item.guarantor, "contact") || "no contact"}
                     </p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <button
-                      disabled={busy === item.applicationId}
-                      onClick={() => setConfirming(item)}
-                      className={buttonPrimary}
-                    >
-                      <CheckCircle2 size={13} />
-                      Approve
-                    </button>
-                    <button
-                      disabled={busy === item.applicationId}
-                      onClick={() => {
-                        setRejectReason("");
-                        setRejecting(item);
-                      }}
-                      className={buttonDanger}
-                    >
-                      <XCircle size={13} />
-                      Reject
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setViewing(item);
+                    }}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dce5d9] bg-white px-3 py-2 text-xs font-semibold text-[#1b5e3b] transition-all hover:border-[#1b5e3b] hover:bg-[#f0f7eb]"
+                  >
+                    <Eye size={13} />
+                    View details
+                  </button>
                 </div>
               </div>
             ))}
@@ -246,6 +266,146 @@ export function GuarantorApprovalsCard({
           </div>
         )}
       </section>
+
+      {viewing && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          onClick={() => setViewing(null)}
+        >
+          <div
+            className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">
+                  Pending Guarantor Approval
+                </h3>
+                <p className="mt-0.5 text-sm text-gray-500">
+                  Submitted by{" "}
+                  <span className="font-semibold text-gray-700">
+                    {viewing.member.name}
+                  </span>{" "}
+                  (@{viewing.member.username}) · {formatDateTime(viewing.submittedAt)}
+                </p>
+              </div>
+              <button
+                onClick={() => setViewing(null)}
+                className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                aria-label="Close"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            <div className="max-h-[55vh] space-y-4 overflow-y-auto pr-1">
+              <div className="space-y-2.5 rounded-2xl border border-[#e2ebe6] bg-[#fafcfb] p-4">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-[#1b5e3b]">
+                  Member
+                </p>
+                <DetailRow
+                  label="Full name"
+                  value={viewing.farm?.fullName ?? viewing.member.name}
+                />
+                <DetailRow
+                  label="Username"
+                  value={`@${viewing.member.username}`}
+                />
+                {viewing.farm && (
+                  <DetailRow label="Address" value={viewing.farm.address} />
+                )}
+              </div>
+
+              <div className="space-y-2.5 rounded-2xl border border-[#e2ebe6] bg-[#fafcfb] p-4">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-[#1b5e3b]">
+                  Guarantor
+                </p>
+                <DetailRow
+                  label="Full name"
+                  value={guarantorFullName(viewing.guarantor)}
+                />
+                <DetailRow
+                  label="Contact number"
+                  value={guarantorValue(viewing.guarantor, "contact") || "—"}
+                />
+                <DetailRow
+                  label="Relationship"
+                  value={guarantorValue(viewing.guarantor, "relationship") || "—"}
+                />
+              </div>
+
+              {viewing.farm && (
+                <>
+                  <div className="space-y-2.5 rounded-2xl border border-[#e2ebe6] bg-[#fafcfb] p-4">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-[#1b5e3b]">
+                      Farm Details
+                    </p>
+                    <DetailRow label="Full name" value={viewing.farm.fullName} />
+                    <DetailRow label="Address" value={viewing.farm.address} />
+                    <DetailRow
+                      label="Farm size"
+                      value={`${viewing.farm.farmSize} ha`}
+                    />
+                    <DetailRow
+                      label="Years farming"
+                      value={`${viewing.farm.yearsFarming} yrs`}
+                    />
+                    <DetailRow
+                      label="Farm ownership"
+                      value={ownershipLabel(
+                        viewing.farm.farmOwnership,
+                        viewing.farm.farmOwnershipDetails,
+                      )}
+                    />
+                  </div>
+
+                  <div className="space-y-2.5 rounded-2xl border border-[#e2ebe6] bg-[#fafcfb] p-4">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-[#1b5e3b]">
+                      Crops
+                    </p>
+                    <DetailRow label="Crops" value={<ListValue items={viewing.farm.crops} />} />
+                  </div>
+
+                  <div className="space-y-2.5 rounded-2xl border border-[#e2ebe6] bg-[#fafcfb] p-4">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-[#1b5e3b]">
+                      Owned Machines
+                    </p>
+                    <DetailRow
+                      label="Machines"
+                      value={<ListValue items={viewing.farm.machines} />}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={() => {
+                  setViewing(null);
+                  setRejecting(viewing);
+                }}
+                disabled={busy === viewing.applicationId}
+                className={buttonDanger}
+              >
+                <XCircle size={13} />
+                Reject
+              </button>
+              <button
+                onClick={() => {
+                  setViewing(null);
+                  setConfirming(viewing);
+                }}
+                disabled={busy === viewing.applicationId}
+                className={`${buttonPrimary} ml-auto`}
+              >
+                <CheckCircle2 size={13} />
+                Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirming && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">

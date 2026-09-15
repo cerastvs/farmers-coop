@@ -1,12 +1,19 @@
 import { Prisma } from "@/app/generated/prisma";
 import prisma from "@/lib/client";
+import {
+  applyLoanInterest,
+  principalFromAmount,
+  roundToMoney,
+} from "@/lib/loan-math";
+
+export {
+  applyLoanInterest,
+  principalFromAmount,
+  roundToMoney,
+};
 
 export const LOAN_INTEREST_SETTING_KEY = "loanInterestRate";
 export const DEFAULT_LOAN_INTEREST_RATE = 2;
-
-export function roundToMoney(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
 
 export async function getLoanInterestRate(
   tx: Prisma.TransactionClient | typeof prisma = prisma,
@@ -19,12 +26,4 @@ export async function getLoanInterestRate(
     return DEFAULT_LOAN_INTEREST_RATE;
   }
   return roundToMoney(rate);
-}
-
-export function applyLoanInterest(
-  principal: number | Prisma.Decimal,
-  ratePercent: number,
-): number {
-  const principalAmount = Number(principal);
-  return roundToMoney(principalAmount * (1 + ratePercent / 100));
 }

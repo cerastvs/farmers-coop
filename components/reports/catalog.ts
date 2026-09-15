@@ -140,7 +140,8 @@ const LOANS: ReportTypeCatalog = {
   memberFilter: true,
   statusOptions: ["PENDING", "APPROVED", "ACTIVE", "OVERDUE", "PAID", "REJECTED"],
   notes: [
-    "Rejected loan requests are excluded from principal, paid, and outstanding totals.",
+    "Rejected loan requests are excluded from principal, payable, paid, and outstanding totals.",
+    "Principal reflects the initial loan amount before interest; Payable includes the computed interest.",
     "Outstanding balances reflect total payments to date for loans in the selected period.",
     "Rejected loan-payment submissions are reported separately and are not included in paid totals.",
   ],
@@ -152,6 +153,7 @@ const LOANS: ReportTypeCatalog = {
       kvs: [
         { id: "loans", label: "Loans", value: (d) => (d.totals?.loans ?? 0) },
         { id: "principal", label: "Principal", value: (d) => money(d.totals?.principal) },
+        { id: "payable", label: "Payable", value: (d) => money(d.totals?.payable) },
         { id: "paid", label: "Loan Paid", value: (d) => money(d.totals?.amountPaid) },
         { id: "outstanding", label: "Outstanding", value: (d) => money(d.totals?.outstandingBalance) },
         { id: "rejectedRequests", label: "Rejected Requests", value: (d) => (d.totals?.requestsRejected ?? 0) },
@@ -176,7 +178,8 @@ const LOANS: ReportTypeCatalog = {
         columns: [
           { id: "borrower", label: "Borrower", get: (r) => borrower(r).name ?? "", render: (r) => borrower(r).name ?? "—" },
           { id: "loan", label: "Loan", get: (r) => r.name ?? "", render: (r) => r.name ?? "—" },
-          { id: "amount", label: "Amount", get: (r) => moneyValue(r.amount), render: (r) => money(r.amount), money: true },
+          { id: "principal", label: "Principal", get: (r) => moneyValue(r.principal), render: (r) => money(r.principal), money: true },
+          { id: "payable", label: "Payable", get: (r) => moneyValue(r.payable), render: (r) => money(r.payable), money: true },
           { id: "paid", label: "Paid", get: (r) => moneyValue(r.amountPaid), render: (r) => money(r.amountPaid), money: true },
           { id: "outstanding", label: "Outstanding", get: (r) => moneyValue(r.outstandingBalance), render: (r) => money(r.outstandingBalance), money: true },
           { id: "status", label: "Status", get: (r) => r.status ?? "", render: (r) => humanize(r.status) },
@@ -187,7 +190,7 @@ const LOANS: ReportTypeCatalog = {
           { key: "member", label: "Borrower", get: (r) => borrower(r).name ?? null },
           { key: "decision", label: "Decision", get: (r) => r.decision ?? null },
         ],
-        totalColumns: ["amount", "paid", "outstanding"],
+        totalColumns: ["principal", "payable", "paid", "outstanding"],
       },
     },
     {
@@ -618,6 +621,7 @@ const SUMMARY: ReportTypeCatalog = {
       kvs: [
         { id: "loans", label: "Loans", value: (d) => (d.loans?.count ?? 0) },
         { id: "principal", label: "Loan Principal", value: (d) => money(d.loans?.principal) },
+        { id: "payable", label: "Loan Payable", value: (d) => money(d.loans?.payable) },
         { id: "paid", label: "Loan Paid", value: (d) => money(d.loans?.amountPaid) },
         { id: "outstanding", label: "Outstanding", value: (d) => money(d.loans?.outstandingBalance) },
         { id: "rejected", label: "Rejected Requests", value: (d) => (d.loans?.rejectedRequests ?? 0) },
@@ -720,7 +724,8 @@ const SUMMARY: ReportTypeCatalog = {
           ),
         columns: [
           { id: "name", label: "Member", get: (r) => (r.user as Record<string, any>)?.name ?? "", render: (r) => (r.user as Record<string, any>)?.name ?? "—" },
-          { id: "amount", label: "Amount", get: (r) => moneyValue(r.amount), render: (r) => money(r.amount), money: true },
+          { id: "principal", label: "Principal", get: (r) => moneyValue(r.principal), render: (r) => money(r.principal), money: true },
+          { id: "payable", label: "Payable", get: (r) => moneyValue(r.payable), render: (r) => money(r.payable), money: true },
           { id: "paid", label: "Paid", get: (r) => moneyValue(r.amountPaid), render: (r) => money(r.amountPaid), money: true },
           { id: "outstanding", label: "Outstanding", get: (r) => moneyValue(r.outstandingBalance), render: (r) => money(r.outstandingBalance), money: true },
           { id: "status", label: "Status", get: (r) => r.status ?? "", render: (r) => humanize(r.status) },
@@ -730,7 +735,7 @@ const SUMMARY: ReportTypeCatalog = {
           { key: "status", label: "Loan status", get: (r) => r.status ?? null },
           { key: "member", label: "Member", get: (r) => (r.user as Record<string, any>)?.name ?? null },
         ],
-        totalColumns: ["amount", "paid", "outstanding"],
+        totalColumns: ["principal", "payable", "paid", "outstanding"],
       },
     },
     {

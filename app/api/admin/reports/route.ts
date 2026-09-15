@@ -16,6 +16,7 @@ import { writeAudit } from "@/lib/activity";
 import { apiErrorResponse, ApiError, requireUser } from "@/lib/api";
 import prisma from "@/lib/client";
 import { RECORDS_ROLES } from "@/lib/permissions";
+import { principalFromAmount } from "@/lib/services/loan-interest";
 import {
   asOfPrisma,
   dateRangePrisma,
@@ -84,6 +85,17 @@ function reportPaymentStatus(status: PaymentStatus) {
   if (status === PaymentStatus.APPROVED) return PaymentStatus.VERIFIED;
   if (status === PaymentStatus.DECLINED) return PaymentStatus.REJECTED;
   return status;
+}
+
+// The initial loan amount before interest. For loans created before the
+// principal field was recorded, reverse the stored payable using the rate.
+function loanPrincipalAmount(loan: {
+  amount: Prisma.Decimal;
+  principalAmount: Prisma.Decimal | null;
+  interestRate: Prisma.Decimal;
+}): number {
+  if (loan.principalAmount != null) return Number(loan.principalAmount);
+  return principalFromAmount(loan.amount, Number(loan.interestRate));
 }
 
 const DEFAULT_TITLES: Record<ReportType, string> = {
@@ -318,7 +330,8 @@ async function generateLoansReport(filters: ReportFilters = {}) {
       id: loan.id,
       borrower: loan.user,
       name: loan.name,
-      amount: Number(loan.amount),
+      principal: loanPrincipalAmount(loan),
+      payable: Number(loan.amount),
       amountPaid: paidInRange,
       outstandingBalance: Math.max(Number(loan.amount) - totalPaid, 0),
       status: loan.status,
@@ -340,11 +353,14 @@ async function generateLoansReport(filters: ReportFilters = {}) {
     generatedAt: new Date().toISOString(),
     totals: {
       loans: records.length,
-      // Rejected loan requests are excluded from principal, paid, and
-      // outstanding amounts; they are surfaced as their own totals.
+      // Rejected loan requests are excluded from principal, payable, paid,
+      // and outstanding amounts; they are surfaced as their own totals.
       principal: records
         .filter((loan) => loan.status !== LoanStatus.REJECTED)
-        .reduce((sum, loan) => sum + loan.amount, 0),
+        .reduce((sum, loan) => sum + loan.principal, 0),
+      payable: records
+        .filter((loan) => loan.status !== LoanStatus.REJECTED)
+        .reduce((sum, loan) => sum + loan.payable, 0),
       amountPaid: records
         .filter((loan) => loan.status !== LoanStatus.REJECTED)
         .reduce((sum, loan) => sum + loan.amountPaid, 0),
@@ -690,6 +706,8 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
         select: {
           id: true,
           amount: true,
+          principalAmount: true,
+          interestRate: true,
           status: true,
           due: true,
           user: { select: { id: true, name: true, username: true } },
@@ -760,13 +778,15 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
       (sum: number, p: { amount: Prisma.Decimal }) => sum + Number(p.amount),
       0,
     );
-    const amount = Number(loan.amount);
+    const payable = Number(loan.amount);
     return {
       id: loan.id,
       user: loan.user,
-      amount,
+      principal: loanPrincipalAmount(loan),
+      payable,
+      amount: payable,
       amountPaid,
-      outstandingBalance: amount - amountPaid,
+      outstandingBalance: payable - amountPaid,
       status: loan.status,
       due: loan.due?.toISOString() ?? null,
     };
@@ -791,9 +811,10 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
     members: { users: users.length, list: users },
     loans: {
       count: loanList.length,
-      // Rejected loan requests are excluded from principal, paid, and
-      // outstanding amounts; the rejected request count is reported separately.
-      principal: activeLoanList.reduce((sum, l) => sum + l.amount, 0),
+      // Rejected loan requests are excluded from principal, payable, paid,
+      // and outstanding amounts; the rejected request count is reported separately.
+      principal: activeLoanList.reduce((sum, l) => sum + l.principal, 0),
+      payable: activeLoanList.reduce((sum, l) => sum + l.payable, 0),
       amountPaid: activeLoanList.reduce((sum, l) => sum + l.amountPaid, 0),
       outstandingBalance: activeLoanList.reduce(
         (sum, l) => sum + l.outstandingBalance,

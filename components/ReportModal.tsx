@@ -612,13 +612,14 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
       case "LOANS": {
         const totals = (data.totals ?? {}) as ReportData;
         const loans = (data.loans ?? []) as ReportData[];
-        const loanCols = ["Borrower", "Type", "Amount", "Paid", "Outstanding", "Status", "Due"];
+        const loanCols = ["Borrower", "Type", "Principal", "Payable", "Paid", "Outstanding", "Status", "Due"];
         const loanRows = loans.map((l) => {
           const b = (l.borrower ?? {}) as ReportData;
           return [
             cell(b.name),
             cell(l.name),
-            cell(l.amount, money(l.amount)),
+            cell(l.principal, money(l.principal)),
+            cell(l.payable, money(l.payable)),
             cell(l.amountPaid, money(l.amountPaid)),
             cell(l.outstandingBalance, money(l.outstandingBalance)),
             cell(l.status, humanize(l.status)),
@@ -632,7 +633,8 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
             return [
               cell(b.name),
               cell(l.name),
-              cell(l.amount, money(l.amount)),
+              cell(l.principal, money(l.principal)),
+              cell(l.payable, money(l.payable)),
               cell(l.amountPaid, money(l.amountPaid)),
               cell(l.outstandingBalance, money(l.outstandingBalance)),
               cell(l.status, humanize(l.status)),
@@ -643,7 +645,7 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
           const b = (l.borrower ?? {}) as ReportData;
           return [
             cell(b.name),
-            cell(l.amount, money(l.amount)),
+            cell(l.payable, money(l.payable)),
             cell(l.amountPaid, money(l.amountPaid)),
             cell(l.status, humanize(l.status)),
           ];
@@ -652,7 +654,7 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
           const b = (l.borrower ?? {}) as ReportData;
           return [
             cell(b.name),
-            cell(l.amount, money(l.amount)),
+            cell(l.payable, money(l.payable)),
             cell(l.outstandingBalance, money(l.outstandingBalance)),
             cell(l.status, humanize(l.status)),
           ];
@@ -682,7 +684,8 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {kvCard("Loans", totals.loans ?? 0, () => showDetail("All Loans", loanCols, loanRows))}
               {kvCard("Principal", money(totals.principal), () => showDetail("Loan Principal", loanCols, principalRows))}
-              {kvCard("Paid", money(totals.amountPaid), () => showDetail("Loan Repayments", ["Borrower", "Amount", "Paid", "Status"], repayRows))}
+              {kvCard("Payable", money(totals.payable), () => showDetail("Loan Payable", loanCols, principalRows))}
+              {kvCard("Paid", money(totals.amountPaid), () => showDetail("Loan Repayments", ["Borrower", "Payable", "Paid", "Status"], repayRows))}
               {kvCard("Outstanding", money(totals.outstandingBalance), () => showDetail("Outstanding Balances", ["Borrower", "Amount", "Outstanding", "Status"], outstandingRows))}
               {kvCard("Rejected Requests", totals.rejectedRequests ?? 0)}
               {rejectedList.length > 0 &&

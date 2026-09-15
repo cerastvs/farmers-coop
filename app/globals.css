@@ -57,3 +57,434 @@ select {
 .animate-slideUp {
   animation: slideUp 0.5s ease-out both;
 }
+
+/* ------------------------------------------------------------------ */
+/* Printable report document                                          */
+/* ------------------------------------------------------------------ */
+
+.rpt-doc {
+  background: #fff;
+  color: #1a1a1a;
+  font-family: "Inter", Arial, Helvetica, sans-serif;
+}
+
+/* On screen, the paper is a white sheet. In print it becomes the page. */
+.rpt-doc {
+  width: 8.5in;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0.75in;
+  box-shadow: 0 6px 30px rgba(15, 35, 25, 0.12);
+  border: 1px solid #e6e6e6;
+  border-radius: 2px;
+}
+
+.rpt-header {
+  border-bottom: 3px double #173a2b;
+  margin-bottom: 1.1rem;
+  padding-bottom: 0.9rem;
+}
+
+.rpt-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.7rem;
+}
+
+.rpt-brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 999px;
+  background: #173a2b;
+  color: #fff;
+  font-weight: 800;
+  font-family: "DM Sans", sans-serif;
+  letter-spacing: 0.05em;
+}
+
+.rpt-coop {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #173a2b;
+  font-family: "DM Sans", sans-serif;
+  line-height: 1.1;
+}
+
+.rpt-coop-sub {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: #5a7267;
+}
+
+.rpt-heading {
+  margin-bottom: 0.8rem;
+}
+
+.rpt-title {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #0f2318;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.rpt-subtitle {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #496558;
+}
+
+.rpt-meta {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.66rem;
+}
+
+.rpt-meta th {
+  text-align: left;
+  font-weight: 700;
+  color: #173a2b;
+  padding: 0.18rem 0.5rem 0.18rem 0;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.rpt-meta td {
+  padding: 0.18rem 1rem 0.18rem 0;
+  color: #333;
+  vertical-align: top;
+}
+
+.rpt-body {
+  min-height: 4in;
+}
+
+.rpt-section {
+  margin-bottom: 1.2rem;
+}
+
+.rpt-section-title {
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #173a2b;
+  border-bottom: 1px solid #cfd8d0;
+  padding-bottom: 0.25rem;
+  margin: 0 0 0.55rem;
+}
+
+.rpt-kv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(2.2in, 1fr));
+  gap: 0.5rem;
+}
+
+.rpt-kv {
+  border: 1px solid #dfe6e0;
+  border-left: 3px solid #1b5e3b;
+  border-radius: 4px;
+  padding: 0.45rem 0.6rem;
+  background: #fcfffb;
+}
+
+.rpt-kv-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #5a7267;
+  margin: 0;
+}
+
+.rpt-kv-value {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f2318;
+  margin: 0.1rem 0 0;
+}
+
+.rpt-kv-sub {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #496558;
+  margin: 0.05rem 0 0;
+}
+
+.rpt-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(2.6in, 1fr));
+  gap: 0.5rem;
+}
+
+.rpt-stat-card {
+  border: 1px solid #dfe6e0;
+  border-radius: 4px;
+  padding: 0.45rem 0.6rem;
+  background: #f8fbf7;
+}
+
+.rpt-stat-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #5a7267;
+  margin: 0 0 0.4rem;
+}
+
+.rpt-stat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.rpt-chip {
+  font-size: 0.66rem;
+  color: #496558;
+  background: #eef3ea;
+  border: 1px solid #dfe6e0;
+  border-radius: 999px;
+  padding: 0.12rem 0.5rem;
+}
+
+.rpt-chip b {
+  color: #173a2b;
+  font-size: 0.75rem;
+}
+
+.rpt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.68rem;
+}
+
+.rpt-table th {
+  text-align: left;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #173a2b;
+  background: #eef2ec;
+  border: 1px solid #c9d3cb;
+  padding: 0.32rem 0.45rem;
+}
+
+.rpt-table td {
+  border: 1px solid #dbe2dc;
+  padding: 0.3rem 0.45rem;
+  color: #222;
+  vertical-align: top;
+}
+
+.rpt-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.rpt-total-row td {
+  font-weight: 800;
+  color: #0f2318;
+  background: #f2f6ef;
+  border-top: 2px solid #c9d3cb;
+}
+
+.rpt-group {
+  margin-bottom: 0.6rem;
+}
+
+.rpt-group-head {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #496558;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.25rem;
+}
+
+.rpt-machine {
+  border: 1px solid #dfe6e0;
+  border-radius: 4px;
+  padding: 0.5rem;
+  margin-bottom: 0.6rem;
+  background: #fcfdfb;
+}
+
+.rpt-machine-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 0.35rem;
+}
+
+.rpt-machine-name {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #173a2b;
+}
+
+.rpt-machine-desc {
+  font-size: 0.66rem;
+  color: #5a7267;
+  text-align: right;
+}
+
+.rpt-empty {
+  font-size: 0.72rem;
+  color: #718176;
+  font-style: italic;
+}
+
+.rpt-pre {
+  font-size: 0.6rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rpt-notes {
+  margin-top: 1.2rem;
+  border-top: 1px solid #cfd8d0;
+  padding-top: 0.7rem;
+  font-size: 0.66rem;
+  color: #496558;
+}
+
+.rpt-notes-title {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #173a2b;
+  margin: 0 0 0.25rem;
+  font-size: 0.62rem;
+}
+
+.rpt-notes ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.rpt-notes li {
+  margin: 0.15rem 0;
+}
+
+.rpt-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.6rem;
+  border-top: 1px solid #cfd8d0;
+  padding-top: 1.2rem;
+}
+
+.rpt-sign {
+  display: flex;
+  flex-direction: column;
+  gap: 2.2rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #496558;
+  width: 1.9in;
+}
+
+.rpt-sign-line {
+  border-bottom: 1px solid #8a998f;
+  flex: 1;
+}
+
+.rpt-footer-note {
+  margin-top: 0.9rem;
+  text-align: center;
+  font-size: 0.6rem;
+  color: #718176;
+}
+
+/* Print copy is hidden on screen; appears only when printing. */
+.rpt-print-root {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Printing — Philippine long bond paper (8.5 x 13 in)                */
+/* ------------------------------------------------------------------ */
+
+@page {
+  size: 8.5in 13in;
+  margin: 0; /* the document supplies its own .75in padding */
+}
+
+@media print {
+  @page {
+    margin: 0;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  body #report-print-root,
+  body #report-print-root *,
+  body .rpt-print-root,
+  body .rpt-print-root * {
+    visibility: visible;
+  }
+
+  .rpt-print-root {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 8.5in;
+  }
+
+  .rpt-doc {
+    width: 8.5in;
+    max-width: none;
+    margin: 0;
+    padding: 0.75in;
+    box-shadow: none;
+    border: none;
+    border-radius: 0;
+  }
+
+  .rpt-section-title {
+    page-break-after: avoid;
+  }
+
+  .rpt-table thead {
+    display: table-header-group;
+  }
+
+  .rpt-table tr,
+  .rpt-table td {
+    page-break-inside: avoid;
+  }
+
+  .rpt-kv,
+  .rpt-stat-card,
+  .rpt-machine,
+  .rpt-group {
+    page-break-inside: avoid;
+  }
+
+  .rpt-doc {
+    page-break-after: auto;
+  }
+}

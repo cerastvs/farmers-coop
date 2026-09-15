@@ -7,8 +7,9 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { Printer, X } from "lucide-react";
 import { Money } from "@/components/Money";
+import { ReportDocument, ReportPrintCopy } from "@/components/reports/ReportDocument";
 
 type ReportData = Record<string, unknown>;
 
@@ -24,6 +25,7 @@ export function ReportModal({
     to?: string | null;
     createdAt: string;
     data: ReportData | null;
+    generatedByName?: string | null;
   };
   onClose: () => void;
 }) {
@@ -43,7 +45,7 @@ export function ReportModal({
         className="relative flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-[#eef2e8] bg-[#f7faf5] px-5 py-4">
+        <div className="flex items-center justify-between gap-3 border-b border-[#eef2e8] bg-[#f7faf5] px-5 py-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-indigo-600">
               {type} Report
@@ -57,26 +59,57 @@ export function ReportModal({
             {createdAt && (
               <p className="text-xs text-[#718176]">
                 Generated {new Date(createdAt).toLocaleString("en-PH")}
+                {report.generatedByName ? ` by ${report.generatedByName}` : ""}
               </p>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-            aria-label="Close report"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-indigo-700"
+            >
+              <Printer size={13} /> Print
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              aria-label="Close report"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto bg-[#eef2ec] p-5">
           {!summary ? (
             <p className="text-sm text-[#718176]">No report data.</p>
           ) : (
-            <ReportContent type={type} data={summary} />
+            <div className="overflow-x-auto">
+              <ReportDocument
+                type={type}
+                data={summary}
+                title={title}
+                from={from ?? null}
+                to={to ?? null}
+                reportId={report.id}
+                generatedAt={createdAt}
+                generatedByName={report.generatedByName ?? null}
+              />
+            </div>
           )}
         </div>
       </div>
+
+      <ReportPrintCopy
+        type={type}
+        data={summary}
+        title={title}
+        from={from ?? null}
+        to={to ?? null}
+        reportId={report.id}
+        generatedAt={createdAt}
+        generatedByName={report.generatedByName ?? null}
+      />
     </div>
   );
 }
@@ -474,7 +507,9 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
               {kvCard("Rejected Requests", loans.rejectedRequests ?? 0)}
               {kvCard("Loan Paid", money(loans.amountPaid), () => showDetail("Loan Repayments", ["Name", "Amount Paid", "Status"], loanRepayRows))}
               {kvCard("Payments", payments.count ?? 0, () => showDetail("Payments", payCols, payRows))}
-              {kvCard("Submitted Amount", money(payments.submittedAmount), () => showDetail("Submitted Payments", payCols, payRows))}
+              {kvCard("Pending Amount", money(payments.pendingAmount))}
+              {kvCard("Verified Amount", money(payments.verifiedAmount))}
+              {kvCard("Rejected Amount", money(payments.rejectedAmount))}
               {kvCard("Supply Products", supplies.products ?? 0, () => showDetail("Supply Products", supplyCols, supplyRows))}
               {kvCard("Units in Stock", supplies.unitsInStock ?? 0, () => showDetail("Supply Inventory", supplyCols, supplyRows))}
               {kvCard("Inventory Value", money(supplies.inventoryValue), () => showDetail("Inventory Value", supplyCols, supplyRows))}
@@ -706,8 +741,9 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {kvCard("Payments", totals.payments ?? 0, () => showDetail("All Payments", payCols, payRows))}
-              {kvCard("Submitted", money(totals.submittedAmount), () => showDetail("Submitted Payments", payCols, payRows))}
+              {kvCard("Pending", money(totals.pendingAmount))}
               {kvCard("Verified", money(totals.verifiedAmount), () => showDetail("Verified Payments", payCols, verifiedRows))}
+              {kvCard("Rejected", money(totals.rejectedAmount))}
             </div>
             {statCards([
               { label: "By Status", byStatus: totals.byStatus as Record<string, number> },

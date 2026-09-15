@@ -93,6 +93,7 @@ interface Report {
   to: string | null;
   createdAt: string;
   data: Record<string, unknown> | null;
+  generatedByName?: string | null;
 }
 
 interface Post {
@@ -171,6 +172,7 @@ const secondaryButton = "rounded-xl border border-[#cddbc9] bg-white px-3.5 py-2
 
 function getSecureProofUrl(receiptUrl: string | null) {
   if (!receiptUrl) return null;
+  if (receiptUrl.startsWith("/uploads/payment-proofs/")) return receiptUrl;
 
   try {
     const url = new URL(receiptUrl);

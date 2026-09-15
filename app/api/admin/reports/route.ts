@@ -16,6 +16,12 @@ import { writeAudit } from "@/lib/activity";
 import { apiErrorResponse, ApiError, requireUser } from "@/lib/api";
 import prisma from "@/lib/client";
 import { RECORDS_ROLES } from "@/lib/permissions";
+import {
+  asOfPrisma,
+  dateRangePrisma,
+  isInReportDateRange,
+  reportDateBoundary,
+} from "@/lib/report-date-range";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -27,6 +33,20 @@ const GenerateReportSchema = z.object({
   memberId: z.string().optional(),
   statuses: z.array(z.string()).optional(),
   preview: z.boolean().optional(),
+  config: z
+    .object({
+      version: z.literal(1).optional(),
+      preset: z.enum(["summary", "detailed", "full"]).optional(),
+      sections: z.array(z.string()).optional(),
+      columns: z.record(z.string(), z.array(z.string())).optional(),
+      sort: z
+        .object({ field: z.string(), dir: z.enum(["asc", "desc"]) })
+        .nullable()
+        .optional(),
+      groupBy: z.string().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
 });
 
 const FINANCIAL_REPORT_TYPES: readonly ReportType[] = [
@@ -42,9 +62,29 @@ const VISIBLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
   PaymentStatus.PENDING,
   PaymentStatus.VERIFIED,
   PaymentStatus.REJECTED,
-  PaymentStatus.PENDING_APPROVAL,
-  PaymentStatus.APPROVED,
 ];
+
+const isRejectedPayment = (payment: { status: PaymentStatus }) =>
+  payment.status === PaymentStatus.REJECTED ||
+  payment.status === PaymentStatus.DECLINED;
+
+function sumPaymentAmounts(
+  payments: readonly { status: PaymentStatus; amount: Prisma.Decimal }[],
+  statuses: readonly PaymentStatus[],
+) {
+  return payments.reduce(
+    (sum, payment) =>
+      sum + (statuses.includes(payment.status) ? Number(payment.amount) : 0),
+    0,
+  );
+}
+
+function reportPaymentStatus(status: PaymentStatus) {
+  if (status === PaymentStatus.PENDING_APPROVAL) return PaymentStatus.PENDING;
+  if (status === PaymentStatus.APPROVED) return PaymentStatus.VERIFIED;
+  if (status === PaymentStatus.DECLINED) return PaymentStatus.REJECTED;
+  return status;
+}
 
 const DEFAULT_TITLES: Record<ReportType, string> = {
   SUMMARY: "Cooperative Summary Report",
@@ -79,32 +119,6 @@ type ReportFilters = {
   statuses?: string[];
 };
 
-function dateRangePrisma(filters: ReportFilters) {
-  const range: Record<string, Date> = {};
-  if (filters.from) {
-    const from = new Date(filters.from);
-    if (!isNaN(from.getTime())) range.gte = from;
-  }
-  if (filters.to) {
-    const to = new Date(filters.to);
-    if (!isNaN(to.getTime())) range.lte = to;
-  }
-  return range;
-}
-
-function isInDateRange(date: Date | null | undefined, filters: ReportFilters) {
-  if (!date) return true;
-  if (filters.from) {
-    const from = new Date(filters.from);
-    if (!isNaN(from.getTime()) && date < from) return false;
-  }
-  if (filters.to) {
-    const to = new Date(filters.to);
-    if (!isNaN(to.getTime()) && date > to) return false;
-  }
-  return true;
-}
-
 const whereFromFilters = (filters: ReportFilters): Prisma.UserWhereInput => ({
   ...(filters.memberId ? { id: filters.memberId } : {}),
 });
@@ -118,7 +132,7 @@ async function generateMembersReport(filters: ReportFilters = {}) {
           ? { role: { in: filters.statuses as Role[] } }
           : {}),
         ...(filters.from || filters.to
-          ? { createdAt: dateRangePrisma(filters) }
+          ? { createdAt: asOfPrisma(filters) }
           : {}),
       },
       orderBy: { createdAt: "desc" },
@@ -139,7 +153,7 @@ async function generateMembersReport(filters: ReportFilters = {}) {
           ? { status: { in: filters.statuses as ApplicationStatus[] } }
           : {}),
         ...(filters.from || filters.to
-          ? { createdAt: dateRangePrisma(filters) }
+          ? { createdAt: asOfPrisma(filters) }
           : {}),
       },
       include: {
@@ -214,18 +228,15 @@ async function generateLoansReport(filters: ReportFilters = {}) {
       AND: [
         ...(filters.memberId ? [{ userId: filters.memberId }] : []),
         {
-          OR: [
-            // Always include non-PAID loans so outstanding balances are complete.
-            { status: { not: LoanStatus.PAID } },
-            // PAID loans (and any loan) appear if they had activity in range.
-            ...(hasRange
-              ? [
+          ...(hasRange
+            ? {
+                OR: [
                   { createdAt: dateRangePrisma(filters) },
                   { payments: { some: { paidAt: dateRangePrisma(filters) } } },
                   { statusHistory: { some: { changedAt: dateRangePrisma(filters) } } },
-                ]
-              : []),
-          ],
+                ],
+              }
+            : {}),
         },
         ...(filters.statuses && filters.statuses.length
           ? [{ status: { in: filters.statuses as LoanStatus[] } }]
@@ -264,7 +275,7 @@ async function generateLoansReport(filters: ReportFilters = {}) {
     );
     const inRangePayments = hasRange
       ? loan.payments.filter((payment) =>
-          isInDateRange(payment.paidAt, filters),
+          isInReportDateRange(payment.paidAt, filters),
         )
       : loan.payments;
     const paidInRange = inRangePayments.reduce(
@@ -274,12 +285,12 @@ async function generateLoansReport(filters: ReportFilters = {}) {
     const rejectedPayments = loan.paymentSubmissions
       .filter(
         (payment) =>
-          !hasRange || isInDateRange(payment.createdAt, filters),
+          !hasRange || isInReportDateRange(payment.createdAt, filters),
       )
       .map((payment) => ({
         id: payment.id,
         amount: Number(payment.amount),
-        status: payment.status,
+        status: reportPaymentStatus(payment.status),
         rejectionReason: payment.rejectionReason,
         paymentMethod: payment.paymentMethod,
         referenceNo: payment.referenceNo,
@@ -415,19 +426,20 @@ async function generatePaymentsReport(filters: ReportFilters = {}) {
     generatedAt: new Date().toISOString(),
     totals: {
       payments: payments.length,
-      submittedAmount: payments.reduce(
-        (sum, payment) => sum + Number(payment.amount),
-        0,
-      ),
-      verifiedAmount: payments
-        .filter(
-          (payment) =>
-            payment.status === PaymentStatus.VERIFIED ||
-            payment.status === PaymentStatus.APPROVED,
-        )
-        .reduce((sum, payment) => sum + Number(payment.amount), 0),
+      pendingAmount: sumPaymentAmounts(payments, [
+        PaymentStatus.PENDING,
+        PaymentStatus.PENDING_APPROVAL,
+      ]),
+      verifiedAmount: sumPaymentAmounts(payments, [
+        PaymentStatus.VERIFIED,
+        PaymentStatus.APPROVED,
+      ]),
+      rejectedAmount: sumPaymentAmounts(payments, [
+        PaymentStatus.REJECTED,
+        PaymentStatus.DECLINED,
+      ]),
       byStatus: countsBy(
-        payments.map((payment) => payment.status),
+        payments.map((payment) => reportPaymentStatus(payment.status)),
         VISIBLE_PAYMENT_STATUSES,
       ),
       byMethod: countsBy(
@@ -435,34 +447,36 @@ async function generatePaymentsReport(filters: ReportFilters = {}) {
         ["ONLINE", "ON_SITE"] as const,
       ),
     },
-    payments: payments.map((payment) => ({
-      id: payment.id,
-      applicant: payment.application
-        ? {
-            id: payment.application.id,
-            fullName: payment.application.fullName,
-            applicationStatus: payment.application.status,
-            appliedAt: payment.application.createdAt.toISOString(),
-          }
-        : null,
-      user: payment.user,
-      loan: payment.loan,
-      type: payment.type,
-      amount: Number(payment.amount),
-      paymentMethod: payment.paymentMethod,
-      status: payment.status,
-      receiptUrl: payment.receiptUrl,
-      referenceNo: payment.referenceNo,
-      createdAt: payment.createdAt.toISOString(),
-      paidAt: payment.paidAt?.toISOString() ?? null,
-      verifiedAt: payment.verifiedAt?.toISOString() ?? null,
-      proofUploadedBy: payment.proofUploadedBy,
-      proofUploadedAt: payment.proofUploadedAt?.toISOString() ?? null,
-      verifiedBy: payment.verifiedByUser,
-      declinedBy: payment.declinedByUser,
-      declinedAt: payment.declinedAt?.toISOString() ?? null,
-      rejectionReason: payment.rejectionReason,
-    })),
+    payments: payments
+      .filter((payment) => !isRejectedPayment(payment))
+      .map((payment) => ({
+        id: payment.id,
+        applicant: payment.application
+          ? {
+              id: payment.application.id,
+              fullName: payment.application.fullName,
+              applicationStatus: payment.application.status,
+              appliedAt: payment.application.createdAt.toISOString(),
+            }
+          : null,
+        user: payment.user,
+        loan: payment.loan,
+        type: payment.type,
+        amount: Number(payment.amount),
+        paymentMethod: payment.paymentMethod,
+        status: payment.status,
+        receiptUrl: payment.receiptUrl,
+        referenceNo: payment.referenceNo,
+        createdAt: payment.createdAt.toISOString(),
+        paidAt: payment.paidAt?.toISOString() ?? null,
+        verifiedAt: payment.verifiedAt?.toISOString() ?? null,
+        proofUploadedBy: payment.proofUploadedBy,
+        proofUploadedAt: payment.proofUploadedAt?.toISOString() ?? null,
+        verifiedBy: payment.verifiedByUser,
+        declinedBy: payment.declinedByUser,
+        declinedAt: payment.declinedAt?.toISOString() ?? null,
+        rejectionReason: payment.rejectionReason,
+      })),
   };
 }
 
@@ -618,8 +632,12 @@ async function generateMachinesReport(filters: ReportFilters = {}) {
   };
 }
 
-async function generateAuditReport() {
+async function generateAuditReport(filters: ReportFilters = {}) {
   const entries = await prisma.auditTrail.findMany({
+    where:
+      filters.from || filters.to
+        ? { createdAt: dateRangePrisma(filters) }
+        : {},
     orderBy: { createdAt: "desc" },
     take: 1000,
     include: {
@@ -652,10 +670,23 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
   const [users, loans, payments, supplies, machines, requests, audits, supplyRepayments] =
     await Promise.all([
       prisma.user.findMany({
+        where:
+          filters.from || filters.to
+            ? { createdAt: asOfPrisma(filters) }
+            : {},
         select: { id: true, name: true, username: true, role: true, active: true },
         orderBy: { createdAt: "desc" },
       }),
       prisma.loan.findMany({
+        where: hasRange
+          ? {
+              OR: [
+                { createdAt: dateRangePrisma(filters) },
+                { payments: { some: { paidAt: dateRangePrisma(filters) } } },
+                { statusHistory: { some: { changedAt: dateRangePrisma(filters) } } },
+              ],
+            }
+          : {},
         select: {
           id: true,
           amount: true,
@@ -702,12 +733,14 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
         orderBy: { name: "asc" },
       }),
       prisma.machineRequest.findMany({
+        where: hasRange ? { requestDate: dateRangePrisma(filters) } : {},
         include: {
           user: { select: { id: true, name: true } },
           machine: { select: { id: true, name: true } },
         },
       }),
       prisma.auditTrail.findMany({
+        where: hasRange ? { createdAt: dateRangePrisma(filters) } : {},
         orderBy: { createdAt: "desc" },
         take: 200,
         include: {
@@ -775,48 +808,60 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
     },
     payments: {
       count: payments.length,
-      submittedAmount: payments.reduce(
-        (sum, payment) => sum + Number(payment.amount),
-        0,
-      ),
+      pendingAmount: sumPaymentAmounts(payments, [
+        PaymentStatus.PENDING,
+        PaymentStatus.PENDING_APPROVAL,
+      ]),
+      verifiedAmount: sumPaymentAmounts(payments, [
+        PaymentStatus.VERIFIED,
+        PaymentStatus.APPROVED,
+      ]),
+      rejectedAmount: sumPaymentAmounts(payments, [
+        PaymentStatus.REJECTED,
+        PaymentStatus.DECLINED,
+      ]),
       byStatus: countsBy(
-        payments.map((payment) => payment.status),
+        payments.map((payment) => reportPaymentStatus(payment.status)),
         VISIBLE_PAYMENT_STATUSES,
       ),
       byMethod: countsBy(
         payments.map((payment) => payment.paymentMethod),
         Object.values(PaymentMethod),
       ),
-      list: payments.map((payment) => ({
+      list: payments
+        .filter((payment) => !isRejectedPayment(payment))
+        .map((payment) => ({
+          id: payment.id,
+          user: payment.user,
+          applicant: payment.application
+            ? { fullName: payment.application.fullName }
+            : null,
+          type: payment.type,
+          paymentMethod: payment.paymentMethod,
+          amount: Number(payment.amount),
+          status: reportPaymentStatus(payment.status),
+          referenceNo: payment.referenceNo,
+          createdAt: payment.createdAt.toISOString(),
+        })),
+    },
+    transactions: payments
+      .filter((payment) => !isRejectedPayment(payment))
+      .map((payment) => ({
         id: payment.id,
-        user: payment.user,
         applicant: payment.application
-          ? { fullName: payment.application.fullName }
+          ? {
+              fullName: payment.application.fullName,
+              applicationStatus: payment.application.status,
+            }
           : null,
+        user: payment.user,
         type: payment.type,
-        paymentMethod: payment.paymentMethod,
         amount: Number(payment.amount),
-        status: payment.status,
+        paymentMethod: payment.paymentMethod,
+      status: reportPaymentStatus(payment.status),
         referenceNo: payment.referenceNo,
         createdAt: payment.createdAt.toISOString(),
       })),
-    },
-    transactions: payments.map((payment) => ({
-      id: payment.id,
-      applicant: payment.application
-        ? {
-            fullName: payment.application.fullName,
-            applicationStatus: payment.application.status,
-          }
-        : null,
-      user: payment.user,
-      type: payment.type,
-      amount: Number(payment.amount),
-      paymentMethod: payment.paymentMethod,
-      status: payment.status,
-      referenceNo: payment.referenceNo,
-      createdAt: payment.createdAt.toISOString(),
-    })),
     supplies: {
       products: supplies.length,
       requests: supplyTransactions.length,
@@ -886,7 +931,7 @@ async function generateReportData(type: ReportType, filters: ReportFilters = {})
     case ReportType.MACHINES:
       return generateMachinesReport(filters);
     case ReportType.AUDIT:
-      return generateAuditReport();
+      return generateAuditReport(filters);
     case ReportType.SUMMARY:
       return generateSummaryReport(filters);
   }
@@ -903,7 +948,18 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
       take: 100,
     });
-    return NextResponse.json(reports);
+    const ids = [...new Set(reports.map((r) => r.generatedBy))];
+    const users = await prisma.user.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true },
+    });
+    const names = new Map(users.map((u) => [u.id, u.name]));
+    return NextResponse.json(
+      reports.map((r) => ({
+        ...r,
+        generatedByName: names.get(r.generatedBy) ?? null,
+      })),
+    );
   } catch (error) {
     return apiErrorResponse(error, "Failed to fetch reports");
   }
@@ -924,6 +980,12 @@ export async function POST(req: NextRequest) {
       throw new ApiError(403, "Financial reports only");
     }
 
+    const actorMe = await prisma.user.findUnique({
+      where: { id: actor.userId },
+      select: { name: true },
+    });
+    const generatedByName = actorMe?.name ?? null;
+
     const data = await generateReportData(result.data.type, result.data);
 
     if (result.data.preview) {
@@ -934,18 +996,38 @@ export async function POST(req: NextRequest) {
         from: result.data.from ?? null,
         to: result.data.to ?? null,
         createdAt: new Date().toISOString(),
-        data: JSON.parse(JSON.stringify(data)) as Record<string, unknown>,
+        generatedBy: actor.userId,
+        generatedByName,
+        data: {
+          ...(JSON.parse(JSON.stringify(data)) as Record<string, unknown>),
+          __config: result.data.config ?? null,
+        },
       });
     }
+
+    const auditMetadata = {
+      type: result.data.type,
+      title: result.data.title ?? DEFAULT_TITLES[result.data.type],
+      filters: {
+        from: result.data.from ?? null,
+        to: result.data.to ?? null,
+        memberId: result.data.memberId ?? null,
+        statuses: result.data.statuses ?? null,
+      },
+      config: result.data.config ?? null,
+    };
 
     const report = await prisma.$transaction(async (tx) => {
       const created = await tx.report.create({
         data: {
           title: result.data.title ?? DEFAULT_TITLES[result.data.type],
           type: result.data.type,
-          from: result.data.from ? new Date(result.data.from) : null,
-          to: result.data.to ? new Date(result.data.to) : null,
-          data: jsonData(data),
+          from: reportDateBoundary(result.data.from, "start"),
+          to: reportDateBoundary(result.data.to, "end"),
+          data: jsonData({
+            ...data,
+            __config: result.data.config ?? null,
+          }),
           generatedBy: actor.userId,
         },
       });
@@ -955,21 +1037,18 @@ export async function POST(req: NextRequest) {
         action: "REPORT_GENERATED",
         entity: "Report",
         entityId: created.id,
-        metadata: {
-          type: created.type,
-          title: created.title,
-          filters: {
-            from: result.data.from ?? null,
-            to: result.data.to ?? null,
-            memberId: result.data.memberId ?? null,
-            statuses: result.data.statuses ?? null,
-          },
-        },
+        metadata: auditMetadata,
       });
       return created;
     });
 
-    return NextResponse.json(report, { status: 201 });
+    return NextResponse.json(
+      {
+        ...report,
+        generatedByName,
+      },
+      { status: 201 },
+    );
   } catch (error) {
     return apiErrorResponse(error, "Failed to generate report");
   }

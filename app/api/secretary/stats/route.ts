@@ -6,7 +6,15 @@ import {
   ApplicationStatus,
   LoanStatus,
   MachineStatus,
+  ReportType,
 } from "@/app/generated/prisma";
+
+const FINANCIAL_REPORT_TYPES: readonly ReportType[] = [
+  ReportType.SUMMARY,
+  ReportType.LOANS,
+  ReportType.PAYMENTS,
+  ReportType.SUPPLIES,
+];
 
 const ACTIVE_MACHINE_STATUSES = [
   MachineStatus.QUEUED,
@@ -37,7 +45,7 @@ function isCurrentlyInUse(request: {
 
 export async function GET() {
   try {
-    await requireUser([Role.SECRETARY, Role.PRESIDENT, Role.TREASURER]);
+    const actor = await requireUser([Role.SECRETARY, Role.PRESIDENT, Role.TREASURER]);
     const [
       applications,
       members,
@@ -168,6 +176,10 @@ export async function GET() {
       }),
 
       prisma.report.findMany({
+        where:
+          actor.userRole === Role.TREASURER
+            ? { type: { in: [...FINANCIAL_REPORT_TYPES] } }
+            : {},
         orderBy: { createdAt: "desc" },
         take: 50,
       }),
@@ -189,6 +201,13 @@ export async function GET() {
     const totalBorrowedMachines = machines.filter((m) =>
       m.requests.some(isCurrentlyInUse),
     ).length;
+
+    const generatorIds = [...new Set(reports.map((r) => r.generatedBy))];
+    const generators = await prisma.user.findMany({
+      where: { id: { in: generatorIds } },
+      select: { id: true, name: true },
+    });
+    const generatorNames = new Map(generators.map((u) => [u.id, u.name]));
 
     return NextResponse.json({
       summary: {
@@ -351,6 +370,10 @@ export async function GET() {
         id: r.id,
         title: r.title,
         type: String(r.type),
+        from: r.from?.toISOString() ?? null,
+        to: r.to?.toISOString() ?? null,
+        generatedBy: r.generatedBy,
+        generatedByName: generatorNames.get(r.generatedBy) ?? null,
         createdAt: r.createdAt.toISOString(),
         data: r.data ? (JSON.parse(JSON.stringify(r.data)) as Record<string, unknown>) : null,
       })),

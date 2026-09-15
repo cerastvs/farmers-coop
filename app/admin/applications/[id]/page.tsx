@@ -112,6 +112,7 @@ function formatDate(value: string | null) {
 
 function getSecureProofUrl(receiptUrl: string | null) {
   if (!receiptUrl) return null;
+  if (receiptUrl.startsWith("/uploads/payment-proofs/")) return receiptUrl;
   try {
     const url = new URL(receiptUrl);
     return url.protocol === "https:" ? url.toString() : null;

@@ -1,3 +1,7 @@
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+
 import { z } from "zod";
 
 import { ApiError } from "@/lib/errors";
@@ -5,7 +9,8 @@ import { ApiError } from "@/lib/errors";
 export const MAX_PAYMENT_PROOF_BYTES = 5 * 1024 * 1024;
 export const MAX_PAYMENT_REQUEST_BYTES =
   MAX_PAYMENT_PROOF_BYTES + 64 * 1024;
-export const PAYMENT_PROOF_UPLOAD_TIMEOUT_MS = 10_000;
+export const DEFAULT_PAYMENT_PROOF_UPLOAD_TIMEOUT_MS = 90_000;
+export const PAYMENT_PROOF_UPLOAD_PUBLIC_PATH = "/uploads/payment-proofs";
 export const PAYMENT_PROOF_TYPES = [
   "image/jpeg",
   "image/png",
@@ -106,6 +111,9 @@ export async function parsePaymentSubmission(
 type UploadPaymentProofOptions = {
   apiKey?: string;
   fetcher?: typeof fetch;
+  localStorageDir?: string;
+  publicPath?: string;
+  randomId?: () => string;
   timeoutMs?: number;
 };
 
@@ -116,6 +124,18 @@ type ImgBbResponse = {
     url?: unknown;
   };
 };
+
+export function getPaymentProofUploadTimeoutMs() {
+  const raw = process.env.PAYMENT_PROOF_UPLOAD_TIMEOUT_MS?.trim();
+  if (!raw) return DEFAULT_PAYMENT_PROOF_UPLOAD_TIMEOUT_MS;
+
+  const timeoutMs = Number(raw);
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 1_000) {
+    return DEFAULT_PAYMENT_PROOF_UPLOAD_TIMEOUT_MS;
+  }
+
+  return Math.round(timeoutMs);
+}
 
 function safeImageUrl(value: unknown) {
   if (typeof value !== "string") return null;
@@ -133,56 +153,102 @@ export async function uploadPaymentProof(
   {
     apiKey = process.env.IMGBB_API,
     fetcher = fetch,
-    timeoutMs = PAYMENT_PROOF_UPLOAD_TIMEOUT_MS,
+    localStorageDir,
+    publicPath,
+    randomId,
+    timeoutMs = getPaymentProofUploadTimeoutMs(),
   }: UploadPaymentProofOptions = {},
 ) {
   const configuredApiKey = apiKey?.trim();
   if (!configuredApiKey) {
-    throw new ApiError(
-      503,
-      "Proof-of-payment uploads are not configured",
-    );
+    return savePaymentProofLocally(file, { localStorageDir, publicPath, randomId });
   }
 
   const body = new FormData();
   body.append("image", file);
-  const signal = AbortSignal.timeout(timeoutMs);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const signal = controller.signal;
 
   let response: Response;
   try {
-    response = await fetcher(
-      `https://api.imgbb.com/1/upload?key=${encodeURIComponent(configuredApiKey)}`,
-      { method: "POST", body, signal },
-    );
-  } catch {
-    if (signal.aborted) {
-      throw new ApiError(504, "Proof-of-payment upload timed out");
+    try {
+      response = await fetcher(
+        `https://api.imgbb.com/1/upload?key=${encodeURIComponent(configuredApiKey)}`,
+        { method: "POST", body, signal },
+      );
+    } catch {
+      return savePaymentProofLocally(file, {
+        localStorageDir,
+        publicPath,
+        randomId,
+      });
     }
-    throw new ApiError(
-      502,
-      "Proof-of-payment upload service is unavailable",
-    );
+
+    let data: ImgBbResponse;
+    try {
+      data = (await response.json()) as ImgBbResponse;
+    } catch {
+      if (signal.aborted) {
+        return savePaymentProofLocally(file, {
+          localStorageDir,
+          publicPath,
+          randomId,
+        });
+      }
+      throw new ApiError(
+        502,
+        "Proof-of-payment upload service returned an invalid response",
+      );
+    }
+
+    const imageUrl = safeImageUrl(data.data?.display_url ?? data.data?.url);
+    if (!response.ok || data.success !== true || !imageUrl) {
+      throw new ApiError(502, "Proof-of-payment upload failed");
+    }
+
+    return imageUrl;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+type LocalPaymentProofOptions = Pick<
+  UploadPaymentProofOptions,
+  "localStorageDir" | "publicPath" | "randomId"
+>;
+
+async function savePaymentProofLocally(
+  file: File,
+  {
+    localStorageDir = join(process.cwd(), "public", "uploads", "payment-proofs"),
+    publicPath = PAYMENT_PROOF_UPLOAD_PUBLIC_PATH,
+    randomId = randomUUID,
+  }: LocalPaymentProofOptions = {},
+) {
+  const extension = proofExtensionForType(file.type);
+  if (!extension) {
+    throw new ApiError(400, "Proof of payment must be a JPEG, PNG, or WebP image");
   }
 
-  let data: ImgBbResponse;
   try {
-    data = (await response.json()) as ImgBbResponse;
+    await mkdir(localStorageDir, { recursive: true });
+    const filename = `${Date.now()}-${randomId()}.${extension}`;
+    const filepath = join(localStorageDir, filename);
+    await writeFile(filepath, Buffer.from(await file.arrayBuffer()), {
+      flag: "wx",
+    });
+    return `${publicPath}/${filename}`;
   } catch {
-    if (signal.aborted) {
-      throw new ApiError(504, "Proof-of-payment upload timed out");
-    }
-    throw new ApiError(
-      502,
-      "Proof-of-payment upload service returned an invalid response",
-    );
-  }
-
-  const imageUrl = safeImageUrl(data.data?.display_url ?? data.data?.url);
-  if (!response.ok || data.success !== true || !imageUrl) {
     throw new ApiError(502, "Proof-of-payment upload failed");
   }
+}
 
-  return imageUrl;
+function proofExtensionForType(type: string) {
+  if (type === "image/jpeg") return "jpg";
+  if (type === "image/png") return "png";
+  if (type === "image/webp") return "webp";
+  return null;
 }
 
 type ReservedPaymentProofUploadOptions<Reservation, Result> = {

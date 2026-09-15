@@ -43,6 +43,7 @@ const ACCEPTED_PROOF_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function getSecureProofUrl(receiptUrl: string | null) {
   if (!receiptUrl) return null;
+  if (receiptUrl.startsWith("/uploads/payment-proofs/")) return receiptUrl;
 
   try {
     const url = new URL(receiptUrl);

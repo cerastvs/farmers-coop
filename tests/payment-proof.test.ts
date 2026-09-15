@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
 import test from "node:test";
 
 import { ApiError } from "../lib/errors";
 import {
+  DEFAULT_PAYMENT_PROOF_UPLOAD_TIMEOUT_MS,
   MAX_PAYMENT_PROOF_BYTES,
   MAX_PAYMENT_REQUEST_BYTES,
+  getPaymentProofUploadTimeoutMs,
   hasPaymentEvidence,
   parsePaymentSubmission,
   readPaymentSubmission,
@@ -147,22 +152,55 @@ test("payment proof validation checks magic bytes against the declared type", as
   );
 });
 
-test("payment proof uploads require ImgBB configuration", async () => {
+test("payment proof uploads fall back to local storage without ImgBB configuration", async () => {
+  const proof = imageFile();
+  const storageDir = await mkdtemp(join(tmpdir(), "payment-proof-"));
   let fetchCalled = false;
 
-  await expectApiError(
-    () =>
-      uploadPaymentProof(imageFile(), {
-        apiKey: "",
-        fetcher: async () => {
-          fetchCalled = true;
-          return Response.json({});
-        },
-      }),
-    503,
-    "Proof-of-payment uploads are not configured",
-  );
-  assert.equal(fetchCalled, false);
+  try {
+    const url = await uploadPaymentProof(proof, {
+      apiKey: "",
+      localStorageDir: storageDir,
+      publicPath: "/test-payment-proofs",
+      randomId: () => "local-proof",
+      fetcher: async () => {
+        fetchCalled = true;
+        return Response.json({});
+      },
+    });
+
+    assert.match(url, /^\/test-payment-proofs\/\d+-local-proof\.jpg$/);
+    assert.deepEqual(
+      new Uint8Array(await readFile(join(storageDir, basename(url)))),
+      new Uint8Array(await proof.arrayBuffer()),
+    );
+    assert.equal(fetchCalled, false);
+  } finally {
+    await rm(storageDir, { recursive: true, force: true });
+  }
+});
+
+test("payment proof upload timeout defaults and validates env overrides", () => {
+  const previous = process.env.PAYMENT_PROOF_UPLOAD_TIMEOUT_MS;
+  try {
+    delete process.env.PAYMENT_PROOF_UPLOAD_TIMEOUT_MS;
+    assert.equal(
+      getPaymentProofUploadTimeoutMs(),
+      DEFAULT_PAYMENT_PROOF_UPLOAD_TIMEOUT_MS,
+    );
+
+    process.env.PAYMENT_PROOF_UPLOAD_TIMEOUT_MS = "120000";
+    assert.equal(getPaymentProofUploadTimeoutMs(), 120000);
+
+    process.env.PAYMENT_PROOF_UPLOAD_TIMEOUT_MS = "500";
+    assert.equal(
+      getPaymentProofUploadTimeoutMs(),
+      DEFAULT_PAYMENT_PROOF_UPLOAD_TIMEOUT_MS,
+    );
+  } finally {
+    if (previous === undefined) delete process.env.PAYMENT_PROOF_UPLOAD_TIMEOUT_MS;
+    else process.env.PAYMENT_PROOF_UPLOAD_TIMEOUT_MS = previous;
+  }
 });
 
 test("payment proof uploads return a validated secure URL", async () => {
@@ -200,26 +238,37 @@ test("payment proof uploads translate provider failures safely", async () => {
   );
 });
 
-test("payment proof uploads time out with a sanitized error", async () => {
-  await expectApiError(
-    () =>
-      uploadPaymentProof(imageFile(), {
-        apiKey: "test-key",
-        timeoutMs: 5,
-        fetcher: async (_input, init) =>
-          new Promise<Response>((_resolve, reject) => {
-            const signal = init?.signal;
-            assert.ok(signal);
-            signal.addEventListener(
-              "abort",
-              () => reject(signal.reason),
-              { once: true },
-            );
-          }),
-      }),
-    504,
-    "Proof-of-payment upload timed out",
-  );
+test("payment proof uploads fall back to local storage after a timeout", async () => {
+  const proof = imageFile();
+  const storageDir = await mkdtemp(join(tmpdir(), "payment-proof-"));
+
+  try {
+    const url = await uploadPaymentProof(proof, {
+      apiKey: "test-key",
+      localStorageDir: storageDir,
+      publicPath: "/test-payment-proofs",
+      randomId: () => "timeout-proof",
+      timeoutMs: 5,
+      fetcher: async (_input, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          const signal = init?.signal;
+          assert.ok(signal);
+          signal.addEventListener(
+            "abort",
+            () => reject(signal.reason),
+            { once: true },
+          );
+        }),
+    });
+
+    assert.match(url, /^\/test-payment-proofs\/\d+-timeout-proof\.jpg$/);
+    assert.deepEqual(
+      new Uint8Array(await readFile(join(storageDir, basename(url)))),
+      new Uint8Array(await proof.arrayBuffer()),
+    );
+  } finally {
+    await rm(storageDir, { recursive: true, force: true });
+  }
 });
 
 test("reserved uploads admit before upload and release on upload failure", async () => {

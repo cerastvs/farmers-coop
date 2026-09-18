@@ -62,7 +62,7 @@ export default function ApplyLoanPage() {
   }, []);
 
   const hasPendingRequest =
-    loans.filter((l) => l.status === "PENDING" || l.status === "APPROVED")
+    loans.filter((l) => l.status === "PENDING" || l.status === "ACTIVE")
       .length > 0;
 
   return (

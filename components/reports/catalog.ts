@@ -138,7 +138,7 @@ const LOANS: ReportTypeCatalog = {
   type: "LOANS",
   label: "Loan Portfolio Report",
   memberFilter: true,
-  statusOptions: ["PENDING", "APPROVED", "ACTIVE", "OVERDUE", "PAID", "REJECTED"],
+  statusOptions: ["PENDING", "ACTIVE", "OVERDUE", "PAID", "REJECTED"],
   notes: [
     "Rejected loan requests are excluded from principal, payable, paid, and outstanding totals.",
     "Principal reflects the initial loan amount before interest; Payable includes the computed interest.",
@@ -261,9 +261,9 @@ const PAYMENTS: ReportTypeCatalog = {
       kind: "kv",
       kvs: [
         { id: "payments", label: "Payments", value: (d) => (d.totals?.payments ?? 0) },
-        { id: "pending", label: "Pending Amount", value: (d) => money(d.totals?.pendingAmount ?? paymentAmountFallback(d.payments, ["PENDING", "PENDING_APPROVAL"])) },
-        { id: "verified", label: "Verified Amount", value: (d) => money(d.totals?.verifiedAmount ?? paymentAmountFallback(d.payments, ["VERIFIED", "APPROVED"])) },
-        { id: "rejected", label: "Rejected Amount", value: (d) => money(d.totals?.rejectedAmount ?? paymentAmountFallback(d.payments, ["REJECTED", "DECLINED"])) },
+        { id: "pending", label: "Pending Amount", value: (d) => money(d.totals?.pendingAmount ?? paymentAmountFallback(d.payments, ["PENDING"])) },
+        { id: "verified", label: "Verified Amount", value: (d) => money(d.totals?.verifiedAmount ?? paymentAmountFallback(d.payments, ["VERIFIED"])) },
+        { id: "rejected", label: "Rejected Amount", value: (d) => money(d.totals?.rejectedAmount ?? paymentAmountFallback(d.payments, ["REJECTED"])) },
       ],
     },
     {
@@ -285,7 +285,7 @@ const PAYMENTS: ReportTypeCatalog = {
       table: {
         rows: (d) =>
           (((d.payments as unknown[]) ?? []) as Record<string, any>[]).filter(
-            (payment) => payment.status !== "REJECTED" && payment.status !== "DECLINED",
+            (payment) => payment.status !== "REJECTED",
           ),
         columns: [
           { id: "name", label: "Member", get: (r) => nameOf(r) ?? "", render: (r) => nameOf(r) },
@@ -633,9 +633,9 @@ const SUMMARY: ReportTypeCatalog = {
       kind: "kv",
       kvs: [
         { id: "payments", label: "Payments", value: (d) => (d.payments?.count ?? 0) },
-        { id: "pending", label: "Pending Amount", value: (d) => money(d.payments?.pendingAmount ?? paymentAmountFallback(d.payments?.list, ["PENDING", "PENDING_APPROVAL"])) },
-        { id: "verified", label: "Verified Amount", value: (d) => money(d.payments?.verifiedAmount ?? paymentAmountFallback(d.payments?.list, ["VERIFIED", "APPROVED"])) },
-        { id: "rejected", label: "Rejected Amount", value: (d) => money(d.payments?.rejectedAmount ?? paymentAmountFallback(d.payments?.list, ["REJECTED", "DECLINED"])) },
+        { id: "pending", label: "Pending Amount", value: (d) => money(d.payments?.pendingAmount ?? paymentAmountFallback(d.payments?.list, ["PENDING"])) },
+        { id: "verified", label: "Verified Amount", value: (d) => money(d.payments?.verifiedAmount ?? paymentAmountFallback(d.payments?.list, ["VERIFIED"])) },
+        { id: "rejected", label: "Rejected Amount", value: (d) => money(d.payments?.rejectedAmount ?? paymentAmountFallback(d.payments?.list, ["REJECTED"])) },
       ],
     },
     {
@@ -744,12 +744,12 @@ const SUMMARY: ReportTypeCatalog = {
       kind: "table",
       hideWhenEmpty: (d) =>
         (((d.payments?.list as unknown[]) ?? []) as Record<string, any>[]).every(
-          (payment) => payment.status === "REJECTED" || payment.status === "DECLINED",
+          (payment) => payment.status === "REJECTED",
         ),
       table: {
         rows: (d) =>
           (((d.payments?.list as unknown[]) ?? []) as Record<string, any>[]).filter(
-            (payment) => payment.status !== "REJECTED" && payment.status !== "DECLINED",
+            (payment) => payment.status !== "REJECTED",
           ),
         columns: [
           { id: "name", label: "Member", get: (r) => nameOf(r) ?? "", render: (r) => nameOf(r) },

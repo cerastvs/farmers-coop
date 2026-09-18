@@ -13,7 +13,7 @@ import { fetchWithTimeout } from "../hooks/fetchWithTimeout";
 interface LoanData {
   id: string;
   name: string;
-  status: "PENDING" | "APPROVED" | "REJECTED" | "ACTIVE" | "OVERDUE" | "PAID";
+  status: "PENDING" | "REJECTED" | "ACTIVE" | "OVERDUE" | "PAID";
   amount: number;
   remainingBalance: number;
   due: string;

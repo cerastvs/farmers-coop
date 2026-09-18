@@ -130,16 +130,16 @@ test("application fee search schema parses query filters", () => {
   );
 });
 
-test("application fee payment transitions only allow approve and decline", () => {
+test("application fee payments verify or reject pending proof", () => {
   assertTransition(
     applicationFeePaymentTransitions,
-    "PENDING_APPROVAL" as never,
-    "APPROVED" as never,
+    "PENDING" as never,
+    "VERIFIED" as never,
     "Application fee payment",
   );
   assertTransition(
     applicationFeePaymentTransitions,
-    "PENDING_APPROVAL" as never,
+    "PENDING" as never,
     "REJECTED" as never,
     "Application fee payment",
   );
@@ -147,7 +147,7 @@ test("application fee payment transitions only allow approve and decline", () =>
     assertTransition(
       applicationFeePaymentTransitions,
       "REJECTED" as never,
-      "PENDING_APPROVAL" as never,
+      "PENDING" as never,
       "Application fee payment",
     ),
   );

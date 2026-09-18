@@ -43,7 +43,7 @@ export async function PATCH(
 
         const nextStatus =
           result.data.action === "approve"
-            ? LoanStatus.APPROVED
+            ? LoanStatus.ACTIVE
             : LoanStatus.REJECTED;
         assertTransition(loanTransitions, loan.status, nextStatus, "Loan");
 
@@ -66,26 +66,7 @@ export async function PATCH(
           data: { loanId: id, status: nextStatus },
         });
 
-        let finalStatus: LoanStatus = nextStatus;
-        if (nextStatus === LoanStatus.APPROVED) {
-          assertTransition(
-            loanTransitions,
-            LoanStatus.APPROVED,
-            LoanStatus.ACTIVE,
-            "Loan",
-          );
-          const activated = await tx.loan.updateMany({
-            where: { id, status: LoanStatus.APPROVED },
-            data: { status: LoanStatus.ACTIVE },
-          });
-          if (activated.count !== 1) {
-            throw new ApiError(409, "Loan status changed during activation");
-          }
-          await tx.loanStatusHistory.create({
-            data: { loanId: id, status: LoanStatus.ACTIVE },
-          });
-          finalStatus = LoanStatus.ACTIVE;
-        }
+        const finalStatus: LoanStatus = nextStatus;
 
         await notifyUser(tx, {
           userId: loan.userId,

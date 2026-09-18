@@ -32,7 +32,7 @@ test("loan lifecycle accepts review and repayment transitions", () => {
     assertTransition(
       loanTransitions,
       LoanStatus.PENDING,
-      LoanStatus.APPROVED,
+      LoanStatus.ACTIVE,
       "Loan",
     ),
   );

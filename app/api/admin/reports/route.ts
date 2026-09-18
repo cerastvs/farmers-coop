@@ -57,8 +57,7 @@ const FINANCIAL_REPORT_TYPES: readonly ReportType[] = [
   ReportType.SUPPLIES,
 ];
 
-// Statuses shown in payment breakdowns. DECLINED is a legacy enum value kept
-// for read-compatibility; all rejections now use REJECTED.
+// Statuses shown in payment breakdowns.
 const VISIBLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
   PaymentStatus.PENDING,
   PaymentStatus.VERIFIED,
@@ -66,8 +65,7 @@ const VISIBLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
 ];
 
 const isRejectedPayment = (payment: { status: PaymentStatus }) =>
-  payment.status === PaymentStatus.REJECTED ||
-  payment.status === PaymentStatus.DECLINED;
+  payment.status === PaymentStatus.REJECTED;
 
 function sumPaymentAmounts(
   payments: readonly { status: PaymentStatus; amount: Prisma.Decimal }[],
@@ -78,13 +76,6 @@ function sumPaymentAmounts(
       sum + (statuses.includes(payment.status) ? Number(payment.amount) : 0),
     0,
   );
-}
-
-function reportPaymentStatus(status: PaymentStatus) {
-  if (status === PaymentStatus.PENDING_APPROVAL) return PaymentStatus.PENDING;
-  if (status === PaymentStatus.APPROVED) return PaymentStatus.VERIFIED;
-  if (status === PaymentStatus.DECLINED) return PaymentStatus.REJECTED;
-  return status;
 }
 
 // The initial loan amount before interest. For loans created before the
@@ -261,7 +252,7 @@ async function generateLoansReport(filters: ReportFilters = {}) {
       payments: { select: { amount: true, paidAt: true, receiptNo: true } },
       paymentSubmissions: {
         where: {
-          status: { in: [PaymentStatus.REJECTED, PaymentStatus.DECLINED] },
+          status: { in: [PaymentStatus.REJECTED] },
         },
         select: {
           id: true,
@@ -302,7 +293,7 @@ async function generateLoansReport(filters: ReportFilters = {}) {
       .map((payment) => ({
         id: payment.id,
         amount: Number(payment.amount),
-        status: reportPaymentStatus(payment.status),
+        status: payment.status,
         rejectionReason: payment.rejectionReason,
         paymentMethod: payment.paymentMethod,
         referenceNo: payment.referenceNo,
@@ -310,7 +301,7 @@ async function generateLoansReport(filters: ReportFilters = {}) {
       }));
 
     const approvedEntry = loan.statusHistory.find(
-      (h) => h.status === LoanStatus.APPROVED,
+      (h) => h.status === LoanStatus.ACTIVE,
     );
     const rejectedEntry = loan.statusHistory.find(
       (h) => h.status === LoanStatus.REJECTED,
@@ -442,20 +433,11 @@ async function generatePaymentsReport(filters: ReportFilters = {}) {
     generatedAt: new Date().toISOString(),
     totals: {
       payments: payments.length,
-      pendingAmount: sumPaymentAmounts(payments, [
-        PaymentStatus.PENDING,
-        PaymentStatus.PENDING_APPROVAL,
-      ]),
-      verifiedAmount: sumPaymentAmounts(payments, [
-        PaymentStatus.VERIFIED,
-        PaymentStatus.APPROVED,
-      ]),
-      rejectedAmount: sumPaymentAmounts(payments, [
-        PaymentStatus.REJECTED,
-        PaymentStatus.DECLINED,
-      ]),
+      pendingAmount: sumPaymentAmounts(payments, [PaymentStatus.PENDING]),
+      verifiedAmount: sumPaymentAmounts(payments, [PaymentStatus.VERIFIED]),
+      rejectedAmount: sumPaymentAmounts(payments, [PaymentStatus.REJECTED]),
       byStatus: countsBy(
-        payments.map((payment) => reportPaymentStatus(payment.status)),
+        payments.map((payment) => payment.status),
         VISIBLE_PAYMENT_STATUSES,
       ),
       byMethod: countsBy(
@@ -829,20 +811,11 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
     },
     payments: {
       count: payments.length,
-      pendingAmount: sumPaymentAmounts(payments, [
-        PaymentStatus.PENDING,
-        PaymentStatus.PENDING_APPROVAL,
-      ]),
-      verifiedAmount: sumPaymentAmounts(payments, [
-        PaymentStatus.VERIFIED,
-        PaymentStatus.APPROVED,
-      ]),
-      rejectedAmount: sumPaymentAmounts(payments, [
-        PaymentStatus.REJECTED,
-        PaymentStatus.DECLINED,
-      ]),
+      pendingAmount: sumPaymentAmounts(payments, [PaymentStatus.PENDING]),
+      verifiedAmount: sumPaymentAmounts(payments, [PaymentStatus.VERIFIED]),
+      rejectedAmount: sumPaymentAmounts(payments, [PaymentStatus.REJECTED]),
       byStatus: countsBy(
-        payments.map((payment) => reportPaymentStatus(payment.status)),
+        payments.map((payment) => payment.status),
         VISIBLE_PAYMENT_STATUSES,
       ),
       byMethod: countsBy(
@@ -860,7 +833,7 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
           type: payment.type,
           paymentMethod: payment.paymentMethod,
           amount: Number(payment.amount),
-          status: reportPaymentStatus(payment.status),
+          status: payment.status,
           referenceNo: payment.referenceNo,
           createdAt: payment.createdAt.toISOString(),
         })),
@@ -879,7 +852,7 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
         type: payment.type,
         amount: Number(payment.amount),
         paymentMethod: payment.paymentMethod,
-      status: reportPaymentStatus(payment.status),
+        status: payment.status,
         referenceNo: payment.referenceNo,
         createdAt: payment.createdAt.toISOString(),
       })),

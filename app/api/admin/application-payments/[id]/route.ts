@@ -61,7 +61,7 @@ export async function PATCH(
 
         const nextStatus =
           result.data.action === "approve"
-            ? PaymentStatus.APPROVED
+            ? PaymentStatus.VERIFIED
             : PaymentStatus.REJECTED;
         assertTransition(
           applicationFeePaymentTransitions,
@@ -71,7 +71,7 @@ export async function PATCH(
         );
 
         if (
-          nextStatus === PaymentStatus.APPROVED &&
+          nextStatus === PaymentStatus.VERIFIED &&
           payment.paymentMethod === "ONLINE" &&
           !payment.receiptUrl
         ) {
@@ -85,7 +85,7 @@ export async function PATCH(
         const claimed = await tx.payment.updateMany({
           where: { id, status: payment.status },
           data:
-            nextStatus === PaymentStatus.APPROVED
+            nextStatus === PaymentStatus.VERIFIED
               ? {
                   status: nextStatus,
                   verifiedBy: actor.userId,
@@ -106,7 +106,7 @@ export async function PATCH(
           throw new ApiError(409, "Payment status changed during review");
         }
 
-        if (nextStatus === PaymentStatus.APPROVED && payment.application) {
+        if (nextStatus === PaymentStatus.VERIFIED && payment.application) {
           const previousStatus = payment.application.status;
           const updated = await tx.application.updateMany({
             where: { id: payment.application.id },
@@ -139,11 +139,11 @@ export async function PATCH(
         await notifyUser(tx, {
           userId: payment.userId,
           title:
-            nextStatus === PaymentStatus.APPROVED
+            nextStatus === PaymentStatus.VERIFIED
               ? "Membership approved"
               : "Payment proof declined",
           message:
-            nextStatus === PaymentStatus.APPROVED
+            nextStatus === PaymentStatus.VERIFIED
               ? "Congratulations! Your application fee payment was verified. You are now an official member of the cooperative."
               : `Your submitted application fee proof could not be approved.${
                   result.data.reason
@@ -154,7 +154,7 @@ export async function PATCH(
         await writeAudit(tx, {
           userId: actor.userId,
           action:
-            nextStatus === PaymentStatus.APPROVED
+            nextStatus === PaymentStatus.VERIFIED
               ? "APPLICATION_FEE_APPROVED"
               : "APPLICATION_FEE_DECLINED",
           entity: "Payment",

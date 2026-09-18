@@ -164,7 +164,6 @@ async function main() {
   await prisma.loanStatusHistory.createMany({
     data: [
       { loanId: loan.id, status: LoanStatus.PENDING },
-      { loanId: loan.id, status: LoanStatus.APPROVED },
       { loanId: loan.id, status: LoanStatus.ACTIVE },
     ],
   });
@@ -188,7 +187,7 @@ async function main() {
         type: PaymentType.APPLICATION_FEE,
         paymentMethod: PaymentMethod.ONLINE,
         amount: 500,
-        status: PaymentStatus.PENDING_APPROVAL,
+        status: PaymentStatus.PENDING,
         receiptUrl: "https://example.com/application-fee-proof.jpg",
         referenceNo: "GCASH-2026-0001",
         proofUploadedById: applicant.id,

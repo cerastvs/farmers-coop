@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
             id,
             applicationId,
             type: PaymentType.APPLICATION_FEE,
-            status: PaymentStatus.APPROVED,
+            status: PaymentStatus.VERIFIED,
             receiptUrl: null,
           },
         });
@@ -114,7 +114,7 @@ async function reserveOnSiteApplicationFee(
           applicationId,
           type: PaymentType.APPLICATION_FEE,
           status: {
-            in: [PaymentStatus.PENDING_APPROVAL, PaymentStatus.APPROVED],
+            in: [PaymentStatus.PENDING, PaymentStatus.VERIFIED],
           },
         },
         select: { id: true },
@@ -134,7 +134,7 @@ async function reserveOnSiteApplicationFee(
           type: PaymentType.APPLICATION_FEE,
           paymentMethod: PaymentMethod.ON_SITE,
           amount,
-          status: PaymentStatus.APPROVED,
+          status: PaymentStatus.VERIFIED,
           verifiedBy: actorId,
           verifiedAt: now,
           paidAt: now,
@@ -167,7 +167,7 @@ async function completeOnSiteApplicationFee(
         where: {
           id: paymentId,
           type: PaymentType.APPLICATION_FEE,
-          status: PaymentStatus.APPROVED,
+          status: PaymentStatus.VERIFIED,
         },
         data: {
           receiptUrl: hasProof ? receiptUrl : null,

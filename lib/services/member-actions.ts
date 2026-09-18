@@ -75,7 +75,6 @@ type Actor = { userId: string; userRole: Role };
 
 const ACTIVE_LOAN_STATUSES = [
   LoanStatus.PENDING,
-  LoanStatus.APPROVED,
   LoanStatus.ACTIVE,
 ];
 

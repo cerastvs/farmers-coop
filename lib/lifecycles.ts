@@ -9,8 +9,7 @@ import { ApiError } from "@/lib/errors";
 type TransitionMap<T extends string> = Record<T, readonly T[]>;
 
 export const loanTransitions: TransitionMap<LoanStatus> = {
-  PENDING: [LoanStatus.APPROVED, LoanStatus.REJECTED],
-  APPROVED: [LoanStatus.ACTIVE, LoanStatus.REJECTED],
+  PENDING: [LoanStatus.ACTIVE, LoanStatus.REJECTED],
   REJECTED: [],
   ACTIVE: [LoanStatus.PAID, LoanStatus.OVERDUE],
   OVERDUE: [LoanStatus.PAID, LoanStatus.ACTIVE],
@@ -21,21 +20,12 @@ export const paymentTransitions: TransitionMap<PaymentStatus> = {
   PENDING: [PaymentStatus.VERIFIED, PaymentStatus.REJECTED],
   VERIFIED: [],
   REJECTED: [],
-  // Application-fee workflow. Resubmissions create a fresh payment row, so a
-  // rejected proof never needs to move back to PENDING_APPROVAL in place.
-  PENDING_APPROVAL: [PaymentStatus.APPROVED, PaymentStatus.REJECTED],
-  APPROVED: [],
-  // Legacy value kept for the enum; rejections use REJECTED.
-  DECLINED: [],
 };
 
 export const applicationFeePaymentTransitions: TransitionMap<PaymentStatus> = {
-  PENDING: [],
+  PENDING: [PaymentStatus.VERIFIED, PaymentStatus.REJECTED],
   VERIFIED: [],
   REJECTED: [],
-  PENDING_APPROVAL: [PaymentStatus.APPROVED, PaymentStatus.REJECTED],
-  APPROVED: [],
-  DECLINED: [],
 };
 
 export const supplyTransitions: TransitionMap<TransactionStatus> = {

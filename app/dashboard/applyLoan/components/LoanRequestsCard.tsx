@@ -10,7 +10,7 @@ export type LoanRequest = {
   id: string;
   name: string;
   type: string;
-  status: "PENDING" | "APPROVED" | "REJECTED" | "ACTIVE" | "OVERDUE" | "PAID";
+  status: "PENDING" | "REJECTED" | "ACTIVE" | "OVERDUE" | "PAID";
   amount: number;
   remainingBalance: number;
   due: string;
@@ -27,10 +27,6 @@ const STATUS_STYLES: Record<
   PENDING: {
     label: "Pending review",
     className: "bg-amber-100 text-amber-700",
-  },
-  APPROVED: {
-    label: "Approved",
-    className: "bg-blue-100 text-blue-700",
   },
   REJECTED: {
     label: "Rejected",

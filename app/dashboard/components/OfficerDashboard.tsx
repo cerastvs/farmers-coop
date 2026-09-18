@@ -237,7 +237,6 @@ interface SecretaryData {
 const LOAN_STATUS_STYLE: Record<string, string> = {
   ACTIVE: "bg-blue-100 text-blue-700",
   PENDING: "bg-yellow-100 text-yellow-700",
-  APPROVED: "bg-green-100 text-green-700",
   PAID: "bg-gray-100 text-gray-500",
   REJECTED: "bg-red-100 text-red-600",
 };
@@ -2443,7 +2442,7 @@ function LoansSection({
   const filtered = loanType === "ALL" ? items : items.filter((l) => l.type === loanType);
 
   const requests = filtered.filter((l) => l.status === "PENDING");
-  const payments = filtered.filter((l) => l.status === "APPROVED" || l.status === "ACTIVE");
+  const payments = filtered.filter((l) => l.status === "ACTIVE");
   const overdue = filtered.filter(
     (l) => l.status === "ACTIVE" && l.due && new Date(l.due) < now,
   );
@@ -2996,7 +2995,7 @@ function PaymentsSection({
                 <p className="mt-1.5 text-xs font-semibold text-amber-700">Missing payment evidence</p>
               )}
               {payment.rejectionReason && <p className="mt-1 text-xs text-red-600">{payment.rejectionReason}</p>}
-              {(payment.status === "PENDING" || payment.status === "PENDING_APPROVAL") && (
+              {(payment.status === "PENDING") && (
                 <div className="flex gap-2 mt-2">
                   <button disabled={busy === payment.id || !hasEvidence} onClick={() => onRequestAction(payment, "verify")} className="rounded-lg bg-green-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-green-700 transition disabled:opacity-50">{payment.type === "APPLICATION_FEE" ? "Approve" : "Verify"}</button>
                   <button disabled={busy === payment.id} onClick={() => onRequestAction(payment, "reject")} className="rounded-lg border border-red-200 px-3 py-1.5 text-[11px] font-bold text-red-600 hover:bg-red-50 transition disabled:opacity-50">{payment.type === "APPLICATION_FEE" ? "Decline" : "Reject"}</button>
@@ -3849,10 +3848,10 @@ export default function OfficerDashboard({
     if (!data) return null;
     const pendingApps = data.applications.filter((a) => a.status === "PENDING");
     const pendingLoans = data.loans.filter((l) => l.status === "PENDING");
-    const activeLoans = data.loans.filter((l) => l.status === "APPROVED" || l.status === "ACTIVE");
+    const activeLoans = data.loans.filter((l) => l.status === "ACTIVE");
     const overdueLoans = data.loans.filter((l) => l.status === "ACTIVE" && l.due && new Date(l.due) < now);
     const pendingPayments = data.payments.filter(
-      (p) => p.status === "PENDING" || p.status === "PENDING_APPROVAL",
+      (p) => p.status === "PENDING",
     );
     const lowStock = data.supplies.filter((s) => s.stock <= 30);
     const verifiedPayments = data.payments.filter((p) => p.status === "VERIFIED");
@@ -3905,7 +3904,7 @@ export default function OfficerDashboard({
         data.loans.filter((l) => l.status === "PENDING").length +
         guarantorPending,
       payments: data.payments.filter(
-        (p) => p.status === "PENDING" || p.status === "PENDING_APPROVAL",
+        (p) => p.status === "PENDING",
       ).length,
       machines: machinePending,
       supplies: supplyPending,
@@ -4255,11 +4254,11 @@ export default function OfficerDashboard({
                 {visibleSections.includes("payments") && (
                 <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-fadeIn">
                   <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#5a7267]">Pending Payments</h3>
-                  {data.payments.filter((p) => p.status === "PENDING" || p.status === "PENDING_APPROVAL").length === 0 ? (
+                  {data.payments.filter((p) => p.status === "PENDING").length === 0 ? (
                     <p className="py-4 text-center text-sm text-[#5a7267]">No pending payments</p>
                   ) : (
                     <div className="space-y-2">
-                      {data.payments.filter((p) => p.status === "PENDING" || p.status === "PENDING_APPROVAL").slice(0, 5).map((p) => (
+                      {data.payments.filter((p) => p.status === "PENDING").slice(0, 5).map((p) => (
                         <div key={p.id} className="flex items-center justify-between rounded-lg border border-[#e2ebe6] bg-[#fafdf9] px-3.5 py-2.5">
                           <div className="min-w-0 flex-1"><p className="text-sm font-medium text-[#0f2318] truncate">{p.user.name}</p><p className="text-[11px] text-[#5a7267]"><Money value={p.amount} /> · {p.loan?.name ?? "Payment"}</p></div>
                           <span className="ml-2 shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">Verify</span>
@@ -4367,11 +4366,11 @@ export default function OfficerDashboard({
             {activeTab === "payments" && data && (
               <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
                 <div className="flex items-center justify-between gap-3 border-b border-[#e2ebe6] px-5 py-4">
-                  <div><h3 className="text-sm font-bold text-[#0f2318]">Payment Verification</h3><p className="text-[11px] text-[#5a7267]">{data.payments.length} total · {data.payments.filter((p) => p.status === "PENDING" || p.status === "PENDING_APPROVAL").length} pending</p></div>
+                  <div><h3 className="text-sm font-bold text-[#0f2318]">Payment Verification</h3><p className="text-[11px] text-[#5a7267]">{data.payments.length} total · {data.payments.filter((p) => p.status === "PENDING").length} pending</p></div>
                   <PendingOnlyToggle active={pendingFilter.payments} count={badges.payments} onToggle={() => togglePendingFilter("payments")} />
                 </div>
                 <div className="p-4">
-                  <PaymentsSection items={pendingFilter.payments ? data.payments.filter((p) => p.status === "PENDING" || p.status === "PENDING_APPROVAL") : data.payments} expanded={true} onToggle={() => {}} onRequestAction={(payment, action) => setConfirmPayment({ payment, action })} onImageClick={(src, alt) => setImageModal({ src, alt })} busy={busy} />
+                  <PaymentsSection items={pendingFilter.payments ? data.payments.filter((p) => p.status === "PENDING") : data.payments} expanded={true} onToggle={() => {}} onRequestAction={(payment, action) => setConfirmPayment({ payment, action })} onImageClick={(src, alt) => setImageModal({ src, alt })} busy={busy} />
                 </div>
               </div>
             )}

@@ -35,9 +35,6 @@ enum PaymentStatus {
   PENDING
   VERIFIED
   REJECTED
-  PENDING_APPROVAL
-  APPROVED
-  DECLINED
 }
 
 enum PaymentMethod {
@@ -74,7 +71,6 @@ enum LoanType {
 
 enum LoanStatus {
   PENDING
-  APPROVED
   REJECTED
   ACTIVE
   OVERDUE

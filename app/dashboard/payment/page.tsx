@@ -34,7 +34,7 @@ interface AuditUser {
 
 interface PaymentRecord {
   id: string;
-  status: "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+  status: "PENDING" | "VERIFIED" | "REJECTED";
   amount: number;
   paymentMethod: "ONLINE" | "ON_SITE";
   referenceNo: string | null;
@@ -175,8 +175,8 @@ function derivePhase(
   if (applicationStatus === "REJECTED") return "rejected";
   if (applicationStatus === "APPROVED") return "approved";
   if (!payment) return "none";
-  if (payment.status === "PENDING_APPROVAL") return "pending";
-  if (payment.status === "APPROVED") return "approved";
+  if (payment.status === "PENDING") return "pending";
+  if (payment.status === "VERIFIED") return "approved";
   return "declined";
 }
 
@@ -698,13 +698,13 @@ function PaymentHistoryCard({ history }: { history: PaymentRecord[] }) {
 
 function StatusPill({ status }: { status: PaymentRecord["status"] }) {
   const styles: Record<PaymentRecord["status"], string> = {
-    PENDING_APPROVAL: "bg-orange-100 text-orange-700",
-    APPROVED: "bg-green-100 text-green-700",
+    PENDING: "bg-orange-100 text-orange-700",
+    VERIFIED: "bg-green-100 text-green-700",
     REJECTED: "bg-red-100 text-red-600",
   };
   const labels: Record<PaymentRecord["status"], string> = {
-    PENDING_APPROVAL: "🟠 Waiting for approval",
-    APPROVED: "🟢 Approved",
+    PENDING: "🟠 Waiting for verification",
+    VERIFIED: "🟢 Verified",
     REJECTED: "🔴 Rejected",
   };
   return (

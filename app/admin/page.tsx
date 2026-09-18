@@ -611,7 +611,7 @@ export default function AdminPage() {
                   {applicationFees.map((fee) => {
                     const proofUrl = getSecureProofUrl(fee.receiptUrl);
                     const isOnline = fee.paymentMethod === "ONLINE";
-                    const pending = fee.status === "PENDING_APPROVAL";
+                    const pending = fee.status === "PENDING";
                     return (
                       <Record key={fee.id} title={fee.application?.fullName ?? fee.user.name} meta={`App #${fee.application?.id.slice(0, 8) ?? "—"} · ₱${fee.amount.toLocaleString()} · ${isOnline ? "Online" : "On-site"} · ${new Date(fee.createdAt).toLocaleDateString()}`} status={fee.status}>
                         <div className="grid gap-2 text-xs">
@@ -710,7 +710,7 @@ export default function AdminPage() {
                           (app.contact ?? "").toLowerCase().includes(feeSearch.trim().toLowerCase())),
                     )
                     .map((app) => {
-                      const paymentOk = app.payment?.status === "APPROVED";
+                      const paymentOk = app.payment?.status === "VERIFIED";
                       return (
                         <Record
                           key={app.id}
@@ -1179,7 +1179,7 @@ function Record({ title, meta, status, children }: { title: string; meta: string
 
 function Status({ value }: { value: string }) {
   const positive = ["ACTIVE", "APPROVED", "VERIFIED", "COMPLETED", "PAID", "PUBLISHED"].includes(value);
-  const negative = ["REJECTED", "INACTIVE", "DECLINED", "OVERDUE"].includes(value);
+  const negative = ["REJECTED", "INACTIVE", "OVERDUE"].includes(value);
   return <span className={`rounded-full px-2.5 py-1 text-[11px] font-black ${positive ? "bg-green-100 text-green-700" : negative ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>{value}</span>;
 }
 

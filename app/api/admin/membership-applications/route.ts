@@ -47,7 +47,7 @@ export async function GET() {
         prisma.payment.count({
           where: {
             type: PaymentType.APPLICATION_FEE,
-            status: PaymentStatus.PENDING_APPROVAL,
+            status: PaymentStatus.PENDING,
           },
         }),
         prisma.application.count({

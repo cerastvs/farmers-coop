@@ -106,7 +106,7 @@ export async function GET(req: NextRequest) {
             none: {
               type: PaymentType.APPLICATION_FEE,
               status: {
-                in: [PaymentStatus.PENDING_APPROVAL, PaymentStatus.APPROVED],
+                in: [PaymentStatus.PENDING, PaymentStatus.VERIFIED],
               },
             },
           },
@@ -123,8 +123,8 @@ export async function GET(req: NextRequest) {
     ]);
 
     const sorted = [...payments].sort((a, b) => {
-      const pendingA = a.status === PaymentStatus.PENDING_APPROVAL ? 0 : 1;
-      const pendingB = b.status === PaymentStatus.PENDING_APPROVAL ? 0 : 1;
+      const pendingA = a.status === PaymentStatus.PENDING ? 0 : 1;
+      const pendingB = b.status === PaymentStatus.PENDING ? 0 : 1;
       if (pendingA !== pendingB) return pendingA - pendingB;
       return b.createdAt.getTime() - a.createdAt.getTime();
     });

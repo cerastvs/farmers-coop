@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
             id: paymentId,
             userId: actor.userId,
             type: PaymentType.APPLICATION_FEE,
-            status: PaymentStatus.PENDING_APPROVAL,
+            status: PaymentStatus.PENDING,
             receiptUrl: null,
           },
         });
@@ -111,7 +111,7 @@ async function reserveApplicationFeePayment(userId: string, amount: number) {
           where: {
             applicationId: application.id,
             type: PaymentType.APPLICATION_FEE,
-            status: { in: [PaymentStatus.PENDING_APPROVAL, PaymentStatus.APPROVED] },
+            status: { in: [PaymentStatus.PENDING, PaymentStatus.VERIFIED] },
           },
           select: { id: true },
         });
@@ -129,7 +129,7 @@ async function reserveApplicationFeePayment(userId: string, amount: number) {
             type: PaymentType.APPLICATION_FEE,
             paymentMethod: PaymentMethod.ONLINE,
             amount,
-            status: PaymentStatus.PENDING_APPROVAL,
+            status: PaymentStatus.PENDING,
           },
           select: { id: true },
         });
@@ -165,7 +165,7 @@ async function completeApplicationFeePayment(
           id: paymentId,
           userId,
           type: PaymentType.APPLICATION_FEE,
-          status: PaymentStatus.PENDING_APPROVAL,
+          status: PaymentStatus.PENDING,
           receiptUrl: null,
         },
         data: {

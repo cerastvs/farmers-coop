@@ -76,6 +76,11 @@ export function formatReportPeriod(
   if (from && to) {
     const d1 = new Date(from);
     const d2 = new Date(to);
+    const sameDay =
+      d1.getFullYear() === d2.getFullYear() &&
+      d1.getMonth() === d2.getMonth() &&
+      d1.getDate() === d2.getDate();
+    if (sameDay) return d1.toLocaleDateString("en-US", yearOpts);
     if (d1.getFullYear() === d2.getFullYear()) {
       return `${d1.toLocaleDateString("en-US", opts)} – ${d2.toLocaleDateString("en-US", yearOpts)}`;
     }

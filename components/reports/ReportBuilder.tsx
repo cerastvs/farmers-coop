@@ -80,6 +80,13 @@ function buildPresetColumns(
   return out;
 }
 
+function todayISO(): string {
+  const d = new Date();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
 export function ReportBuilder({
   reportTypes,
   members,
@@ -94,8 +101,8 @@ export function ReportBuilder({
 }: ReportBuilderProps) {
   const [type, setType] = useState(initialType);
   const [title, setTitle] = useState("");
-  const [from, setFrom] = useState(initialFrom ?? "");
-  const [to, setTo] = useState(initialTo ?? "");
+  const [from, setFrom] = useState(initialFrom ?? todayISO());
+  const [to, setTo] = useState(initialTo ?? todayISO());
   const [memberId, setMemberId] = useState("");
   const [statuses, setStatuses] = useState<string[]>([]);
   const [preset, setPreset] = useState<PresetId>("detailed");

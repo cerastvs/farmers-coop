@@ -508,55 +508,70 @@ loan: { select: { id: true, name: true, type: true } },
 }
 
 async function generateSuppliesReport(filters: ReportFilters = {}) {
-  const [supplies, repayments, rejectedPayments] = await Promise.all([
-    prisma.supply.findMany({
-      orderBy: { productName: "asc" },
-      include: {
-        transactions: {
-          orderBy: { createdAt: "desc" },
-          where: {
-            ...(filters.memberId ? { userId: filters.memberId } : {}),
-            ...(filters.statuses && filters.statuses.length
-              ? { status: { in: filters.statuses as TransactionStatus[] } }
-              : {}),
-            ...(filters.from || filters.to
-              ? { createdAt: dateRangePrisma(filters) }
-              : {}),
-          },
-          include: {
-            user: { select: { id: true, name: true, username: true } },
+  const [supplies, repayments, rejectedPayments, completedTxns] =
+    await Promise.all([
+      prisma.supply.findMany({
+        orderBy: { productName: "asc" },
+        where: {
+          ...(filters.to
+            ? { createdAt: { lte: reportDateBoundary(filters.to, "end")! } }
+            : {}),
+        },
+        include: {
+          transactions: {
+            orderBy: { createdAt: "desc" },
+            where: {
+              ...(filters.memberId ? { userId: filters.memberId } : {}),
+              ...(filters.statuses && filters.statuses.length
+                ? { status: { in: filters.statuses as TransactionStatus[] } }
+                : {}),
+              ...(filters.from || filters.to
+                ? { createdAt: dateRangePrisma(filters) }
+                : {}),
+            },
+            include: {
+              user: { select: { id: true, name: true, username: true } },
+            },
           },
         },
-      },
-    }),
-    prisma.loanPayment.findMany({
-      where: {
-        loan: { type: LoanType.SUPPLY },
-        ...(filters.from || filters.to
-          ? { paidAt: dateRangePrisma(filters) }
-          : {}),
-      },
-      select: { amount: true },
-    }),
-    prisma.payment.findMany({
-      where: {
-        status: PaymentStatus.REJECTED,
-        loan: { type: LoanType.SUPPLY },
-        ...(filters.memberId ? { userId: filters.memberId } : {}),
-        ...(filters.from || filters.to
-          ? { createdAt: dateRangePrisma(filters) }
-          : {}),
-      },
-      orderBy: { createdAt: "desc" },
-      include: {
-        user: { select: { id: true, name: true, username: true } },
-        loan: { select: { id: true, name: true } },
-        declinedByUser: {
-          select: { id: true, name: true, username: true, role: true },
+      }),
+      prisma.loanPayment.findMany({
+        where: {
+          loan: { type: LoanType.SUPPLY },
+          ...(filters.from || filters.to
+            ? { paidAt: dateRangePrisma(filters) }
+            : {}),
         },
-      },
-    }),
-  ]);
+        select: { amount: true },
+      }),
+      prisma.payment.findMany({
+        where: {
+          status: PaymentStatus.REJECTED,
+          loan: { type: LoanType.SUPPLY },
+          ...(filters.memberId ? { userId: filters.memberId } : {}),
+          ...(filters.from || filters.to
+            ? { createdAt: dateRangePrisma(filters) }
+            : {}),
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+          user: { select: { id: true, name: true, username: true } },
+          loan: { select: { id: true, name: true } },
+          declinedByUser: {
+            select: { id: true, name: true, username: true, role: true },
+          },
+        },
+      }),
+      prisma.supplyTransaction.findMany({
+        where: { status: TransactionStatus.COMPLETED },
+        select: {
+          supplyId: true,
+          quantity: true,
+          reviewedAt: true,
+          createdAt: true,
+        },
+      }),
+    ]);
   const transactions = supplies.flatMap((supply) => supply.transactions);
   const completed = transactions.filter(
     (transaction) => transaction.status === TransactionStatus.COMPLETED,
@@ -568,16 +583,35 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
     (transaction) => transaction.type === SupplyTransactionType.LOAN,
   );
 
+  // Stock is a rolling figure: reconstruct the on-hand quantity as of the end
+  // of the report period by adding back completed dispatches after that date
+  // (the stored quantity already reflects every completed dispatch to date).
+  const asOf = reportDateBoundary(filters.to, "end");
+  const completedAfterAsOf = new Map<string, number>();
+  if (asOf) {
+    for (const t of completedTxns) {
+      const dispatchedAt = t.reviewedAt ?? t.createdAt;
+      if (dispatchedAt.getTime() > asOf.getTime()) {
+        completedAfterAsOf.set(
+          t.supplyId,
+          (completedAfterAsOf.get(t.supplyId) ?? 0) + t.quantity,
+        );
+      }
+    }
+  }
+  const stockAsOf = (supply: { id: string; quantity: number }): number =>
+    supply.quantity + (completedAfterAsOf.get(supply.id) ?? 0);
+
   return {
     generatedAt: new Date().toISOString(),
     totals: {
       products: supplies.length,
       unitsInStock: supplies.reduce(
-        (sum, supply) => sum + supply.quantity,
+        (sum, supply) => sum + stockAsOf(supply),
         0,
       ),
       inventoryValue: supplies.reduce(
-        (sum, supply) => sum + Number(supply.price) * supply.quantity,
+        (sum, supply) => sum + Number(supply.price) * stockAsOf(supply),
         0,
       ),
       requests: transactions.length,
@@ -619,8 +653,8 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
         id: supply.id,
         productName: supply.productName,
         price: Number(supply.price),
-        quantity: supply.quantity,
-        inventoryValue: Number(supply.price) * supply.quantity,
+        quantity: stockAsOf(supply),
+        inventoryValue: Number(supply.price) * stockAsOf(supply),
         soldUnits,
         borrowedUnits,
         createdAt: supply.createdAt.toISOString(),
@@ -732,7 +766,7 @@ async function generateAuditReport(filters: ReportFilters = {}) {
 
 async function generateSummaryReport(filters: ReportFilters = {}) {
   const hasRange = Boolean(filters.from || filters.to);
-  const [users, loans, payments, supplies, machines, requests, audits, supplyRepayments] =
+  const [users, loans, payments, supplies, machines, requests, audits, supplyRepayments, completedTxns] =
     await Promise.all([
       prisma.user.findMany({
         where:
@@ -776,10 +810,17 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
         },
       }),
       prisma.supply.findMany({
+        where: {
+          ...(filters.to
+            ? { createdAt: { lte: reportDateBoundary(filters.to, "end")! } }
+            : {}),
+        },
         select: {
+          id: true,
           productName: true,
           price: true,
           quantity: true,
+          createdAt: true,
           transactions: {
             where: {
               ...(filters.statuses && filters.statuses.length
@@ -822,6 +863,15 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
         },
         select: { amount: true },
       }),
+      prisma.supplyTransaction.findMany({
+        where: { status: TransactionStatus.COMPLETED },
+        select: {
+          supplyId: true,
+          quantity: true,
+          reviewedAt: true,
+          createdAt: true,
+        },
+      }),
     ]);
   const loanList = loans.map((loan) => {
     const amountPaid = loan.payments.reduce(
@@ -851,6 +901,25 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
   const borrowed = completed.filter(
     (t) => t.type === SupplyTransactionType.LOAN,
   );
+
+  // Stock is a rolling figure: reconstruct the on-hand quantity as of the end
+  // of the report period by adding back completed dispatches after that date
+  // (the stored quantity already reflects every completed dispatch to date).
+  const asOf = reportDateBoundary(filters.to, "end");
+  const completedAfterAsOf = new Map<string, number>();
+  if (asOf) {
+    for (const t of completedTxns) {
+      const dispatchedAt = t.reviewedAt ?? t.createdAt;
+      if (dispatchedAt.getTime() > asOf.getTime()) {
+        completedAfterAsOf.set(
+          t.supplyId,
+          (completedAfterAsOf.get(t.supplyId) ?? 0) + t.quantity,
+        );
+      }
+    }
+  }
+  const stockAsOf = (supply: { id: string; quantity: number }): number =>
+    supply.quantity + (completedAfterAsOf.get(supply.id) ?? 0);
 
   const activeLoanList = loanList.filter(
     (l) => l.status !== "REJECTED",
@@ -934,11 +1003,11 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
         Object.values(TransactionStatus),
       ),
       unitsInStock: supplies.reduce(
-        (sum, supply) => sum + supply.quantity,
+        (sum, supply) => sum + stockAsOf(supply),
         0,
       ),
       inventoryValue: supplies.reduce(
-        (sum, supply) => sum + Number(supply.price) * supply.quantity,
+        (sum, supply) => sum + Number(supply.price) * stockAsOf(supply),
         0,
       ),
       sold: {
@@ -954,10 +1023,11 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
         amount: supplyRepayments.reduce((sum, p) => sum + Number(p.amount), 0),
       },
       list: supplies.map((s) => ({
+        id: s.id,
         productName: s.productName,
         price: Number(s.price),
-        quantity: s.quantity,
-        inventoryValue: Number(s.price) * s.quantity,
+        quantity: stockAsOf(s),
+        inventoryValue: Number(s.price) * stockAsOf(s),
       })),
     },
     machines: {

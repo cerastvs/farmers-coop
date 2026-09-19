@@ -28,6 +28,7 @@ enum PaymentType {
   LOAN_PAYMENT
   EQUIPMENT_PURCHASE
   MEMBERSHIP_FEE
+  SUPPLY_PURCHASE
   OTHER_FEE
 }
 
@@ -201,11 +202,11 @@ model Loan {
   paymentSubmissions Payment[]
   statusHistory      LoanStatusHistory[]
 
-  createdById  String?
+createdById  String?
   createdByRole Role?
-  entryType    EntryType     @default(ONLINE)
-  initiatedBy  InitiatedBy   @default(MEMBER)
-  source       EntrySource   @default(PORTAL)
+  entryType    EntryType   @default(ONLINE)
+  initiatedBy  InitiatedBy @default(MEMBER)
+  source       EntrySource @default(PORTAL)
   remarks      String?
   auditId      String?
 }
@@ -336,6 +337,9 @@ model Payment {
   source       EntrySource  @default(PORTAL)
   remarks      String?
   auditId      String?
+
+  supplyTransactionId String? @unique
+  supplyTransaction   SupplyTransaction? @relation(fields: [supplyTransactionId], references: [id], onDelete: SetNull)
 }
 
 model Machine {
@@ -402,6 +406,8 @@ model SupplyTransaction {
   source       EntrySource @default(PORTAL)
   remarks      String?
   auditId      String?
+
+  payment Payment?
 }
 
 model LoanPayment {

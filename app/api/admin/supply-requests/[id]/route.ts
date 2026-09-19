@@ -81,7 +81,10 @@ export async function PATCH(
         }
 
         if (nextStatus === TransactionStatus.COMPLETED) {
-          await completeSupplyRequest(tx, request);
+          await completeSupplyRequest(tx, request, {
+            userId: actor.userId,
+            userRole: actor.userRole,
+          });
         }
 
         await notifyUser(tx, {

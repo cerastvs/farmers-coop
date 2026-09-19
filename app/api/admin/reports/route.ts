@@ -408,7 +408,8 @@ async function generatePaymentsReport(filters: ReportFilters = {}) {
     orderBy: { createdAt: "desc" },
     include: {
       user: { select: { id: true, name: true, username: true } },
-      loan: { select: { id: true, name: true } },
+loan: { select: { id: true, name: true, type: true } },
+
       application: {
         select: {
           id: true,
@@ -428,7 +429,6 @@ async function generatePaymentsReport(filters: ReportFilters = {}) {
       },
     },
   });
-
   return {
     generatedAt: new Date().toISOString(),
     totals: {
@@ -475,11 +475,35 @@ async function generatePaymentsReport(filters: ReportFilters = {}) {
         declinedAt: payment.declinedAt?.toISOString() ?? null,
         rejectionReason: payment.rejectionReason,
       })),
+    rejectedPayments: payments
+      .filter((payment) => isRejectedPayment(payment))
+      .map((payment) => ({
+        id: payment.id,
+        applicant: payment.application
+          ? {
+              id: payment.application.id,
+              fullName: payment.application.fullName,
+              applicationStatus: payment.application.status,
+              appliedAt: payment.application.createdAt.toISOString(),
+            }
+          : null,
+        user: payment.user,
+        loan: payment.loan,
+        type: payment.type,
+        amount: Number(payment.amount),
+        paymentMethod: payment.paymentMethod,
+        status: payment.status,
+        referenceNo: payment.referenceNo,
+        createdAt: payment.createdAt.toISOString(),
+        declinedBy: payment.declinedByUser,
+        declinedAt: payment.declinedAt?.toISOString() ?? null,
+        rejectionReason: payment.rejectionReason,
+      })),
   };
 }
 
 async function generateSuppliesReport(filters: ReportFilters = {}) {
-  const [supplies, repayments] = await Promise.all([
+  const [supplies, repayments, rejectedPayments] = await Promise.all([
     prisma.supply.findMany({
       orderBy: { productName: "asc" },
       include: {
@@ -508,6 +532,24 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
           : {}),
       },
       select: { amount: true },
+    }),
+    prisma.payment.findMany({
+      where: {
+        status: PaymentStatus.REJECTED,
+        loan: { type: LoanType.SUPPLY },
+        ...(filters.memberId ? { userId: filters.memberId } : {}),
+        ...(filters.from || filters.to
+          ? { createdAt: dateRangePrisma(filters) }
+          : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        user: { select: { id: true, name: true, username: true } },
+        loan: { select: { id: true, name: true } },
+        declinedByUser: {
+          select: { id: true, name: true, username: true, role: true },
+        },
+      },
     }),
   ]);
   const transactions = supplies.flatMap((supply) => supply.transactions);
@@ -550,6 +592,13 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
         repayments: repayments.length,
         amount: repayments.reduce((sum, p) => sum + Number(p.amount), 0),
       },
+      rejectedPayments: {
+        count: rejectedPayments.length,
+        amount: rejectedPayments.reduce(
+          (sum, p) => sum + Number(p.amount),
+          0,
+        ),
+      },
     },
     supplies: supplies.map((supply) => {
       const completedTxs = supply.transactions.filter(
@@ -578,6 +627,19 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
         })),
       };
     }),
+    rejectedPayments: rejectedPayments.map((payment) => ({
+      id: payment.id,
+      member: payment.user,
+      loan: payment.loan,
+      amount: Number(payment.amount),
+      paymentMethod: payment.paymentMethod,
+      status: payment.status,
+      referenceNo: payment.referenceNo,
+      createdAt: payment.createdAt.toISOString(),
+      declinedAt: payment.declinedAt?.toISOString() ?? null,
+      declinedBy: payment.declinedByUser,
+      rejectionReason: payment.rejectionReason,
+    })),
   };
 }
 
@@ -705,6 +767,7 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
         include: {
           user: { select: { id: true, name: true, username: true } },
           application: { select: { id: true, fullName: true, status: true } },
+          loan: { select: { id: true, name: true, type: true } },
         },
       }),
       prisma.supply.findMany({
@@ -830,6 +893,7 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
           applicant: payment.application
             ? { fullName: payment.application.fullName }
             : null,
+          loan: payment.loan,
           type: payment.type,
           paymentMethod: payment.paymentMethod,
           amount: Number(payment.amount),
@@ -849,6 +913,7 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
             }
           : null,
         user: payment.user,
+        loan: payment.loan,
         type: payment.type,
         amount: Number(payment.amount),
         paymentMethod: payment.paymentMethod,

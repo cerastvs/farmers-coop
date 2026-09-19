@@ -37,6 +37,15 @@ const nameOf = (row: Record<string, any>): string =>
   (applicant(row).fullName as string) ??
   "—";
 
+const paymentTypeLabel = (row: Record<string, any>): string => {
+  if (row.type === "LOAN_PAYMENT") {
+    const loan = (row.loan as Record<string, any>) ?? null;
+    if (loan?.type === "SUPPLY") return "Supply Loan Payment";
+    return "Loan Payment";
+  }
+  return humanize(String(row.type ?? "")) || "—";
+};
+
 // ---------------------------------------------------------------- MEMBERS
 
 const MEMBERS: ReportTypeCatalog = {
@@ -251,7 +260,7 @@ const PAYMENTS: ReportTypeCatalog = {
   memberFilter: true,
   statusOptions: ["PENDING", "VERIFIED", "REJECTED"],
   notes: [
-    "Rejected payment submissions are reported separately and excluded from verified amounts.",
+    "Verified payments appear under Payment Records; pending and rejected payment proofs are listed in their own tables.",
     "Only records created within the selected period are included.",
   ],
   sections: [
@@ -285,38 +294,88 @@ const PAYMENTS: ReportTypeCatalog = {
       table: {
         rows: (d) =>
           (((d.payments as unknown[]) ?? []) as Record<string, any>[]).filter(
-            (payment) => payment.status !== "REJECTED",
+            (payment) => payment.status === "VERIFIED",
           ),
         columns: [
           { id: "name", label: "Member", get: (r) => nameOf(r) ?? "", render: (r) => nameOf(r) },
-          { id: "type", label: "Type", get: (r) => r.type ?? "", render: (r) => humanize(r.type) },
+          { id: "type", label: "Type", get: (r) => r.type ?? "", render: (r) => paymentTypeLabel(r) },
           { id: "method", label: "Method", get: (r) => r.paymentMethod ?? "", render: (r) => humanize(r.paymentMethod) },
           { id: "amount", label: "Amount", get: (r) => moneyValue(r.amount), render: (r) => money(r.amount), money: true },
-          { id: "status", label: "Status", get: (r) => r.status ?? "", render: (r) => humanize(r.status) },
           { id: "reference", label: "Reference", get: (r) => r.referenceNo ?? "", render: (r) => r.referenceNo || "—" },
           { id: "date", label: "Date", get: (r) => dateValue(r.createdAt), render: (r) => renderDate(r.createdAt) },
         ],
         groupFields: [
-          { key: "status", label: "Payment status", get: (r) => r.status ?? null },
           { key: "method", label: "Method", get: (r) => r.paymentMethod ?? null },
           { key: "type", label: "Type", get: (r) => r.type ?? null },
         ],
         totalColumns: ["amount"],
       },
     },
+    {
+      id: "pendingTable",
+      label: "Pending Payments",
+      kind: "table",
+      hideWhenEmpty: (d) =>
+        (((d.payments as unknown[]) ?? []) as Record<string, any>[]).every(
+          (payment) => payment.status !== "PENDING",
+        ),
+      table: {
+        rows: (d) =>
+          (((d.payments as unknown[]) ?? []) as Record<string, any>[]).filter(
+            (payment) => payment.status === "PENDING",
+          ),
+        columns: [
+          { id: "name", label: "Member", get: (r) => nameOf(r) ?? "", render: (r) => nameOf(r) },
+          { id: "type", label: "Type", get: (r) => r.type ?? "", render: (r) => paymentTypeLabel(r) },
+          { id: "method", label: "Method", get: (r) => r.paymentMethod ?? "", render: (r) => humanize(r.paymentMethod) },
+          { id: "amount", label: "Amount", get: (r) => moneyValue(r.amount), render: (r) => money(r.amount), money: true },
+          { id: "reference", label: "Reference", get: (r) => r.referenceNo ?? "", render: (r) => r.referenceNo || "—" },
+          { id: "date", label: "Date", get: (r) => dateValue(r.createdAt), render: (r) => renderDate(r.createdAt) },
+        ],
+        groupFields: [
+          { key: "method", label: "Method", get: (r) => r.paymentMethod ?? null },
+          { key: "type", label: "Type", get: (r) => r.type ?? null },
+        ],
+        totalColumns: ["amount"],
+      },
+    },
+  {
+      id: "rejectedTable",
+      label: "Rejected Payments",
+      kind: "table",
+      hideWhenEmpty: (d) =>
+        (((d.rejectedPayments as unknown[]) ?? []) as Record<string, any>[]).length === 0,
+      table: {
+        rows: (d) =>
+          (((d.rejectedPayments as unknown[]) ?? []) as Record<string, any>[]).filter(
+            (payment) => payment.status === "REJECTED",
+          ),
+        columns: [
+          { id: "name", label: "Member", get: (r) => nameOf(r) ?? "", render: (r) => nameOf(r) },
+          { id: "type", label: "Type", get: (r) => r.type ?? "", render: (r) => paymentTypeLabel(r) },
+          { id: "method", label: "Method", get: (r) => r.paymentMethod ?? "", render: (r) => humanize(r.paymentMethod) },
+          { id: "amount", label: "Amount", get: (r) => moneyValue(r.amount), render: (r) => money(r.amount), money: true },
+          { id: "reference", label: "Reference", get: (r) => r.referenceNo ?? "", render: (r) => r.referenceNo || "—" },
+          { id: "date", label: "Date", get: (r) => dateValue(r.declinedAt ?? r.createdAt), render: (r) => renderDate(r.declinedAt ?? r.createdAt) },
+          { id: "reason", label: "Reason", get: (r) => r.rejectionReason ?? "", render: (r) => r.rejectionReason || "—" },
+        ],
+        groupFields: [],
+        totalColumns: ["amount"],
+      },
+    },
   ],
-  defaultSections: ["totals", "byStatus", "byMethod", "paymentsTable"],
+  defaultSections: ["totals", "byStatus", "byMethod", "paymentsTable", "pendingTable", "rejectedTable"],
   presets: {
     summary: { id: "summary", label: "Summary", sections: ["totals", "byStatus", "byMethod"] },
     detailed: {
       id: "detailed",
       label: "Detailed",
-      sections: ["totals", "byStatus", "byMethod", "paymentsTable"],
+      sections: ["totals", "byStatus", "byMethod", "paymentsTable", "pendingTable", "rejectedTable"],
     },
     full: {
       id: "full",
       label: "Full Details",
-      sections: ["totals", "byStatus", "byMethod", "paymentsTable"],
+      sections: ["totals", "byStatus", "byMethod", "paymentsTable", "pendingTable", "rejectedTable"],
     },
   },
 };
@@ -331,6 +390,7 @@ const SUPPLIES: ReportTypeCatalog = {
   notes: [
     "Sold and borrowed figures reflect completed transactions within the selected period.",
     "Paid borrowed repayments are supply-loan repayments recorded in the same period.",
+    "Rejected payment proofs on supply loans are listed separately and excluded from paid amounts.",
   ],
   sections: [
     {
@@ -424,7 +484,7 @@ const SUPPLIES: ReportTypeCatalog = {
         columns: [
           { id: "supply", label: "Supply", get: (r) => r.supply ?? "", render: (r) => r.supply ?? "—" },
           { id: "member", label: "Member", get: (r) => r.member ?? "", render: (r) => r.member ?? "—" },
-          { id: "type", label: "Type", get: (r) => r.type ?? "", render: (r) => humanize(r.type) },
+          { id: "type", label: "Type", get: (r) => r.type ?? "", render: (r) => paymentTypeLabel(r) },
           { id: "qty", label: "Qty", get: (r) => r.qty, render: (r) => String(r.qty || 0) },
           { id: "total", label: "Total", get: (r) => r.total, render: (r) => money(r.total), money: true },
           { id: "status", label: "Status", get: (r) => r.status ?? "", render: (r) => humanize(r.status) },
@@ -437,19 +497,43 @@ const SUPPLIES: ReportTypeCatalog = {
         totalColumns: ["qty", "total"],
       },
     },
+    {
+      id: "rejectedPaymentsTable",
+      label: "Rejected Payments",
+      kind: "table",
+      hideWhenEmpty: (d) =>
+        (((d.rejectedPayments as unknown[]) ?? []) as Record<string, any>[]).length === 0,
+      table: {
+        rows: (d) =>
+          (((d.rejectedPayments as unknown[]) ?? []) as Record<string, any>[]).filter(
+            (payment) => payment.status === "REJECTED",
+          ),
+        columns: [
+          { id: "name", label: "Member", get: (r) => nameOf(r) ?? "", render: (r) => nameOf(r) },
+          { id: "loan", label: "Supply Loan", get: (r) => (r.loan as Record<string, any>)?.name ?? "", render: (r) => (r.loan as Record<string, any>)?.name || "—" },
+          { id: "method", label: "Method", get: (r) => r.paymentMethod ?? "", render: (r) => humanize(r.paymentMethod) },
+          { id: "amount", label: "Amount", get: (r) => moneyValue(r.amount), render: (r) => money(r.amount), money: true },
+          { id: "reference", label: "Reference", get: (r) => r.referenceNo ?? "", render: (r) => r.referenceNo || "—" },
+          { id: "date", label: "Date", get: (r) => dateValue(r.declinedAt ?? r.createdAt), render: (r) => renderDate(r.declinedAt ?? r.createdAt) },
+          { id: "reason", label: "Reason", get: (r) => r.rejectionReason ?? "", render: (r) => r.rejectionReason || "—" },
+        ],
+        groupFields: [],
+        totalColumns: ["amount"],
+      },
+    },
   ],
-  defaultSections: ["totals", "units", "byStatus", "suppliesTable"],
+  defaultSections: ["totals", "units", "byStatus", "suppliesTable", "rejectedPaymentsTable"],
   presets: {
     summary: { id: "summary", label: "Summary", sections: ["totals", "units", "byStatus"] },
     detailed: {
       id: "detailed",
       label: "Detailed",
-      sections: ["totals", "units", "byStatus", "suppliesTable"],
+      sections: ["totals", "units", "byStatus", "suppliesTable", "rejectedPaymentsTable"],
     },
     full: {
       id: "full",
       label: "Full Details",
-      sections: ["totals", "units", "byStatus", "suppliesTable", "transactionsTable"],
+      sections: ["totals", "units", "byStatus", "suppliesTable", "transactionsTable", "rejectedPaymentsTable"],
     },
   },
 };
@@ -694,7 +778,7 @@ const SUMMARY: ReportTypeCatalog = {
         rows: (d) => ((d.transactions as unknown[]) ?? []) as Record<string, any>[],
         columns: [
           { id: "name", label: "Member", get: (r) => nameOf(r) ?? "", render: (r) => nameOf(r) },
-          { id: "type", label: "Type", get: (r) => r.type ?? "", render: (r) => humanize(r.type) },
+          { id: "type", label: "Type", get: (r) => r.type ?? "", render: (r) => paymentTypeLabel(r) },
           { id: "method", label: "Method", get: (r) => r.paymentMethod ?? "", render: (r) => humanize(r.paymentMethod) },
           { id: "amount", label: "Amount", get: (r) => moneyValue(r.amount), render: (r) => money(r.amount), money: true },
           { id: "status", label: "Status", get: (r) => r.status ?? "", render: (r) => humanize(r.status) },
@@ -753,7 +837,7 @@ const SUMMARY: ReportTypeCatalog = {
           ),
         columns: [
           { id: "name", label: "Member", get: (r) => nameOf(r) ?? "", render: (r) => nameOf(r) },
-          { id: "type", label: "Type", get: (r) => r.type ?? "", render: (r) => humanize(r.type) },
+          { id: "type", label: "Type", get: (r) => r.type ?? "", render: (r) => paymentTypeLabel(r) },
           { id: "method", label: "Method", get: (r) => r.paymentMethod ?? "", render: (r) => humanize(r.paymentMethod) },
           { id: "amount", label: "Amount", get: (r) => moneyValue(r.amount), render: (r) => money(r.amount), money: true },
           { id: "status", label: "Status", get: (r) => r.status ?? "", render: (r) => humanize(r.status) },

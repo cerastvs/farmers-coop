@@ -73,31 +73,31 @@ select {
   width: 8.5in;
   max-width: 100%;
   margin: 0 auto;
-  padding: 0.75in;
+  padding: 0.6in;
   box-shadow: 0 6px 30px rgba(15, 35, 25, 0.12);
   border: 1px solid #e6e6e6;
   border-radius: 2px;
 }
 
 .rpt-header {
-  border-bottom: 3px double #173a2b;
-  margin-bottom: 1.1rem;
-  padding-bottom: 0.9rem;
+  border-bottom: 2px solid #173a2b;
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.7rem;
 }
 
 .rpt-brand {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  margin-bottom: 0.7rem;
+  margin-bottom: 0.6rem;
 }
 
 .rpt-brand-mark {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.6rem;
-  height: 2.6rem;
+  width: 2.3rem;
+  height: 2.3rem;
   border-radius: 999px;
   background: #173a2b;
   color: #fff;
@@ -107,7 +107,7 @@ select {
 }
 
 .rpt-coop {
-  font-size: 1.3rem;
+  font-size: 1.15rem;
   font-weight: 800;
   color: #173a2b;
   font-family: "DM Sans", sans-serif;
@@ -115,18 +115,18 @@ select {
 }
 
 .rpt-coop-sub {
-  font-size: 0.62rem;
+  font-size: 0.58rem;
   text-transform: uppercase;
   letter-spacing: 0.22em;
   color: #5a7267;
 }
 
 .rpt-heading {
-  margin-bottom: 0.8rem;
+  margin-bottom: 0.6rem;
 }
 
 .rpt-title {
-  font-size: 1.45rem;
+  font-size: 1.3rem;
   font-weight: 800;
   color: #0f2318;
   line-height: 1.15;
@@ -134,7 +134,7 @@ select {
 }
 
 .rpt-subtitle {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.14em;
@@ -144,143 +144,144 @@ select {
 .rpt-meta {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.66rem;
+  font-size: 0.64rem;
 }
 
 .rpt-meta th {
   text-align: left;
   font-weight: 700;
   color: #173a2b;
-  padding: 0.18rem 0.5rem 0.18rem 0;
+  padding: 0.14rem 0.5rem 0.14rem 0;
   white-space: nowrap;
   vertical-align: top;
 }
 
 .rpt-meta td {
-  padding: 0.18rem 1rem 0.18rem 0;
+  padding: 0.14rem 1rem 0.14rem 0;
   color: #333;
   vertical-align: top;
 }
 
 .rpt-body {
-  min-height: 4in;
+  display: block;
 }
 
 .rpt-section {
-  margin-bottom: 1.2rem;
+  margin-bottom: 0.85rem;
 }
 
 .rpt-section-title {
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: #173a2b;
   border-bottom: 1px solid #cfd8d0;
-  padding-bottom: 0.25rem;
-  margin: 0 0 0.55rem;
-}
-
-.rpt-kv-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(2.2in, 1fr));
-  gap: 0.5rem;
-}
-
-.rpt-kv {
-  border: 1px solid #dfe6e0;
-  border-left: 3px solid #1b5e3b;
-  border-radius: 4px;
-  padding: 0.45rem 0.6rem;
-  background: #fcfffb;
-}
-
-.rpt-kv-label {
-  font-size: 0.62rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #5a7267;
-  margin: 0;
-}
-
-.rpt-kv-value {
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: #0f2318;
-  margin: 0.1rem 0 0;
-}
-
-.rpt-kv-sub {
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: #496558;
-  margin: 0.05rem 0 0;
-}
-
-.rpt-stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(2.6in, 1fr));
-  gap: 0.5rem;
-}
-
-.rpt-stat-card {
-  border: 1px solid #dfe6e0;
-  border-radius: 4px;
-  padding: 0.45rem 0.6rem;
-  background: #f8fbf7;
-}
-
-.rpt-stat-label {
-  font-size: 0.62rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #5a7267;
+  padding-bottom: 0.2rem;
   margin: 0 0 0.4rem;
 }
 
-.rpt-stat-chips {
+/* Compact summary metrics — a single delimited line, not KPI cards. */
+.rpt-metrics {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  align-items: baseline;
+  border: 1px solid #d9dfda;
+  border-radius: 3px;
+  padding: 0.38rem 0.7rem;
+  background: #fff;
 }
 
-.rpt-chip {
-  font-size: 0.66rem;
+.rpt-met {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  font-size: 0.64rem;
   color: #496558;
-  background: #eef3ea;
-  border: 1px solid #dfe6e0;
-  border-radius: 999px;
-  padding: 0.12rem 0.5rem;
+  padding-right: 0.85rem;
 }
 
-.rpt-chip b {
+.rpt-met + .rpt-met {
+  border-left: 1px solid #d9dfda;
+  padding-left: 0.85rem;
+}
+
+.rpt-met-label {
+  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 0.56rem;
+  letter-spacing: 0.06em;
+  color: #5a7267;
+  white-space: nowrap;
+}
+
+.rpt-met-value {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #0f2318;
+  font-variant-numeric: tabular-nums;
+}
+
+.rpt-met-sub {
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: #5a7267;
+}
+
+.rpt-met-num {
+  font-size: 0.72rem;
   color: #173a2b;
-  font-size: 0.75rem;
+}
+
+/* Status overview — compact single-line rows, no cards. */
+.rpt-status {
+  border: 1px solid #d9dfda;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.rpt-status-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  padding: 0.26rem 0.7rem;
+}
+
+.rpt-status-line + .rpt-status-line {
+  border-top: 1px solid #edf0ec;
+}
+
+.rpt-status-name {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.6rem;
+  color: #173a2b;
+  min-width: 1.4in;
+  padding-right: 0.6rem;
 }
 
 .rpt-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.68rem;
+  font-size: 0.62rem;
 }
 
 .rpt-table th {
   text-align: left;
-  font-size: 0.6rem;
+  font-size: 0.55rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   color: #173a2b;
   background: #eef2ec;
   border: 1px solid #c9d3cb;
-  padding: 0.32rem 0.45rem;
+  padding: 0.26rem 0.4rem;
 }
 
 .rpt-table td {
   border: 1px solid #dbe2dc;
-  padding: 0.3rem 0.45rem;
+  padding: 0.23rem 0.4rem;
   color: #222;
   vertical-align: top;
 }
@@ -311,11 +312,7 @@ select {
 }
 
 .rpt-machine {
-  border: 1px solid #dfe6e0;
-  border-radius: 4px;
-  padding: 0.5rem;
-  margin-bottom: 0.6rem;
-  background: #fcfdfb;
+  margin-bottom: 0.5rem;
 }
 
 .rpt-machine-head {
@@ -323,23 +320,23 @@ select {
   justify-content: space-between;
   align-items: baseline;
   gap: 1rem;
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.2rem;
 }
 
 .rpt-machine-name {
-  font-size: 0.85rem;
+  font-size: 0.72rem;
   font-weight: 800;
   color: #173a2b;
 }
 
 .rpt-machine-desc {
-  font-size: 0.66rem;
+  font-size: 0.6rem;
   color: #5a7267;
   text-align: right;
 }
 
 .rpt-empty {
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   color: #718176;
   font-style: italic;
 }
@@ -351,10 +348,10 @@ select {
 }
 
 .rpt-notes {
-  margin-top: 1.2rem;
+  margin-top: 0.9rem;
   border-top: 1px solid #cfd8d0;
-  padding-top: 0.7rem;
-  font-size: 0.66rem;
+  padding-top: 0.55rem;
+  font-size: 0.62rem;
   color: #496558;
 }
 
@@ -363,8 +360,8 @@ select {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: #173a2b;
-  margin: 0 0 0.25rem;
-  font-size: 0.62rem;
+  margin: 0 0 0.2rem;
+  font-size: 0.58rem;
 }
 
 .rpt-notes ul {
@@ -373,23 +370,23 @@ select {
 }
 
 .rpt-notes li {
-  margin: 0.15rem 0;
+  margin: 0.12rem 0;
 }
 
 .rpt-footer {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
-  margin-top: 1.6rem;
+  margin-top: 1.1rem;
   border-top: 1px solid #cfd8d0;
-  padding-top: 1.2rem;
+  padding-top: 0.8rem;
 }
 
 .rpt-sign {
   display: flex;
   flex-direction: column;
-  gap: 2.2rem;
-  font-size: 0.62rem;
+  gap: 1.6rem;
+  font-size: 0.58rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -403,9 +400,9 @@ select {
 }
 
 .rpt-footer-note {
-  margin-top: 0.9rem;
+  margin-top: 0.6rem;
   text-align: center;
-  font-size: 0.6rem;
+  font-size: 0.56rem;
   color: #718176;
 }
 
@@ -458,7 +455,7 @@ select {
     width: 8.5in;
     max-width: none;
     margin: 0;
-    padding: 0.75in;
+    padding: 0.6in;
     box-shadow: none;
     border: none;
     border-radius: 0;
@@ -477,8 +474,9 @@ select {
     page-break-inside: avoid;
   }
 
-  .rpt-kv,
-  .rpt-stat-card,
+  .rpt-metrics,
+  .rpt-status,
+  .rpt-status-line,
   .rpt-machine,
   .rpt-group {
     page-break-inside: avoid;

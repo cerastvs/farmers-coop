@@ -26,6 +26,11 @@ import {
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+function formattedNameWithRole(name: string, role: Role): string {
+  const label = role.toLowerCase().replace(/_/g, " ");
+  return `${name} (${label.charAt(0).toUpperCase()}${label.slice(1)})`;
+}
+
 const GenerateReportSchema = z.object({
   type: z.nativeEnum(ReportType),
   title: z.string().trim().min(3).max(150).optional(),
@@ -1010,9 +1015,11 @@ export async function GET() {
     const ids = [...new Set(reports.map((r) => r.generatedBy))];
     const users = await prisma.user.findMany({
       where: { id: { in: ids } },
-      select: { id: true, name: true },
+      select: { id: true, name: true, role: true },
     });
-    const names = new Map(users.map((u) => [u.id, u.name]));
+    const names = new Map(
+      users.map((u) => [u.id, u.name ? formattedNameWithRole(u.name, u.role) : null]),
+    );
     return NextResponse.json(
       reports.map((r) => ({
         ...r,
@@ -1043,7 +1050,9 @@ export async function POST(req: NextRequest) {
       where: { id: actor.userId },
       select: { name: true },
     });
-    const generatedByName = actorMe?.name ?? null;
+    const generatedByName = actorMe?.name
+      ? formattedNameWithRole(actorMe.name, actor.userRole)
+      : null;
 
     const data = await generateReportData(result.data.type, result.data);
 

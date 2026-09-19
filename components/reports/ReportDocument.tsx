@@ -155,7 +155,7 @@ function DataTable({
   return tableFor(sorted, "all");
 }
 
-function StatGrid({
+function StatusBlock({
   groups,
 }: {
   groups: { label: string; byStatus: Record<string, number> }[];
@@ -163,17 +163,15 @@ function StatGrid({
   const nonEmpty = groups.filter((g) => Object.keys(g.byStatus).length > 0);
   if (nonEmpty.length === 0) return null;
   return (
-    <div className="rpt-stat-grid">
+    <div className="rpt-status">
       {nonEmpty.map((group) => (
-        <div className="rpt-stat-card" key={group.label}>
-          <p className="rpt-stat-label">{group.label}</p>
-          <div className="rpt-stat-chips">
-            {Object.entries(group.byStatus).map(([status, count]) => (
-              <span className="rpt-chip" key={status}>
-                <b>{count}</b> {humanize(status)}
-              </span>
-            ))}
-          </div>
+        <div className="rpt-status-line" key={group.label}>
+          <span className="rpt-status-name">{group.label}</span>
+          {Object.entries(group.byStatus).map(([status, count]) => (
+            <span className="rpt-met" key={status}>
+              <b className="rpt-met-num">{count}</b> {humanize(status)}
+            </span>
+          ))}
         </div>
       ))}
     </div>
@@ -201,12 +199,12 @@ function SectionView({
     });
     if (items.length === 0) return null;
     return (
-      <div className="rpt-kv-grid">
+      <div className="rpt-metrics">
         {items.map((k) => (
-          <div className="rpt-kv" key={k.id}>
-            <p className="rpt-kv-label">{k.label}</p>
-            <p className="rpt-kv-value">{k.value(data)}</p>
-          </div>
+          <span className="rpt-met" key={k.id}>
+            <span className="rpt-met-label">{k.label}</span>
+            <span className="rpt-met-value">{k.value(data)}</span>
+          </span>
         ))}
       </div>
     );
@@ -216,13 +214,13 @@ function SectionView({
     const items = section.units ?? [];
     if (items.length === 0) return null;
     return (
-      <div className="rpt-kv-grid">
+      <div className="rpt-metrics">
         {items.map((u) => (
-          <div className="rpt-kv" key={u.id}>
-            <p className="rpt-kv-label">{u.label}</p>
-            <p className="rpt-kv-value">{u.primary(data)}</p>
-            <p className="rpt-kv-sub">{u.secondary(data)}</p>
-          </div>
+          <span className="rpt-met" key={u.id}>
+            <span className="rpt-met-label">{u.label}</span>
+            <span className="rpt-met-value">{u.primary(data)}</span>
+            <span className="rpt-met-sub">{u.secondary(data)}</span>
+          </span>
         ))}
       </div>
     );
@@ -230,7 +228,7 @@ function SectionView({
 
   if (section.kind === "stat") {
     return (
-      <StatGrid
+      <StatusBlock
         groups={(section.stats ?? []).map((s) => ({
           label: s.label,
           byStatus: s.byStatus(data),

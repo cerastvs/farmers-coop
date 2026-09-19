@@ -9,6 +9,11 @@ import {
   ReportType,
 } from "@/app/generated/prisma";
 
+function formattedNameWithRole(name: string, role: Role): string {
+  const label = role.toLowerCase().replace(/_/g, " ");
+  return `${name} (${label.charAt(0).toUpperCase()}${label.slice(1)})`;
+}
+
 const FINANCIAL_REPORT_TYPES: readonly ReportType[] = [
   ReportType.SUMMARY,
   ReportType.LOANS,
@@ -205,9 +210,14 @@ export async function GET() {
     const generatorIds = [...new Set(reports.map((r) => r.generatedBy))];
     const generators = await prisma.user.findMany({
       where: { id: { in: generatorIds } },
-      select: { id: true, name: true },
+      select: { id: true, name: true, role: true },
     });
-    const generatorNames = new Map(generators.map((u) => [u.id, u.name]));
+    const generatorNames = new Map(
+      generators.map((u) => [
+        u.id,
+        u.name ? formattedNameWithRole(u.name, u.role) : null,
+      ]),
+    );
 
     return NextResponse.json({
       summary: {

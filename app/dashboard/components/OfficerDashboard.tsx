@@ -14,6 +14,7 @@ import type {
   ReportFilters,
 } from "@/components/reports/types";
 import { logout } from "../../login/actions";
+import { machineActiveOverdueDays, machineRequestOverdueDays, isMachineRequestOverdue, loanOverdueDays, isLoanOverdue, daysBetween } from "../../lib/client-overdue";
 import AdminActionsPanel from "../secretary/AdminActionsPanel";
 import { Money } from "@/components/Money";
 import {
@@ -2527,6 +2528,9 @@ function LoansSection({
                     className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${LOAN_STATUS_STYLE[loan.status] || ""}`}
                   >
                     {loan.status}
+                  {loanOverdueDays(loan.due) > 0 && (
+                    <span className="ml-1.5 rounded bg-red-100 px-1.5 py-0.5 text-[9px] font-bold text-red-700 ring-1 ring-red-200">Overdue · {loanOverdueDays(loan.due)} days</span>
+                  )}
                   </span>
                 </div>
                 <p className="text-xs text-[#718176] mt-0.5">
@@ -2697,12 +2701,16 @@ function MachinesSection({
             </div>
             <span
               className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                machine.isBorrowed
-                  ? "bg-orange-100 text-orange-700"
-                  : "bg-green-100 text-green-700"
+                machineActiveOverdueDays(machine.requests) > 0
+                  ? "bg-red-100 text-red-700 ring-1 ring-red-300"
+                  : machine.isBorrowed
+                    ? "bg-orange-100 text-orange-700"
+                    : "bg-green-100 text-green-700"
               }`}
             >
-              {machine.isBorrowed ? "In Use" : "Available"}
+              {machineActiveOverdueDays(machine.requests) > 0
+                ? "Overdue · " + machineActiveOverdueDays(machine.requests) + " days"
+                : machine.isBorrowed ? "In Use" : "Available"}
             </span>
           </button>
         ))
@@ -3866,6 +3874,7 @@ export default function OfficerDashboard({
       pendingLoans: pendingLoans.length,
       pendingPayments: pendingPayments.length,
       machinesInUse: data.summary.totalBorrowedMachines,
+      overdueMachines: data.machines.filter((m) => machineActiveOverdueDays(m.requests) > 0).length,
       totalMembers: data.summary.totalMembers,
       overdueLoans: overdueLoans.length,
       lowStock: lowStock.length,
@@ -4199,9 +4208,9 @@ export default function OfficerDashboard({
             ) : (
               <>
                 {visibleSections.includes("applications") && <StatCard label="Pending Applications" value={stats.pendingApps} sub="Awaiting review" accent="bg-amber-500" icon={FileText} delay={0} />}
-                {visibleSections.includes("loans") && <StatCard label="Active Loans" value={stats.activeLoans} sub={`${stats.pendingLoans} pending`} accent="bg-emerald-500" icon={Banknote} delay={50} />}
+                {visibleSections.includes("loans") && <StatCard label="Active Loans" value={stats.activeLoans} sub={stats.overdueLoans > 0 ? `${stats.pendingLoans} pending · ${stats.overdueLoans} overdue` : `${stats.pendingLoans} pending`} accent={stats.overdueLoans > 0 ? "bg-red-500" : "bg-emerald-500"} icon={Banknote} delay={50} />}
                 {visibleSections.includes("payments") && <StatCard label="Pending Payments" value={stats.pendingPayments} sub="Need verification" accent="bg-blue-500" icon={ClipboardCheck} delay={100} />}
-                {visibleSections.includes("machines") && <StatCard label="Machines In Use" value={stats.machinesInUse} sub="Currently borrowed" accent="bg-indigo-500" icon={Tractor} delay={150} />}
+                {visibleSections.includes("machines") && <StatCard label="Machines In Use" value={stats.machinesInUse} sub={stats.overdueMachines > 0 ? `Currently borrowed · ${stats.overdueMachines} overdue` : "Currently borrowed"} accent={stats.overdueMachines > 0 ? "bg-red-500" : "bg-indigo-500"} icon={Tractor} delay={150} />}
                 {visibleSections.includes("members") && <StatCard label="Total Members" value={stats.totalMembers} sub="Active cooperative" accent="bg-purple-500" icon={Users} delay={200} />}
                 {visibleSections.includes("supplies") && <StatCard label="Low Stock Items" value={stats.lowStock} sub="Below 30 units" accent="bg-orange-500" icon={Package} delay={250} />}
               </>
@@ -4213,7 +4222,11 @@ export default function OfficerDashboard({
           {ALL_TABS.map((t) => {
             const Icon = t.icon;
             const isSection = (SECTIONS as readonly string[]).includes(t.key);
-            const count = isSection ? badges[t.key as Section] : 0;
+            const overdueBadge =
+              t.key === "loans" ? (stats?.overdueLoans ?? 0)
+              : t.key === "machines" ? (stats?.overdueMachines ?? 0)
+              : 0;
+            const count = overdueBadge > 0 ? overdueBadge : isSection ? badges[t.key as Section] : 0;
             return (
               <button
                 key={t.key}
@@ -4223,7 +4236,7 @@ export default function OfficerDashboard({
                 <Icon size={14} />
                 <span className="relative">
                   {t.label}
-                  {isSection && count > 0 && (
+                  {count > 0 && (
                     <span className="absolute -right-2.5 -top-2 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#EF4444] px-1 text-[10px] font-bold leading-none text-white shadow-sm">
                       {count > 99 ? "99+" : count}
                     </span>
@@ -4274,18 +4287,25 @@ export default function OfficerDashboard({
                 </div>
               )}
 
+                {visibleSections.includes("machines") && stats && stats.overdueMachines > 0 && (
+                  <button onClick={() => openSection("machines")} className="w-full rounded-xl border border-red-200 bg-red-50 p-5 text-left shadow-sm animate-fadeIn transition hover:bg-red-100 hover:shadow-md active:scale-[0.99]">
+                    <div className="flex items-center gap-2 mb-2"><AlertTriangle size={16} className="text-red-600" /><h3 className="text-xs font-semibold uppercase tracking-wider text-red-700">Overdue Machines</h3></div>
+                    <p className="text-sm text-red-800">{stats.overdueMachines} machine{stats.overdueMachines > 1 ? "s" : ""} with overdue borrow requests M-BM-7 open section</p>
+                  </button>
+                )}
+
                 {visibleSections.includes("loans") && stats && stats.overdueLoans > 0 && (
-                  <div className="rounded-xl border border-red-200 bg-red-50 p-5 shadow-sm animate-fadeIn">
+                  <button onClick={() => openSection("loans")} className="w-full rounded-xl border border-red-200 bg-red-50 p-5 text-left shadow-sm animate-fadeIn transition hover:bg-red-100 hover:shadow-md active:scale-[0.99]">
                     <div className="flex items-center gap-2 mb-2"><AlertTriangle size={16} className="text-red-600" /><h3 className="text-xs font-semibold uppercase tracking-wider text-red-700">Overdue Loans</h3></div>
-                    <p className="text-sm text-red-800">{stats.overdueLoans} loan{stats.overdueLoans > 1 ? "s" : ""} past due date</p>
-                  </div>
+                    <p className="text-sm text-red-800">{stats.overdueLoans} loan{stats.overdueLoans > 1 ? "s" : ""} past due date M-BM-7 open section</p>
+                  </button>
                 )}
 
                 {visibleSections.includes("supplies") && stats && stats.lowStock > 0 && (
-                  <div className="rounded-xl border border-orange-200 bg-orange-50 p-5 shadow-sm animate-fadeIn">
+                  <button onClick={() => openSection("supplies")} className="w-full rounded-xl border border-orange-200 bg-orange-50 p-5 text-left shadow-sm animate-fadeIn transition hover:bg-orange-100 hover:shadow-md active:scale-[0.99] cursor-pointer">
                     <div className="flex items-center gap-2 mb-2"><AlertTriangle size={16} className="text-orange-600" /><h3 className="text-xs font-semibold uppercase tracking-wider text-orange-700">Low Stock Alert</h3></div>
-                    <p className="text-sm text-orange-800">{stats.lowStock} supply item{stats.lowStock > 1 ? "s" : ""} below 30 units</p>
-                  </div>
+                    <p className="text-sm text-orange-800">{stats.lowStock} supply item{stats.lowStock > 1 ? "s" : ""} below 30 units M-BM-7 open section</p>
+                  </button>
                 )}
               </>
             )}

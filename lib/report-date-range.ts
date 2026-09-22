@@ -48,6 +48,22 @@ export function asOfPrisma(
   return cutoff ? { lte: cutoff } : {};
 }
 
+// "As of" filter for obligation-style records (pending payments, outstanding
+// loans). Such records represent a continuing balance rather than one-off
+// activity, so they must remain in a report generated for a later date as long
+// as they are still live (unsettled / cancelled). Callers OR this together with
+// normal period-activity date range filters.
+export function liveAsOfStatusFilter<T extends string>(
+  filters: ReportDateFilters,
+  liveStatuses: readonly T[],
+) {
+  const cutoff = asOfPrisma(filters);
+  return {
+    status: { in: [...liveStatuses] as T[] },
+    ...(cutoff && "lte" in cutoff ? { createdAt: cutoff } : {}),
+  };
+}
+
 export function isInReportDateRange(
   date: Date | null | undefined,
   filters: ReportDateFilters,

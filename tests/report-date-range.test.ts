@@ -5,6 +5,7 @@ import {
   asOfPrisma,
   dateRangePrisma,
   isInReportDateRange,
+  liveAsOfStatusFilter,
   reportDateBoundary,
 } from "../lib/report-date-range";
 
@@ -77,4 +78,39 @@ test("as-of filter falls back to the from date when to is missing", () => {
 
 test("as-of filter is empty when no date is given", () => {
   assert.deepEqual(asOfPrisma({}), {});
+});
+
+test("live as-of filter keeps only still-live statuses and caps at the end of the selected day", () => {
+  const filter = liveAsOfStatusFilter(
+    { from: "2026-09-13", to: "2026-09-13" },
+    ["PENDING", "ACTIVE", "OVERDUE"],
+  );
+
+  assert.deepEqual(filter.status, { in: ["PENDING", "ACTIVE", "OVERDUE"] });
+  assert.ok(filter.createdAt);
+  const cutoff = filter.createdAt.lte as Date;
+  assert.equal(cutoff.getFullYear(), 2026);
+  assert.equal(cutoff.getMonth(), 8);
+  assert.equal(cutoff.getDate(), 13);
+  assert.equal(cutoff.getHours(), 23);
+  assert.equal(cutoff.getMinutes(), 59);
+});
+
+test("live as-of filter keeps records created before the selected day", () => {
+  const filter = liveAsOfStatusFilter(
+    { to: "2026-09-15" },
+    ["PENDING", "ACTIVE"],
+  );
+
+  assert.ok(filter.createdAt);
+  const cutoff = filter.createdAt.lte as Date;
+  assert.ok(new Date(2026, 8, 12, 9) <= cutoff);
+  assert.ok(new Date(2026, 8, 16, 0) > cutoff);
+});
+
+test("live as-of filter drops the date constraint when no date is given", () => {
+  const filter = liveAsOfStatusFilter({}, ["PENDING"]);
+
+  assert.deepEqual(filter.status, { in: ["PENDING"] });
+  assert.equal(filter.createdAt, undefined);
 });

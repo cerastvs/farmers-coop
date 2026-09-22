@@ -21,6 +21,7 @@ import {
   asOfPrisma,
   dateRangePrisma,
   isInReportDateRange,
+  liveAsOfStatusFilter,
   reportDateBoundary,
 } from "@/lib/report-date-range";
 import { NextRequest, NextResponse } from "next/server";
@@ -242,6 +243,11 @@ async function generateLoansReport(filters: ReportFilters = {}) {
                   { createdAt: dateRangePrisma(filters) },
                   { payments: { some: { paidAt: dateRangePrisma(filters) } } },
                   { statusHistory: { some: { changedAt: dateRangePrisma(filters) } } },
+                  liveAsOfStatusFilter(filters, [
+                    LoanStatus.PENDING,
+                    LoanStatus.ACTIVE,
+                    LoanStatus.OVERDUE,
+                  ]),
                 ],
               }
             : {}),
@@ -407,7 +413,12 @@ async function generatePaymentsReport(filters: ReportFilters = {}) {
         ? { status: { in: filters.statuses as PaymentStatus[] } }
         : {}),
       ...(filters.from || filters.to
-        ? { createdAt: dateRangePrisma(filters) }
+        ? {
+            OR: [
+              { createdAt: dateRangePrisma(filters) },
+              liveAsOfStatusFilter(filters, [PaymentStatus.PENDING]),
+            ],
+          }
         : {}),
     },
     orderBy: { createdAt: "desc" },
@@ -783,6 +794,11 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
                 { createdAt: dateRangePrisma(filters) },
                 { payments: { some: { paidAt: dateRangePrisma(filters) } } },
                 { statusHistory: { some: { changedAt: dateRangePrisma(filters) } } },
+                liveAsOfStatusFilter(filters, [
+                  LoanStatus.PENDING,
+                  LoanStatus.ACTIVE,
+                  LoanStatus.OVERDUE,
+                ]),
               ],
             }
           : {},
@@ -800,7 +816,12 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
       prisma.payment.findMany({
         where:
           filters.from || filters.to
-            ? { createdAt: dateRangePrisma(filters) }
+            ? {
+                OR: [
+                  { createdAt: dateRangePrisma(filters) },
+                  liveAsOfStatusFilter(filters, [PaymentStatus.PENDING]),
+                ],
+              }
             : {},
         orderBy: { createdAt: "desc" },
         include: {

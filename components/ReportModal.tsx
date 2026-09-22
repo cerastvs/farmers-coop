@@ -410,6 +410,28 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
         const members = (data.members ?? {}) as ReportData;
         const audit = (data.audit ?? {}) as ReportData;
         const transactions = (data.transactions ?? []) as ReportData[];
+        const applicationFeeTransactions = transactions.filter(
+          (t) => t.type === "APPLICATION_FEE",
+        );
+        const otherTransactions = transactions.filter(
+          (t) => t.type !== "APPLICATION_FEE",
+        );
+        const transactionRow = (t: ReportData, preferApplicant: boolean) => {
+          const user = (t.user as ReportData) ?? {};
+          const applicant = (t.applicant as ReportData) ?? {};
+          const name = preferApplicant
+            ? (applicant.fullName as string) ?? (user.name as string) ?? "—"
+            : (user.name as string) ?? (applicant.fullName as string) ?? "—";
+          return [
+            cell(name),
+            cell(t.type, humanize(t.type)),
+            cell(t.paymentMethod, humanize(t.paymentMethod)),
+            cell(t.amount, money(t.amount)),
+            cell(t.status, humanize(t.status)),
+            cell(t.referenceNo, (t.referenceNo as string) || "—"),
+            cell(t.createdAt, t.createdAt ? new Date(t.createdAt as string).toLocaleDateString("en-PH") : "—"),
+          ];
+        };
         const memberList = (members.list ?? []) as ReportData[];
         const loanList = (loans.list ?? []) as ReportData[];
         const paymentList = (payments.list ?? []) as ReportData[];
@@ -530,24 +552,20 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
                 { label: "Supply Requests by Status", byStatus: supplies.requestsByStatus as Record<string, number> },
               ])}
             </div>
-            {transactions.length > 0 && (
-              <SummarySection label={`Recent Transactions (${transactions.length})`}>
+            {applicationFeeTransactions.length > 0 && (
+              <SummarySection label={`Application Fees (${applicationFeeTransactions.length})`}>
+                <Table
+                  head={["Applicant", "Type", "Method", "Amount", "Status", "Reference", "Date"]}
+                  rows={applicationFeeTransactions.map((t) => transactionRow(t, true))}
+                  fallback="No application fees in this period."
+                />
+              </SummarySection>
+            )}
+            {otherTransactions.length > 0 && (
+              <SummarySection label={`Recent Transactions (${otherTransactions.length})`}>
                 <Table
                   head={["Member", "Type", "Method", "Amount", "Status", "Reference", "Date"]}
-                  rows={transactions.map((t) => {
-                    const user = (t.user as ReportData) ?? {};
-                    const applicant = (t.applicant as ReportData) ?? {};
-                    const name = (user.name as string) ?? (applicant.fullName as string) ?? "—";
-                    return [
-                      cell(name),
-                      cell(t.type, humanize(t.type)),
-                      cell(t.paymentMethod, humanize(t.paymentMethod)),
-                      cell(t.amount, money(t.amount)),
-                      cell(t.status, humanize(t.status)),
-                      cell(t.referenceNo, (t.referenceNo as string) || "—"),
-                      cell(t.createdAt, t.createdAt ? new Date(t.createdAt as string).toLocaleDateString("en-PH") : "—"),
-                    ];
-                  })}
+                  rows={otherTransactions.map((t) => transactionRow(t, false))}
                   fallback="No transactions in this period."
                 />
               </SummarySection>

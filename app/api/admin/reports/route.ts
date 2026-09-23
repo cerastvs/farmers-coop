@@ -18,6 +18,11 @@ import prisma from "@/lib/client";
 import { RECORDS_ROLES } from "@/lib/permissions";
 import { principalFromAmount } from "@/lib/services/loan-interest";
 import {
+  BLOCKING_MACHINE_STATUSES,
+  daysBetween,
+  isMachineRequestOverdueAsOf,
+} from "@/lib/services/overdue";
+import {
   asOfPrisma,
   dateRangePrisma,
   isInReportDateRange,
@@ -84,6 +89,54 @@ function sumPaymentAmounts(
   );
 }
 
+// Machine requests whose booking has passed its scheduled end date and has not
+// been returned. Kept in reports as of the selected date so a still-overdue
+// request remains visible even when its original request date falls outside the
+// period. Mirrors the dashboard's "Needs Attention" definition (APPROVED or
+// IN_USE bookings past their end date), so e.g. an APPROVED booking that was
+// never started and never returned still shows up as overdue.
+function overdueMachineRequestsAsOfPrisma(filters: ReportFilters) {
+  const asOf = reportDateBoundary(filters.to ?? filters.from, "start");
+  return asOf
+    ? {
+        status: { in: [...BLOCKING_MACHINE_STATUSES] },
+        endDate: { lt: asOf },
+        returnedAt: null,
+      }
+    : {};
+}
+
+// Status distribution for machine requests, with the OVERDUE bucket computed
+// "as of" the selected date: a request is overdue only on days when its
+// scheduled end date has passed and it had not yet been returned.
+function machineRequestStatusCounts(
+  requests: readonly {
+    status: MachineStatus;
+    endDate?: Date | null;
+    returnedAt?: Date | null;
+  }[],
+  asOf: Date | null,
+): Record<string, number> {
+  const byStatus = countsBy(
+    requests.map((request) => request.status),
+    Object.values(MachineStatus),
+  );
+  const overdueStatuses = BLOCKING_MACHINE_STATUSES as readonly MachineStatus[];
+  byStatus[MachineStatus.OVERDUE] = asOf
+    ? requests.filter(
+        (request) =>
+          overdueStatuses.includes(request.status) &&
+          isMachineRequestOverdueAsOf(
+            request.endDate,
+            request.returnedAt,
+            asOf,
+          ),
+      ).length
+    : requests.filter((request) => request.status === MachineStatus.OVERDUE)
+        .length;
+  return byStatus;
+}
+
 // The initial loan amount before interest. For loans created before the
 // principal field was recorded, reverse the stored payable using the rate.
 function loanPrincipalAmount(loan: {
@@ -115,6 +168,15 @@ function countsBy<T extends string>(
       values.filter((item) => item === value).length,
     ]),
   );
+}
+
+// End of the current calendar day, used as the "as of" instant for reports
+// generated without an explicit date range so still-overdue obligations match
+// what officers see live on the dashboard.
+function currentDayEnd() {
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  return today;
 }
 
 function jsonData(value: unknown): Prisma.InputJsonValue {
@@ -694,6 +756,9 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
 }
 
 async function generateMachinesReport(filters: ReportFilters = {}) {
+  const hasRange = Boolean(filters.from || filters.to);
+  const machineAsOf =
+    reportDateBoundary(filters.to ?? filters.from, "end") ?? currentDayEnd();
   const machines = await prisma.machine.findMany({
     orderBy: { name: "asc" },
     include: {
@@ -704,8 +769,13 @@ async function generateMachinesReport(filters: ReportFilters = {}) {
           ...(filters.statuses && filters.statuses.length
             ? { status: { in: filters.statuses as MachineStatus[] } }
             : {}),
-          ...(filters.from || filters.to
-            ? { requestDate: dateRangePrisma(filters) }
+          ...(hasRange
+            ? {
+                OR: [
+                  { requestDate: dateRangePrisma(filters) },
+                  overdueMachineRequestsAsOfPrisma(filters),
+                ],
+              }
             : {}),
         },
         include: {
@@ -715,17 +785,44 @@ async function generateMachinesReport(filters: ReportFilters = {}) {
     },
   });
   const requests = machines.flatMap((machine) => machine.requests);
+  const overdueRequests = requests
+    .filter(
+      (request) =>
+        BLOCKING_MACHINE_STATUSES.includes(
+          request.status as (typeof BLOCKING_MACHINE_STATUSES)[number],
+        ) &&
+        isMachineRequestOverdueAsOf(
+          request.endDate,
+          request.returnedAt,
+          machineAsOf,
+        ),
+    )
+    .map((request) => {
+      const machine = machines.find((m) =>
+        m.requests.some((r) => r.id === request.id),
+      );
+      return {
+        id: request.id,
+        machine: machine?.name,
+        member: request.user,
+        status: request.status,
+        endDate: request.endDate?.toISOString() ?? null,
+        daysOverdue:
+          request.endDate != null
+            ? daysBetween(request.endDate, machineAsOf)
+            : 0,
+      };
+    });
 
   return {
     generatedAt: new Date().toISOString(),
     totals: {
       machines: machines.length,
       requests: requests.length,
-      requestsByStatus: countsBy(
-        requests.map((request) => request.status),
-        Object.values(MachineStatus),
-      ),
+      requestsByStatus: machineRequestStatusCounts(requests, machineAsOf),
+      overdue: overdueRequests.length,
     },
+    overdueRequests,
     machines: machines.map((machine) => ({
       id: machine.id,
       name: machine.name,
@@ -863,7 +960,14 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
         orderBy: { name: "asc" },
       }),
       prisma.machineRequest.findMany({
-        where: hasRange ? { requestDate: dateRangePrisma(filters) } : {},
+        where: hasRange
+          ? {
+              OR: [
+                { requestDate: dateRangePrisma(filters) },
+                overdueMachineRequestsAsOfPrisma(filters),
+              ],
+            }
+          : {},
         include: {
           user: { select: { id: true, name: true } },
           machine: { select: { id: true, name: true } },
@@ -945,6 +1049,8 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
   const activeLoanList = loanList.filter(
     (l) => l.status !== "REJECTED",
   );
+  const machineAsOf =
+    reportDateBoundary(filters.to ?? filters.from, "end") ?? currentDayEnd();
 
   return {
     generatedAt: new Date().toISOString(),
@@ -1054,10 +1160,7 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
     machines: {
       count: machines.length,
       requests: requests.length,
-      requestsByStatus: countsBy(
-        requests.map((request) => request.status),
-        Object.values(MachineStatus),
-      ),
+      requestsByStatus: machineRequestStatusCounts(requests, machineAsOf),
       list: machines,
       requestsList: requests.map((r) => ({
         id: r.id,

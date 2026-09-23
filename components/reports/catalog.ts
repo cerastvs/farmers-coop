@@ -556,6 +556,7 @@ const MACHINES: ReportTypeCatalog = {
       kvs: [
         { id: "machines", label: "Machines", value: (d) => (d.totals?.machines ?? 0) },
         { id: "requests", label: "Requests", value: (d) => (d.totals?.requests ?? 0) },
+        { id: "overdue", label: "Overdue Machines", value: (d) => (d.totals?.overdue ?? 0) },
       ],
     },
     {
@@ -563,6 +564,23 @@ const MACHINES: ReportTypeCatalog = {
       label: "Requests by Status",
       kind: "stat",
       stats: [{ id: "status", label: "Requests by Status", byStatus: (d) => byStatus(d.totals ?? {}, "requestsByStatus") }],
+    },
+    {
+      id: "overdueTable",
+      label: "Overdue Machines",
+      kind: "table",
+      hideWhenEmpty: (d) => ((d.overdueRequests as unknown[]) ?? []).length === 0,
+      table: {
+        rows: (d) => ((d.overdueRequests as unknown[]) ?? []) as Record<string, any>[],
+        columns: [
+          { id: "member", label: "Member", get: (r) => (r.member as Record<string, any>)?.name ?? "", render: (r) => (r.member as Record<string, any>)?.name ?? "—" },
+          { id: "machine", label: "Machine", get: (r) => r.machine ?? "", render: (r) => r.machine ?? "—" },
+          { id: "status", label: "Status", get: (r) => r.status ?? "", render: (r) => humanize(r.status) },
+          { id: "endDate", label: "End Date", get: (r) => dateValue(r.endDate), render: (r) => renderDate(r.endDate) },
+          { id: "days", label: "Days Overdue", get: (r) => Number(r.daysOverdue ?? 0), render: (r) => String(r.daysOverdue ?? 0) },
+        ],
+        groupFields: [],
+      },
     },
     {
       id: "requestsTable",
@@ -617,14 +635,14 @@ const MACHINES: ReportTypeCatalog = {
       },
     },
   ],
-  defaultSections: ["totals", "byStatus", "requestsTable"],
+  defaultSections: ["totals", "byStatus", "overdueTable", "requestsTable"],
   presets: {
-    summary: { id: "summary", label: "Summary", sections: ["totals", "byStatus"] },
-    detailed: { id: "detailed", label: "Detailed", sections: ["totals", "byStatus", "requestsTable"] },
+    summary: { id: "summary", label: "Summary", sections: ["totals", "byStatus", "overdueTable"] },
+    detailed: { id: "detailed", label: "Detailed", sections: ["totals", "byStatus", "overdueTable", "requestsTable"] },
     full: {
       id: "full",
       label: "Full Details",
-      sections: ["totals", "byStatus", "requestsTable", "machineList"],
+      sections: ["totals", "byStatus", "overdueTable", "requestsTable", "machineList"],
     },
   },
 };

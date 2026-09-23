@@ -821,6 +821,7 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
       case "MACHINES": {
         const totals = (data.totals ?? {}) as ReportData;
         const machines = (data.machines ?? []) as ReportData[];
+        const overdueRequests = (data.overdueRequests ?? []) as ReportData[];
         const machineRows = machines.map((m) => [
           cell(m.name),
           cell(m.description),
@@ -835,13 +836,28 @@ function ReportBody({ type, data }: { type: string; data: ReportData }) {
             cell(r.endDate, r.endDate ? new Date(r.endDate as string).toLocaleDateString("en-PH") : "—"),
           ];
         }));
+        const overdueRows = overdueRequests.map((r) => {
+          const u = (r.member as ReportData) ?? {};
+          return [
+            cell(u.name),
+            cell(r.machine),
+            cell(r.endDate, r.endDate ? new Date(r.endDate as string).toLocaleDateString("en-PH") : "—"),
+            cell(r.daysOverdue, `${r.daysOverdue} day${(Number(r.daysOverdue) ?? 0) === 1 ? "" : "s"}`),
+          ];
+        });
         return (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {kvCard("Machines", totals.machines ?? 0, () => showDetail("Machines", ["Machine", "Description"], machineRows))}
               {kvCard("Requests", totals.requests ?? 0, () => showDetail("Machine Requests", ["Machine", "Member", "Status", "Start", "End"], machineReqRows))}
+              {kvCard("Overdue Machines", totals.overdue ?? 0, () => showDetail("Overdue Machines", ["Member", "Machine", "End Date", "Days Overdue"], overdueRows))}
             </div>
             {statCards([{ label: "Requests by Status", byStatus: totals.requestsByStatus as Record<string, number> }])}
+            {overdueRequests.length > 0 && (
+              <SummarySection label={`Overdue Machines (${overdueRequests.length})`}>
+                <Table head={["Member", "Machine", "End Date", "Days Overdue"]} rows={overdueRows} fallback="No overdue machines." />
+              </SummarySection>
+            )}
             <SummarySection label={`Machines (${machines.length})`}>
               {machines.map((m) => {
                 const requests = (m.requests ?? []) as ReportData[];

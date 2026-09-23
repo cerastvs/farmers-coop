@@ -28,6 +28,23 @@ export function isDateOverdue(dueDate: Date, now: Date = new Date()) {
 }
 
 /**
+ * Whether a machine request was overdue and not yet returned as of a given
+ * date. Used by reports so the overdue status only applies on the days the
+ * request was actually overdue (its scheduled end date had passed) and the
+ * machine had not been returned yet.
+ */
+export function isMachineRequestOverdueAsOf(
+  endDate: Date | null | undefined,
+  returnedAt: Date | null | undefined,
+  asOf: Date,
+) {
+  if (!endDate) return false;
+  if (toDayStart(endDate) >= toDayStart(asOf)) return false;
+  if (returnedAt && toDayStart(returnedAt) <= toDayStart(asOf)) return false;
+  return true;
+}
+
+/**
  * Marks a loan as OVERDUE if its due date has passed and it has an
  * outstanding balance. Returns true if it was transitioned.
  */

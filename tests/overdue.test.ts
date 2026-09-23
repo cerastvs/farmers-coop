@@ -6,6 +6,7 @@ import "dotenv/config";
 import {
   daysBetween,
   isDateOverdue,
+  isMachineRequestOverdueAsOf,
   requiredDurationDays,
 } from "../lib/services/overdue";
 
@@ -33,4 +34,36 @@ test("isDateOverdue only flags a fully-passed due date", () => {
   assert.equal(isDateOverdue(new Date(2026, 2, 14, 23, 0), now), true);
   assert.equal(isDateOverdue(new Date(2026, 2, 15, 0, 0), now), false);
   assert.equal(isDateOverdue(new Date(2026, 2, 16, 0, 0), now), false);
+});
+
+test("machine request is overdue only as of days past the end date and unreturned", () => {
+  const asOf = new Date(2026, 8, 15, 12);
+  const endDate = new Date(2026, 8, 12, 9);
+
+  assert.equal(
+    isMachineRequestOverdueAsOf(endDate, null, asOf),
+    true,
+    "past end date and never returned",
+  );
+  assert.equal(
+    isMachineRequestOverdueAsOf(endDate, new Date(2026, 8, 15, 8), asOf),
+    false,
+    "returned earlier on the report day",
+  );
+  assert.equal(
+    isMachineRequestOverdueAsOf(endDate, new Date(2026, 8, 16, 8), asOf),
+    true,
+    "returned after the report day",
+  );
+  assert.equal(
+    isMachineRequestOverdueAsOf(new Date(2026, 8, 15, 8), null, asOf),
+    false,
+    "same-day end date is not overdue",
+  );
+  assert.equal(
+    isMachineRequestOverdueAsOf(new Date(2026, 8, 20), null, asOf),
+    false,
+    "future end date is not overdue",
+  );
+  assert.equal(isMachineRequestOverdueAsOf(null, null, asOf), false);
 });

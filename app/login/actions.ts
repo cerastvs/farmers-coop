@@ -116,7 +116,7 @@ export async function login(prevState: ActionState, formData: FormData) {
 
   if (user.role === "SECRETARY") redirect("/dashboard/secretary");
   if (user.role === "TREASURER") redirect("/dashboard/treasurer");
-  if (user.role === "PRESIDENT") redirect("/admin");
+  if (user.role === "PRESIDENT") redirect("/dashboard/president");
   redirect("/dashboard");
 }
 

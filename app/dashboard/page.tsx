@@ -5,6 +5,8 @@ import {
   getDashboardStats,
   getDashboardUser,
 } from "@/lib/services/dashboard";
+import { officerPanelRoute } from "@/lib/services/panel-access";
+import type { Role } from "@/app/generated/prisma";
 import { DashboardClient } from "./components/DashboardClient";
 
 export default async function DashboardPage() {
@@ -18,6 +20,12 @@ export default async function DashboardPage() {
 
   if (!user) {
     redirect("/login");
+  }
+
+  // Officers never see the member dashboard; send them to their own panel.
+  const panel = officerPanelRoute(user.role as Role);
+  if (panel !== "/dashboard") {
+    redirect(panel);
   }
 
   const pendingApplicant = user.role === "APPLICANT" && user.hasApplied;

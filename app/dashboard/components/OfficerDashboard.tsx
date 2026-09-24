@@ -16,6 +16,8 @@ import type {
 import { logout } from "../../login/actions";
 import { machineActiveOverdueDays, machineRequestOverdueDays, isMachineRequestOverdue, loanOverdueDays, isLoanOverdue, daysBetween } from "../../lib/client-overdue";
 import AdminActionsPanel from "../secretary/AdminActionsPanel";
+import { HarvestSeasonPanel } from "@/app/dashboard/components/HarvestSeasonPanel";
+import type { HarvestSeasonsData } from "@/app/dashboard/components/HarvestSeasonPanel";
 import { Money } from "@/components/Money";
 import {
   FileText,
@@ -259,6 +261,7 @@ const SECTIONS = [
   "announcements",
   "sms",
   "overdue",
+  "harvest",
 ] as const;
 type Section = (typeof SECTIONS)[number];
 type MachineRequestAction =
@@ -339,6 +342,12 @@ const SECTION_META: Record<
     icon: AlertTriangle,
     accent: "border-l-red-400",
     iconBg: "bg-red-100 text-red-600",
+  },
+  harvest: {
+    label: "Harvest Season",
+    icon: Wheat,
+    accent: "border-l-lime-400",
+    iconBg: "bg-lime-100 text-lime-600",
   },
 };
 
@@ -3628,6 +3637,7 @@ const ROLE_META: Record<
       "supplies",
       "announcements",
       "overdue",
+      "harvest",
     ],
     showAdminActions: false,
   },
@@ -3643,6 +3653,7 @@ const ROLE_META: Record<
       "supplies",
       "announcements",
       "sms",
+      "harvest",
     ],
     showAdminActions: false,
   },
@@ -3662,6 +3673,7 @@ export default function OfficerDashboard({
   );
   const [data, setData] = useState<SecretaryData | null>(null);
   const [guarantorPending, setGuarantorPending] = useState(0);
+  const [seasonsData, setSeasonsData] = useState<HarvestSeasonsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -3711,6 +3723,7 @@ export default function OfficerDashboard({
     announcements: false,
     sms: false,
     overdue: false,
+    harvest: false,
   });
 
   const fetchData = useCallback(async () => {
@@ -3725,6 +3738,18 @@ export default function OfficerDashboard({
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const fetchSeasons = useCallback(async () => {
+    if (role !== "PRESIDENT") return;
+    try {
+      const res = await fetch("/api/seasons");
+      if (res.ok) setSeasonsData(await res.json());
+    } catch {
+      console.error("Failed to fetch harvest seasons");
+    }
+  }, [role]);
+
+  useEffect(() => { fetchSeasons(); }, [fetchSeasons]);
 
   useEffect(() => {
     let cancelled = false;
@@ -3899,6 +3924,7 @@ export default function OfficerDashboard({
         announcements: 0,
         sms: 0,
         overdue: 0,
+        harvest: 0,
       };
     }
     const machinePending = data.machines.reduce(
@@ -3926,8 +3952,9 @@ export default function OfficerDashboard({
       announcements: data.posts.filter((p) => !p.published).length,
       sms: 0,
       overdue: 0,
+      harvest: seasonsData && seasonsData.seasons.length === 0 ? 1 : 0,
     };
-  }, [data, guarantorPending]);
+  }, [data, guarantorPending, seasonsData]);
 
   function togglePendingFilter(section: Section) {
     setPendingFilter((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -4269,6 +4296,13 @@ export default function OfficerDashboard({
                 </div>
               )}
 
+                {role === "PRESIDENT" && seasonsData && seasonsData.seasons.length === 0 && (
+                  <button onClick={() => openSection("harvest")} className="w-full rounded-xl border border-amber-200 bg-amber-50 p-5 text-left shadow-sm animate-fadeIn transition hover:bg-amber-100 hover:shadow-md active:scale-[0.99]">
+                    <div className="mb-2 flex items-center gap-2"><Calendar size={16} className="text-amber-700" /><h3 className="text-xs font-semibold uppercase tracking-wider text-amber-800">Upcoming Harvest Season Not Set</h3></div>
+                    <p className="text-sm text-amber-900">No harvest seasons are configured. Set up the planting/harvest calendar and machine capacity ▸ open section</p>
+                  </button>
+                )}
+
                 {role === "SECRETARY" && (
                 <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-fadeIn">
                   <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#5a7267]">Registered Members</h3>
@@ -4499,6 +4533,10 @@ export default function OfficerDashboard({
                   <OverdueSection expanded={true} onToggle={() => {}} role={role} />
                 </div>
               </div>
+            )}
+
+            {activeTab === "harvest" && role === "PRESIDENT" && (
+              <HarvestSeasonPanel data={seasonsData} onReload={fetchSeasons} />
             )}
           </div>
 

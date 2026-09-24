@@ -343,12 +343,46 @@ model Payment {
 }
 
 model Machine {
-  id          String           @id @default(uuid())
-  name        String
-  description String?
-  imageUrl    String?
-  createdAt   DateTime         @default(now())
-  requests    MachineRequest[]
+  id               String                  @id @default(uuid())
+  name             String
+  description      String?
+  imageUrl         String?
+  createdAt        DateTime                @default(now())
+  requests         MachineRequest[]
+  seasonCapacities MachineSeasonCapacity[]
+}
+
+// Recurring (annual) harvest seasons. Only `startMonth`/`startDay` are stored;
+// each season runs from its own start until the start of the next season in the
+// cycle (wrapping the year), so the year is always fully covered with no gaps
+// or overlaps. Editing a season's start automatically shifts the boundary with
+// its neighbors; deleting a season merges its period back into the previous one.
+model Season {
+  id         String                  @id @default(uuid())
+  name       String
+  startMonth Int
+  startDay   Int
+  createdAt  DateTime                @default(now())
+  updatedAt  DateTime                @updatedAt
+  capacities MachineSeasonCapacity[]
+
+  @@index([startMonth, startDay])
+}
+
+// Per-season hectare-day capacity limit for a machine. `maxHectareDays` is
+// shared across all members and null means no limit. Usage is computed live
+// from MachineRequests whose start falls within the season's instance, so
+// booked capacity resets automatically when a new season begins.
+model MachineSeasonCapacity {
+  id             String  @id @default(uuid())
+  seasonId       String
+  machineId      String
+  maxHectareDays Float?
+  season         Season  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  machine        Machine @relation(fields: [machineId], references: [id], onDelete: Cascade)
+
+  @@unique([seasonId, machineId])
+  @@index([machineId])
 }
 
 model MachineRequest {

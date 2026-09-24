@@ -25,6 +25,8 @@ async function main() {
   await prisma.report.deleteMany();
   await prisma.log.deleteMany();
   await prisma.availability.deleteMany();
+  await prisma.machineSeasonCapacity.deleteMany();
+  await prisma.season.deleteMany();
   await prisma.machineRequest.deleteMany();
   await prisma.machine.deleteMany();
   await prisma.supplyTransaction.deleteMany();
@@ -283,6 +285,22 @@ async function main() {
         status: MachineStatus.QUEUED,
       },
     ],
+  });
+
+  const wetSeason = await prisma.season.create({
+    data: { name: "Wet Season", startMonth: 5, startDay: 1 },
+  });
+
+  const drySeason = await prisma.season.create({
+    data: { name: "Dry Season", startMonth: 11, startDay: 1 },
+  });
+
+  const allMachines = await prisma.machine.findMany({ select: { id: true } });
+  await prisma.machineSeasonCapacity.createMany({
+    data: allMachines.flatMap((m) => [
+      { seasonId: wetSeason.id, machineId: m.id, maxHectareDays: null },
+      { seasonId: drySeason.id, machineId: m.id, maxHectareDays: null },
+    ]),
   });
 
   await prisma.availability.createMany({

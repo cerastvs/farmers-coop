@@ -23,9 +23,10 @@ const UpdateSeasonSchema = z
     startMonth: z.number().int().min(1).max(12).optional(),
     startDay: z.number().int().min(1).max(31).optional(),
   })
-  .refine((v) => v.name !== undefined || v.startMonth !== undefined || v.startDay !== undefined, {
-    message: "Nothing to update",
-  });
+  .refine(
+    (v) => v.name !== undefined || v.startMonth !== undefined || v.startDay !== undefined,
+    { message: "Nothing to update" },
+  );
 
 export async function PATCH(
   req: Request,

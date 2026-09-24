@@ -32,6 +32,7 @@ import {
   getLoanInterestRate,
 } from "@/lib/services/loan-interest";
 import { requiredDurationDays } from "@/lib/services/overdue";
+import { getMemberCurrentSeasonCapacity } from "@/lib/services/seasons";
 
 export const LoanRequestSchema = z
   .object({
@@ -301,6 +302,22 @@ export async function submitMachineRequest({
           400,
           `A ${farmSize} ha farm allows at most ${requiredDays} day(s) of machine use (1 day per hectare)`,
         );
+      }
+
+      const seasonCapacity = await getMemberCurrentSeasonCapacity(
+        memberId,
+        new Date(),
+        tx,
+      );
+      if (seasonCapacity) {
+        const bookedInSeason =
+          seasonCapacity.bookedHectareDays + requestedDays;
+        if (bookedInSeason > farmSize) {
+          throw new ApiError(
+            400,
+            `You already have ${seasonCapacity.bookedHectareDays} machine-day(s) booked in the ${seasonCapacity.seasonName}; this request would bring you to ${bookedInSeason} of your ${farmSize} machine-day limit. Cancel an existing request first, then resubmit within your limit.`,
+          );
+        }
       }
 
       const created = await tx.machineRequest.create({

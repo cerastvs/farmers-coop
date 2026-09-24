@@ -20,16 +20,6 @@ export async function POST() {
         tx.season.create({ data: { name: "Dry Season", startMonth: 11, startDay: 1 } }),
       ]);
 
-      const machines = await tx.machine.findMany({ select: { id: true } });
-      if (machines.length > 0) {
-        await tx.machineSeasonCapacity.createMany({
-          data: machines.flatMap((m) => [
-            { seasonId: wet.id, machineId: m.id, maxHectareDays: null },
-            { seasonId: dry.id, machineId: m.id, maxHectareDays: null },
-          ]),
-        });
-      }
-
       await writeAudit(tx, {
         userId: actor.userId,
         userRole: Role.PRESIDENT,

@@ -7,23 +7,30 @@ import {
   Loader2,
   Pencil,
   Plus,
-  Save,
   Trash2,
   Wheat,
   X,
 } from "lucide-react";
 
 export interface HarvestSeasonsData {
-  seasons: { id: string; name: string; startMonth: number; startDay: number }[];
+  seasons: {
+    id: string;
+    name: string;
+    startMonth: number;
+    startDay: number;
+  }[];
   current: { id: string; name: string; start: string; end: string } | null;
   next: { id: string; name: string; start: string; end: string } | null;
-  machines: { id: string; name: string }[];
-  capacities: {
+  members: { id: string; name: string; farmHectares: number }[];
+  capacity: {
     seasonId: string;
-    machineId: string;
-    maxHectareDays: number | null;
+    userId: string;
+    name: string;
+    limitHectareDays: number | null;
+    bookedHectareDays: number;
+    remaining: number | null;
+    utilizationPercent: number | null;
   }[];
-  usage: { machineId: string; seasonId: string; bookedHectareDays: number }[];
   empty: boolean;
 }
 
@@ -113,7 +120,6 @@ export function HarvestSeasonPanel({
   const [notice, setNotice] = useState<Notice>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Record<string, string>>({});
   const [showAdd, setShowAdd] = useState(false);
   const [addName, setAddName] = useState("");
   const [addMonth, setAddMonth] = useState(1);
@@ -135,31 +141,10 @@ export function HarvestSeasonPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, seasons.length]);
 
-  const capacityRows = useMemo(() => {
-    const rows = new Map<string, number | null>();
-    for (const c of data?.capacities ?? []) {
-      if (c.seasonId === selectedSeasonId) rows.set(c.machineId, c.maxHectareDays);
-    }
-    return rows;
-  }, [data, selectedSeasonId]);
-
-  const usageByMachine = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const u of data?.usage ?? []) {
-      if (u.seasonId === selectedSeasonId) map.set(u.machineId, u.bookedHectareDays);
-    }
-    return map;
-  }, [data, selectedSeasonId]);
-
-  useEffect(() => {
-    if (!selectedSeasonId) return;
-    const next: Record<string, string> = {};
-    for (const m of data?.machines ?? []) {
-      const v = capacityRows.get(m.id);
-      next[m.id] = v === null || v === undefined ? "" : String(v);
-    }
-    setDraft(next);
-  }, [data, selectedSeasonId, capacityRows]);
+  const capacityForSelectedSeason = useMemo(
+    () => (data?.capacity ?? []).filter((c) => c.seasonId === selectedSeasonId),
+    [data, selectedSeasonId],
+  );
 
   function flash(kind: "success" | "error", text: string) {
     setNotice({ kind, text });
@@ -240,28 +225,6 @@ export function HarvestSeasonPanel({
       setDeletingId(null);
       setDeleteConfirm(false);
     }
-  }
-
-  async function handleSaveCapacities() {
-    if (!selectedSeasonId || !data) return;
-    const capacityRowsPayload = data.machines.map((m) => {
-      const raw = draft[m.id]?.trim();
-      if (raw === "") return { machineId: m.id, maxHectareDays: null };
-      const num = Number(raw);
-      if (!Number.isFinite(num) || num < 0) return null;
-      return { machineId: m.id, maxHectareDays: num };
-    });
-    if (capacityRowsPayload.some((c) => c === null)) {
-      flash("error", "Enter valid non-negative numbers, or leave blank for no limit");
-      return;
-    }
-    await run("cap", () =>
-      fetch(`/api/seasons/${selectedSeasonId}/capacities`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ capacities: capacityRowsPayload }),
-      }),
-      "Capacity limits saved");
   }
 
   function startEdit(season: HarvestSeasonsData["seasons"][number]) {
@@ -559,21 +522,24 @@ export function HarvestSeasonPanel({
   const selectedBar = selectedIndex >= 0 ? SEASON_BAR_COLORS[selectedIndex % SEASON_BAR_COLORS.length] : "bg-gray-300";
 
   const renderCapacity = () => {
-    if (!data || !data.machines.length || !selectedSeason) return null;
+    if (!data || !selectedSeason) return null;
+    const rows = capacityForSelectedSeason;
+    const overLimitCount = rows.filter((r) => r.limitHectareDays !== null && r.bookedHectareDays > r.limitHectareDays).length;
     return (
       <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="text-sm font-bold text-[#0f2318]">Machine Capacity</h3>
+            <h3 className="text-sm font-bold text-[#0f2318]">Machine Capacity — per member</h3>
             <p className="text-[11px] text-[#5a7267]">
-              Hectare-day limits for{" "}
-              <span className="font-semibold text-[#0f2318]">{selectedSeason.name}</span>, shared across
-              all members and reset automatically when the next season begins.
+              Each member&apos;s limit for{" "}
+              <span className="font-semibold text-[#0f2318]">{selectedSeason.name}</span> equals their
+              farm area (1 hectare = 1 machine-day), shared across all machines. Usage resets each
+              season.
             </p>
           </div>
           <label className="flex items-center gap-1.5 text-[11px] font-semibold text-[#5a7267]">
             <span className={`h-2.5 w-2.5 rounded-full ${selectedBar}`} />
-            Viewing
+            Season
             <select
               value={selectedSeason.id}
               onChange={(e) => setSelectedSeasonId(e.target.value)}
@@ -586,76 +552,79 @@ export function HarvestSeasonPanel({
           </label>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] border-collapse text-left">
-            <thead>
-              <tr className="text-[10px] font-bold uppercase tracking-wider text-[#5a7267]">
-                <th className="py-2 pr-3">Machine</th>
-                <th className="py-2 pr-3">Booked (ha-days)</th>
-                <th className="py-2 pr-3">Capacity limit (ha-days)</th>
-                <th className="py-2">Utilization</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.machines.map((machine) => {
-                const booked = usageByMachine.get(machine.id) ?? 0;
-                const limitRaw = capacityRows.get(machine.id) ?? null;
-                const limitSet = limitRaw !== null && limitRaw !== undefined;
-                const max = limitSet ? limitRaw : null;
-                const pct = max ? Math.min(100, Math.round((booked / max) * 100)) : 0;
-                const over = max !== null && booked > max;
-                return (
-                  <tr key={machine.id} className="border-t border-[#eef3ee]">
-                    <td className="py-2.5 pr-3 text-sm font-medium text-[#0f2318]">{machine.name}</td>
-                    <td className="py-2.5 pr-3">
-                      <span className={`font-mono text-sm font-bold ${over ? "text-red-600" : "text-[#0f2318]"}`}>
-                        {booked.toLocaleString("en-US", { maximumFractionDigits: 1 })}
-                      </span>
-                      {over && <span className="ml-1.5 rounded-full bg-red-50 px-1.5 py-0.5 text-[9px] font-bold text-red-600">over limit</span>}
-                    </td>
-                    <td className="py-2.5 pr-3">
-                      <input
-                        key={`${selectedSeason.id}:${machine.id}`}
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={draft[machine.id] ?? ""}
-                        onChange={(e) => setDraft((prev) => ({ ...prev, [machine.id]: e.target.value }))}
-                        placeholder="Unlimited"
-                        className="w-28 rounded-md border border-[#dce5d9] px-2.5 py-1.5 text-xs text-[#0f2318] outline-none focus:border-[#1b5e3b]"
-                      />
-                    </td>
-                    <td className="py-2.5">
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-24 overflow-hidden rounded-full bg-[#eef3ee]">
-                          <div className={`h-full rounded-full ${over ? "bg-red-500" : "bg-[#1b5e3b]"}`} style={{ width: `${max ? Math.max(2, Math.min(100, pct)) : 3}%` }} />
-                        </div>
-                        <span className="text-[10px] font-semibold text-[#5a7267]">
-                          {max ? `${pct}%` : "no limit"}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="mt-4 flex items-center justify-between gap-3">
-          <p className="max-w-md text-[10px] text-[#718176]">
-            Booked hectare-days are computed live from active borrow requests (approved, in use, or
-            overdue) whose start falls within this season. Clearing the limit field removes the cap.
+        {rows.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-[#dce5d9] bg-[#fafdf9] px-4 py-5 text-center text-xs text-[#5a7267]">
+            No members to track yet.
           </p>
-          <button
-            onClick={handleSaveCapacities}
-            disabled={busy === "cap"}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#1b5e3b] px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#144b2e] active:scale-[0.99] disabled:opacity-60"
-          >
-            {busy === "cap" ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-            Save capacity
-          </button>
-        </div>
+        ) : (
+          <>
+            <div className="overflow-hidden rounded-lg border border-[#e2ebe6]">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-[#e2ebe6] bg-[#f4f9f4] text-[10px] uppercase tracking-wider text-[#5a7267]">
+                    <th className="px-3 py-2 font-bold">Member</th>
+                    <th className="px-3 py-2 font-bold">Farm area (ha)</th>
+                    <th className="px-3 py-2 font-bold text-right">Booked</th>
+                    <th className="px-3 py-2 font-bold text-right">Remaining</th>
+                    <th className="px-3 py-2 font-bold w-40">Utilization</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#eef3ee] bg-white">
+                  {rows.map((row) => {
+                    const over = row.limitHectareDays !== null && row.bookedHectareDays > row.limitHectareDays;
+                    return (
+                      <tr key={row.userId} className={over ? "bg-red-50/50" : ""}>
+                        <td className="px-3 py-2 font-semibold text-[#0f2318]">{row.name}</td>
+                        <td className="px-3 py-2 font-mono text-[#5a7267]">
+                          {row.limitHectareDays === null
+                            ? <span className="italic">no farm record</span>
+                            : `${row.limitHectareDays} ha-days`}
+                        </td>
+                        <td className={`px-3 py-2 text-right font-mono font-bold ${over ? "text-red-600" : "text-[#0f2318]"}`}>
+                          {row.bookedHectareDays.toLocaleString("en-US", { maximumFractionDigits: 1 })}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono font-bold text-[#0f2318]">
+                          {row.remaining === null ? "—" : row.remaining.toLocaleString("en-US", { maximumFractionDigits: 1 })}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#eef3ee]">
+                              <div
+                                className={`h-full rounded-full ${over ? "bg-red-500" : "bg-[#1b5e3b]"}`}
+                                style={{ width: `${row.utilizationPercent === null ? 3 : Math.max(2, Math.min(100, row.utilizationPercent))}%` }}
+                              />
+                            </div>
+                            <span className="w-8 shrink-0 text-right text-[10px] font-bold text-[#5a7267]">
+                              {row.utilizationPercent === null ? "—" : `${row.utilizationPercent}%`}
+                            </span>
+                          </div>
+                          {over && (
+                            <span className="mt-1 inline-block rounded-full bg-red-50 px-1.5 py-0.5 text-[9px] font-bold text-red-600">
+                              over limit by {Math.round(row.bookedHectareDays - (row.limitHectareDays ?? 0))} ha
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="max-w-lg text-[10px] text-[#718176]">
+                Booked = sum of machine-days of active borrow requests (approved, in use, or
+                overdue) whose start falls in this season. A member&apos;s limit comes from their farm
+                area on file — no separate limits are stored.
+              </p>
+              {overLimitCount > 0 && (
+                <span className="rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-bold text-red-600">
+                  {overLimitCount} member{overLimitCount > 1 ? "s" : ""} over their limit
+                </span>
+              )}
+            </div>
+          </>
+        )}
       </div>
     );
   };

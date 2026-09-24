@@ -1,6 +1,5 @@
-import { MachineStatus, Prisma } from "@/app/generated/prisma";
+import { MachineStatus, Prisma, Role } from "@/app/generated/prisma";
 import client from "@/lib/client";
-import { requiredDurationDays } from "@/lib/services/overdue";
 
 export interface SeasonLike {
   id: string;
@@ -169,38 +168,44 @@ export function formatSeasonDate(date: Date | null | undefined) {
 }
 
 /**
- * Hectare-days a machine request occupies is its farm size multiplied by the
- * number of days the machine is used. Falls back to the coop's "1 ha = 1 day"
- * duration rule when no explicit duration was recorded.
+ * Machine-days a request occupies. The coop rule is 1 hectare = 1 machine-day,
+ * so a booking for N days consumes N machine-days from the member's
+ * per-season pool (partial spans round UP, so 2.1 days books 3). Older
+ * requests without a recorded duration fall back to the farm area, rounded up.
+ * This is the single source of truth for how bookings deduct from capacity.
  */
 export function hectareDayContribution(
   farmSize: number | null | undefined,
   durationDays: number | null | undefined,
 ) {
-  if (!farmSize || farmSize <= 0) return 0;
-  const days = durationDays && durationDays > 0 ? durationDays : requiredDurationDays(farmSize);
-  return farmSize * days;
+  const span = durationDays ?? farmSize;
+  if (!span || span <= 0) return 0;
+  return Math.ceil(span);
 }
 
 export const CAPACITY_COUNTING_STATUSES = [
+  MachineStatus.QUEUED,
   MachineStatus.APPROVED,
   MachineStatus.IN_USE,
+  MachineStatus.RETURN_PENDING,
   MachineStatus.OVERDUE,
 ];
 
 export interface SeasonCapacityUsage {
-  machineId: string;
+  userId: string;
   seasonId: string;
   bookedHectareDays: number;
 }
 
 /**
- * Booked hectare-days per machine for the relevant instance of each season,
- * computed live from machine requests so limits reset when a season changes.
+ * Booked machine-days per member for the relevant instance of each season,
+ * summed across ALL machines (a member draws from one season pool). Computed
+ * live from machine requests so usage resets when a season changes.
  */
 export async function computeCapacityUsage(
   seasons: SeasonLike[],
   now: Date = new Date(),
+  db: Prisma.TransactionClient | PrismaClientUnion = client,
 ): Promise<SeasonCapacityUsage[]> {
   const sorted = sortSeasons(seasons);
   if (sorted.length === 0) return [];
@@ -220,7 +225,7 @@ export async function computeCapacityUsage(
     earliest,
   );
 
-  const requests = await client.machineRequest.findMany({
+  const requests = await db.machineRequest.findMany({
     where: {
       status: { in: CAPACITY_COUNTING_STATUSES },
       OR: [
@@ -230,7 +235,7 @@ export async function computeCapacityUsage(
       ],
     },
     select: {
-      machineId: true,
+      userId: true,
       startDate: true,
       startedAt: true,
       requestDate: true,
@@ -255,25 +260,89 @@ export async function computeCapacityUsage(
       if (!inst) continue;
       if (start >= inst.start && start < inst.end) {
         const map = usageBySeason.get(season.id)!;
-        map.set(req.machineId, (map.get(req.machineId) ?? 0) + contribution);
+        map.set(req.userId, (map.get(req.userId) ?? 0) + contribution);
       }
     }
   }
 
   const result: SeasonCapacityUsage[] = [];
   for (const season of sorted) {
-    for (const [machineId, booked] of usageBySeason.get(season.id)!) {
-      result.push({ machineId, seasonId: season.id, bookedHectareDays: booked });
+    for (const [userId, booked] of usageBySeason.get(season.id)!) {
+      result.push({ userId, seasonId: season.id, bookedHectareDays: booked });
     }
   }
   return result;
+}
+
+/**
+ * A member's booked machine-days in the season currently in progress, plus the
+ * capacity state of that season. Returns null when no season is running.
+ */
+export async function getMemberCurrentSeasonCapacity(
+  memberId: string,
+  now: Date = new Date(),
+  db: Prisma.TransactionClient | PrismaClientUnion = client,
+) {
+  const rows = await db.season.findMany({
+    orderBy: [{ startMonth: "asc" }, { startDay: "asc" }],
+  });
+  if (rows.length === 0) return null;
+  const seasons: SeasonLike[] = rows.map(({ id, name, startMonth, startDay }) => ({
+    id,
+    name,
+    startMonth,
+    startDay,
+  }));
+
+  const current = currentInstance(seasons, now);
+  if (!current) return null;
+
+  const usage = await computeCapacityUsage(seasons, now, db);
+  const booked =
+    usage.find((u) => u.seasonId === current.season.id && u.userId === memberId)
+      ?.bookedHectareDays ?? 0;
+
+  return {
+    seasonId: current.season.id,
+    seasonName: current.season.name,
+    bookedHectareDays: booked,
+  };
+}
+
+export interface MemberCapacity {
+  id: string;
+  name: string;
+  farmHectares: number;
+}
+
+/**
+ * Active members with their farm area. The member's per-season capacity limit
+ * equals their farm area (1 hectare = 1 machine-day), shared across all
+ * machines, resetting each season. Derived live — no per-member limit rows.
+ */
+export async function getCapacityMembers(
+  tx: Prisma.TransactionClient | PrismaClientUnion = client,
+): Promise<MemberCapacity[]> {
+  const users = await tx.user.findMany({
+    where: { role: Role.MEMBER, active: true },
+    orderBy: { name: "asc" },
+    select: {
+      id: true,
+      name: true,
+      applications: { select: { farmSize: true }, take: 1 },
+    },
+  });
+  return users.map((u) => ({
+    id: u.id,
+    name: u.name ?? u.id,
+    farmHectares: u.applications[0]?.farmSize ?? 0,
+  }));
 }
 
 export interface SeasonOverview {
   seasons: SeasonLike[];
   current: SeasonInstance | null;
   next: SeasonInstance | null;
-  usage: SeasonCapacityUsage[];
 }
 
 export async function getSeasonOverview(
@@ -294,7 +363,6 @@ export async function getSeasonOverview(
     seasons: sortSeasons(seasons),
     current: currentInstance(seasons, now),
     next: nextInstance(seasons, now),
-    usage: await computeCapacityUsage(seasons, now),
   };
 }
 

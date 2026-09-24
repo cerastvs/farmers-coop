@@ -128,10 +128,14 @@ test("season start dates reject invalid month/day pairs", () => {
   assert.equal(isValidMonthDay(12, 31), true);
 });
 
-test("hectare-days usage is farm size times the booked days", () => {
-  assert.equal(hectareDayContribution(3, 4), 12);
-  assert.equal(hectareDayContribution(2.5, 3), 7.5);
-  assert.equal(hectareDayContribution(3, null), 9); // 3 ha => 3 days by the 1 ha/day rule
-  assert.equal(hectareDayContribution(0, 5), 0);
-  assert.equal(hectareDayContribution(null, 5), 0);
+test("machine-days consumed = the days booked, rounded up (1 day = 1 ha of farm budget)", () => {
+  assert.equal(hectareDayContribution(5, 3), 3);
+  assert.equal(hectareDayContribution(5, 3), 3);
+  assert.equal(hectareDayContribution(5, 2.1), 3);
+  assert.equal(hectareDayContribution(5, 5), 5);
+  assert.equal(hectareDayContribution(5, 0), 0);
+  assert.equal(hectareDayContribution(null, null), 0);
+  // Legacy requests without a recorded duration fall back to the farm area (rounded up).
+  assert.equal(hectareDayContribution(2.1, null), 3);
+  assert.equal(hectareDayContribution(2, null), 2);
 });

@@ -343,13 +343,12 @@ model Payment {
 }
 
 model Machine {
-  id               String                  @id @default(uuid())
+  id               String           @id @default(uuid())
   name             String
   description      String?
   imageUrl         String?
-  createdAt        DateTime                @default(now())
+  createdAt        DateTime         @default(now())
   requests         MachineRequest[]
-  seasonCapacities MachineSeasonCapacity[]
 }
 
 // Recurring (annual) harvest seasons. Only `startMonth`/`startDay` are stored;
@@ -357,32 +356,20 @@ model Machine {
 // cycle (wrapping the year), so the year is always fully covered with no gaps
 // or overlaps. Editing a season's start automatically shifts the boundary with
 // its neighbors; deleting a season merges its period back into the previous one.
+//
+// Capacity is PER MEMBER and derived live: each member's limit equals their
+// farm area (Application.farmSize), where 1 hectare = 1 machine-day. Any
+// machine they book in a season deducts from their own pool. Usage resets each
+// time a new season begins. No per-member capacity rows are stored.
 model Season {
-  id         String                  @id @default(uuid())
+  id         String  @id @default(uuid())
   name       String
   startMonth Int
   startDay   Int
-  createdAt  DateTime                @default(now())
-  updatedAt  DateTime                @updatedAt
-  capacities MachineSeasonCapacity[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([startMonth, startDay])
-}
-
-// Per-season hectare-day capacity limit for a machine. `maxHectareDays` is
-// shared across all members and null means no limit. Usage is computed live
-// from MachineRequests whose start falls within the season's instance, so
-// booked capacity resets automatically when a new season begins.
-model MachineSeasonCapacity {
-  id             String  @id @default(uuid())
-  seasonId       String
-  machineId      String
-  maxHectareDays Float?
-  season         Season  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  machine        Machine @relation(fields: [machineId], references: [id], onDelete: Cascade)
-
-  @@unique([seasonId, machineId])
-  @@index([machineId])
 }
 
 model MachineRequest {

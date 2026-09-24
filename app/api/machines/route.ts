@@ -4,6 +4,7 @@ import { apiErrorResponse, requireUser } from "@/lib/api";
 import { MEMBER_ROLES } from "@/lib/permissions";
 import { Role, MachineStatus } from "@/app/generated/prisma";
 import { writeAudit } from "@/lib/activity";
+import { getMemberCurrentSeasonCapacity } from "@/lib/services/seasons";
 
 const ACTIVE_STATUSES = [
   MachineStatus.QUEUED,
@@ -102,6 +103,7 @@ export async function GET() {
       machines: result,
       farmSize,
       allowedDurationDays,
+      seasonCapacity: await getMemberCurrentSeasonCapacity(userId),
     });
   } catch (error) {
     return apiErrorResponse(error, "Failed to fetch machines");

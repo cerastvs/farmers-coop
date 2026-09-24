@@ -34,6 +34,12 @@ interface Machine {
   bookedDates: BookedDate[];
 }
 
+interface SeasonCapacity {
+  seasonId: string;
+  seasonName: string;
+  bookedHectareDays: number;
+}
+
 export default function RentMachinePage() {
   useMarkAlertSeen("machineAlerts");
   const [machines, setMachines] = useState<Machine[]>([]);
@@ -54,6 +60,7 @@ export default function RentMachinePage() {
   const [imageModal, setImageModal] = useState<{ src: string; alt: string } | null>(null);
   const [farmSize, setFarmSize] = useState<number>(1);
   const [allowedDurationDays, setAllowedDurationDays] = useState<number>(1);
+  const [seasonCapacity, setSeasonCapacity] = useState<SeasonCapacity | null>(null);
 
   useEffect(() => {
     fetchMachines();
@@ -68,6 +75,7 @@ export default function RentMachinePage() {
         if (typeof data.farmSize === "number") setFarmSize(data.farmSize);
         if (typeof data.allowedDurationDays === "number")
           setAllowedDurationDays(data.allowedDurationDays);
+        setSeasonCapacity(data.seasonCapacity ?? null);
       }
     } catch (error) {
       console.error("Failed to fetch machines:", error);
@@ -85,6 +93,13 @@ export default function RentMachinePage() {
 
   const exceedsAllowedDuration =
     selectedDurationDays() !== null && selectedDurationDays()! > allowedDurationDays;
+
+  const bookedInSeason = seasonCapacity?.bookedHectareDays ?? 0;
+  const remainingInSeason = Math.max(0, farmSize - bookedInSeason);
+  const prospectiveDays = (selectedDurationDays() ?? 0) + bookedInSeason;
+  const capacityActive = seasonCapacity !== null;
+  const exceedsSeasonCapacity =
+    capacityActive && farmSize > 0 && prospectiveDays > farmSize;
 
   function openBorrowForm(machineId: string) {
     setFormMachineId(machineId);
@@ -115,6 +130,14 @@ export default function RentMachinePage() {
       setMessage({
         type: "error",
         text: `Your ${farmSize} ha farm allows at most ${allowedDurationDays} day(s) of machine use (1 day per hectare).`,
+      });
+      return;
+    }
+
+    if (exceedsSeasonCapacity) {
+      setMessage({
+        type: "error",
+        text: `This would bring you to ${prospectiveDays} of your ${farmSize} machine-day season limit. Cancel one of your current requests first, then resubmit within your limit.`,
       });
       return;
     }
@@ -271,6 +294,31 @@ export default function RentMachinePage() {
           </div>
         )}
 
+        {seasonCapacity && (
+          <div
+            className={`rounded-xl border px-4 py-3 text-sm font-medium ${
+              bookedInSeason >= farmSize
+                ? "bg-red-50 text-red-700 border-red-200"
+                : "bg-emerald-50 text-emerald-800 border-emerald-200"
+            }`}
+          >
+            <span className="font-bold">{seasonCapacity.seasonName}:</span> you have{" "}
+            <span className="font-bold">
+              {bookedInSeason} of {farmSize} machine-day
+              {farmSize !== 1 ? "s" : ""}
+            </span>{" "}
+            booked this season
+            {bookedInSeason < farmSize && (
+              <> — <span className="font-bold">{remainingInSeason}</span> remain</>
+            )}
+            {bookedInSeason >= farmSize && (
+              <span className="block mt-0.5 text-xs">
+                You&apos;ve reached your limit. Cancel one of your current requests to free capacity.
+              </span>
+            )}
+          </div>
+        )}
+
         <section>
           <h2 className="mb-3 text-base font-extrabold text-[#173a2b]">
             Machines
@@ -417,6 +465,27 @@ export default function RentMachinePage() {
                           </p>
                         )}
 
+                        {capacityActive && selectedDurationDays() !== null && !exceedsAllowedDuration && (
+                          <p className={`text-xs font-semibold ${exceedsSeasonCapacity ? "text-red-600" : "text-[#39733e]"}`}>
+                            {exceedsSeasonCapacity ? (
+                              <>
+                                This request would bring you to{" "}
+                                <span className="font-bold">{prospectiveDays}</span> of your{" "}
+                                <span className="font-bold">{farmSize}</span> machine-day limit for {seasonCapacity!.seasonName}{" "}
+                                (you already have {bookedInSeason} booked) — it would exceed your limit. Cancel one of your
+                                current requests below, then resubmit within your limit.
+                              </>
+                            ) : (
+                              <>
+                                With this request you&apos;ll have{" "}
+                                <span className="font-bold">{prospectiveDays}</span> of your{" "}
+                                <span className="font-bold">{farmSize}</span> machine-day limit booked for{" "}
+                                {seasonCapacity!.seasonName} (you already have {bookedInSeason} booked).
+                              </>
+                            )}
+                          </p>
+                        )}
+
                         <div className="flex justify-end gap-2">
                           <button
                             onClick={closeBorrowForm}
@@ -426,7 +495,7 @@ export default function RentMachinePage() {
                           </button>
                           <button
                             onClick={() => handleBorrow(machine.id)}
-                            disabled={borrowing === machine.id || !startDate || !endDate || hasDateConflict || exceedsAllowedDuration}
+                            disabled={borrowing === machine.id || !startDate || !endDate || hasDateConflict || exceedsAllowedDuration || exceedsSeasonCapacity}
                             className={`rounded-xl px-5 py-2 text-sm font-bold transition-colors ${
                               borrowing === machine.id || !startDate || !endDate
                                 ? "bg-gray-200 text-gray-400 cursor-not-allowed"
@@ -434,7 +503,9 @@ export default function RentMachinePage() {
                                   ? "bg-red-100 text-red-600 border border-red-300 cursor-not-allowed"
                                   : exceedsAllowedDuration
                                     ? "bg-red-100 text-red-600 border border-red-300 cursor-not-allowed"
-                                    : "bg-[#174b36] text-white hover:bg-[#1a5c42]"
+                                    : exceedsSeasonCapacity
+                                      ? "bg-red-100 text-red-600 border border-red-300 cursor-not-allowed"
+                                      : "bg-[#174b36] text-white hover:bg-[#1a5c42]"
                             }`}
                           >
                             {borrowing === machine.id
@@ -443,7 +514,9 @@ export default function RentMachinePage() {
                                 ? "Dates conflict with existing booking"
                                 : exceedsAllowedDuration
                                   ? "Exceeds allowed duration"
-                                  : "Submit Request"}
+                                  : exceedsSeasonCapacity
+                                    ? "Exceeds your season limit"
+                                    : "Submit Request"}
                           </button>
                         </div>
                       </div>

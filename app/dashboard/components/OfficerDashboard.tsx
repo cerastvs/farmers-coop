@@ -4269,6 +4269,41 @@ export default function OfficerDashboard({
                 </div>
               )}
 
+                {role === "SECRETARY" && (
+                <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-fadeIn">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#5a7267]">Registered Members</h3>
+                  <p className="text-sm text-[#5a7267]">{stats?.totalMembers ?? data.members.length} members · {data.members.filter((m) => m.active).length} active</p>
+                  <div className="mt-3 space-y-2">
+                    {data.members.slice().sort((a, b) => new Date(b.joined).getTime() - new Date(a.joined).getTime()).slice(0, 3).map((m) => (
+                      <button key={m.id} onClick={() => openSection("members")} className="flex w-full items-center justify-between rounded-lg border border-[#e2ebe6] bg-[#fafdf9] px-3.5 py-2.5 text-left transition hover:border-purple-300 hover:bg-purple-50/30 active:scale-[0.99]">
+                        <div className="min-w-0 flex-1"><p className="text-sm font-medium text-[#0f2318] truncate">{m.name}</p><p className="text-[11px] text-[#5a7267]">@{m.username} · joined {new Date(m.joined).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p></div>
+                        <span className="ml-2 shrink-0 rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700 ring-1 ring-purple-200">View</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+                {role === "SECRETARY" && (
+                <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-fadeIn">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#5a7267]">Recent Reports</h3>
+                  {data.reports.length === 0 ? (
+                    <button onClick={() => openSection("reports")} className="w-full rounded-lg border border-dashed border-[#dce5d9] bg-[#fafdf9] px-3.5 py-4 text-center text-xs text-[#5a7267] transition hover:border-[#1b5e3b] hover:text-[#1b5e3b]">
+                      No reports yet — generate your first report
+                    </button>
+                  ) : (
+                    <div className="space-y-2">
+                      {data.reports.slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 4).map((r) => (
+                        <button key={r.id} onClick={() => openSection("reports")} className="flex w-full items-center justify-between rounded-lg border border-[#e2ebe6] bg-[#fafdf9] px-3.5 py-2.5 text-left transition hover:border-emerald-300 hover:bg-emerald-50/30 active:scale-[0.99]">
+                          <div className="min-w-0 flex-1"><p className="text-sm font-medium text-[#0f2318] truncate">{r.title}</p><p className="text-[11px] text-[#5a7267]">{r.type} · {new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p></div>
+                          {r.generatedByName ? <span className="ml-2 shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200">{r.generatedByName}</span> : null}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
                 {visibleSections.includes("payments") && (
                 <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm animate-fadeIn">
                   <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#5a7267]">Pending Payments</h3>

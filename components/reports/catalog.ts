@@ -812,6 +812,34 @@ const SUMMARY: ReportTypeCatalog = {
       },
     },
     {
+      id: "pendingTable",
+      label: "Pending Payments",
+      kind: "table",
+      hideWhenEmpty: (d) =>
+        (((d.transactions as unknown[]) ?? []) as Record<string, any>[]).every(
+          (transaction) => transaction.status !== "PENDING",
+        ),
+      table: {
+        rows: (d) =>
+          (((d.transactions as unknown[]) ?? []) as Record<string, any>[]).filter(
+            (transaction) => transaction.status === "PENDING",
+          ),
+        columns: [
+          { id: "name", label: "Member", get: (r) => nameOf(r) ?? "", render: (r) => nameOf(r) },
+          { id: "type", label: "Type", get: (r) => r.type ?? "", render: (r) => paymentTypeLabel(r) },
+          { id: "method", label: "Method", get: (r) => r.paymentMethod ?? "", render: (r) => humanize(r.paymentMethod) },
+          { id: "amount", label: "Amount", get: (r) => moneyValue(r.amount), render: (r) => money(r.amount), money: true },
+          { id: "reference", label: "Reference", get: (r) => r.referenceNo ?? "", render: (r) => r.referenceNo || "—" },
+          { id: "date", label: "Date", get: (r) => dateValue(r.createdAt), render: (r) => renderDate(r.createdAt) },
+        ],
+        groupFields: [
+          { key: "method", label: "Method", get: (r) => r.paymentMethod ?? null },
+          { key: "type", label: "Type", get: (r) => r.type ?? null },
+        ],
+        totalColumns: ["amount"],
+      },
+    },
+    {
       id: "loansTable",
       label: "Loan Records",
       kind: "table",
@@ -880,23 +908,24 @@ const SUMMARY: ReportTypeCatalog = {
     "audit",
     "stats",
     "units",
+    "pendingTable",
     "transactions",
   ],
   presets: {
     summary: {
       id: "summary",
       label: "Summary",
-      sections: ["members", "loans", "payments", "supplies", "machines", "audit", "stats", "units"],
+      sections: ["members", "loans", "payments", "supplies", "machines", "audit", "stats", "units", "pendingTable"],
     },
     detailed: {
       id: "detailed",
       label: "Detailed",
-      sections: ["members", "loans", "payments", "supplies", "machines", "audit", "stats", "units", "transactions"],
+      sections: ["members", "loans", "payments", "supplies", "machines", "audit", "stats", "units", "transactions", "pendingTable"],
     },
     full: {
       id: "full",
       label: "Full Details",
-      sections: ["members", "loans", "payments", "supplies", "machines", "audit", "stats", "units", "transactions", "loansTable", "paymentsTable"],
+      sections: ["members", "loans", "payments", "supplies", "machines", "audit", "stats", "units", "transactions", "pendingTable", "loansTable", "paymentsTable"],
     },
   },
 };

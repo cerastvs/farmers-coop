@@ -12,7 +12,10 @@ import {
 } from "@/app/generated/prisma";
 import { ApiError } from "@/lib/errors";
 import { manualCreateData } from "@/lib/services/entry-context";
-import { generateReceiptNo } from "@/lib/services/loan-payments";
+import {
+  generateReceiptNo,
+  nextReceiptOrdinal,
+} from "@/lib/services/loan-payments";
 import { openSupplyLoan } from "@/lib/services/supply-loans";
 
 type SupplyRequestToComplete = SupplyTransaction & {
@@ -22,32 +25,86 @@ type SupplyRequestToComplete = SupplyTransaction & {
 type Actor = { userId: string; userRole: Role };
 
 /**
- * Finalizes an approved supply request once it is picked up: verifies that
- * inventory is sufficient, decrements stock, and — for loan-type requests —
- * opens the repayable supply-loan account. Purchase-type requests record the
- * collected payment as a verified cash transaction. Must run inside the same
- * transaction as the status transition to COMPLETED.
+ * Decrement on-hand stock, failing if the requested quantity is not available.
+ * Uses a conditional UPDATE so two concurrent completions cannot both observe
+ * the same stock level and drive it negative.
+ */
+async function decrementStock(
+  tx: Prisma.TransactionClient,
+  supplyId: string,
+  quantity: number,
+  message: string,
+) {
+  const inventory = await tx.supply.updateMany({
+    where: { id: supplyId, quantity: { gte: quantity } },
+    data: { quantity: { decrement: quantity } },
+  });
+  if (inventory.count !== 1) {
+    throw new ApiError(409, message);
+  }
+}
+
+/**
+ * On approval, take the stock out of on-hand so the units are genuinely
+ * committed to this member and cannot be promised to a second approved request.
+ *
+ * Previously stock was only decremented at pickup, so pending and approved
+ * requests held no claim on inventory: two approved requests could exceed
+ * available stock and the second would fail at the last step, after the member
+ * had been told the goods were theirs. Reserving at approval rejects the
+ * over-commitment while it is still cheap to resolve. The remaining stock
+ * (already on hand, not yet dispatched) is what members see, so the displayed
+ * figure now reflects what is genuinely available to promise.
+ *
+ * The atomic `gte` guard means a rejection racing an approval can never drive
+ * stock negative — the second operation simply fails and its transaction rolls
+ * back.
+ */
+export async function reserveSupplyRequestStock(
+  tx: Prisma.TransactionClient,
+  request: SupplyRequestToComplete,
+) {
+  await decrementStock(
+    tx,
+    request.supplyId,
+    request.quantity,
+    "Insufficient inventory to approve this request",
+  );
+}
+
+/**
+ * Return reserved stock to on-hand when an approved request is rejected before
+ * pickup, or cancelled.
+ */
+export async function releaseSupplyRequestStock(
+  tx: Prisma.TransactionClient,
+  request: SupplyRequestToComplete,
+) {
+  await tx.supply.update({
+    where: { id: request.supplyId },
+    data: { quantity: { increment: request.quantity } },
+  });
+}
+
+/**
+ * Finalizes an approved supply request once it is picked up. Stock was already
+ * deducted at approval, so this no longer decrements — it verifies the units are
+ * still accounted for, and — for loan-type requests — opens the repayable
+ * supply-loan account. Purchase-type requests record the collected payment as a
+ * verified cash transaction. Must run inside the same transaction as the status
+ * transition to COMPLETED.
  */
 export async function completeSupplyRequest(
   tx: Prisma.TransactionClient,
   request: SupplyRequestToComplete,
   actor: Actor,
 ) {
-  const inventory = await tx.supply.updateMany({
-    where: {
-      id: request.supplyId,
-      quantity: { gte: request.quantity },
-    },
-    data: { quantity: { decrement: request.quantity } },
-  });
-  if (inventory.count !== 1) {
-    throw new ApiError(
-      409,
-      "Insufficient inventory to complete request",
-    );
-  }
-
   if (request.type === SupplyTransactionType.PURCHASE) {
+    // `request.totalPrice` is the price frozen when the member submitted the
+    // request, not the product's current price. The member agreed to that
+    // figure, so the amount collected at pickup must be the one they were
+    // quoted. Recomputing from `request.supply.price` here would let a price
+    // edit between request and pickup silently change what the member owes.
     await tx.payment.create({
       data: {
         userId: request.userId,
@@ -59,7 +116,8 @@ export async function completeSupplyRequest(
         verifiedAt: new Date(),
         paidAt: new Date(),
         receiptNo: generateReceiptNo(
-          request.supplyId + request.userId + String(request.totalPrice),
+          request.id,
+          await nextReceiptOrdinal(tx),
         ),
         ...manualCreateData(actor.userId, actor.userRole, {
           entryType: EntryType.MANUAL,

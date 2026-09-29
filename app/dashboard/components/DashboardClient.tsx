@@ -81,7 +81,11 @@ export function DashboardClient({
 
   const summaryCards = [
     {
-      label: "Active Loans",
+      // Counts ACTIVE and OVERDUE loans — every loan still carrying a balance —
+      // so the label says "Outstanding" rather than "Active", which would be
+      // read as "not overdue" and double-count loans already flagged as overdue
+      // on the same card row.
+      label: "Outstanding Loans",
       value: stats?.activeLoansCount.toString() || "0",
       icon: <IconLoan />,
       iconBg: "bg-green-100",
@@ -103,7 +107,10 @@ export function DashboardClient({
       largeValue: true,
     },
     {
-      label: "Next Payment Due",
+      // The loan model has no installment schedule: a loan has a single full
+      // payoff date. Calling it "Next Payment Due" implies instalments the
+      // system does not compute, so the label states what the date actually is.
+      label: "Loan Payoff Due",
       value: stats?.nextPaymentDue
         ? new Date(stats.nextPaymentDue)
             .toLocaleDateString("en-US", {

@@ -1,4 +1,5 @@
 import type { Prisma } from "@/app/generated/prisma";
+import { zonedTimeToDate } from "@/lib/business-time";
 
 export type ReportDateFilters = {
   from?: string;
@@ -7,6 +8,18 @@ export type ReportDateFilters = {
 
 const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
+/**
+ * Resolves a report date boundary to an absolute instant.
+ *
+ * Date-only values (`YYYY-MM-DD`, what the report builder submits) are
+ * interpreted as Philippine Time calendar days, per the business-timezone
+ * contract in lib/business-time.ts — NOT in the server's local zone. Building
+ * the boundary with `new Date(y, m, d)` made the result depend on how the host
+ * was configured, shifting a UTC deployment by 8 hours.
+ *
+ * Values that carry an explicit offset or `Z` are already absolute and are used
+ * as given.
+ */
 export function reportDateBoundary(
   value: string | undefined,
   boundary: "start" | "end",
@@ -17,8 +30,16 @@ export function reportDateBoundary(
   if (dateOnly) {
     const [, year, month, day] = dateOnly;
     return boundary === "start"
-      ? new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0)
-      : new Date(Number(year), Number(month) - 1, Number(day), 23, 59, 59, 999);
+      ? zonedTimeToDate(Number(year), Number(month), Number(day))
+      : zonedTimeToDate(
+          Number(year),
+          Number(month),
+          Number(day),
+          23,
+          59,
+          59,
+          999,
+        );
   }
 
   const date = new Date(value);

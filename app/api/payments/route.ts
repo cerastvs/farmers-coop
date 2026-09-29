@@ -79,6 +79,16 @@ export async function POST(req: NextRequest) {
   }
 }
 
+/**
+ * Loan states that may still be settled. Kept in step with the statuses that
+ * officer verification and manual payment recording accept, so a member can
+ * always pay any loan an officer could have recorded by hand.
+ */
+const PAYABLE_LOAN_STATUSES: LoanStatus[] = [
+  LoanStatus.ACTIVE,
+  LoanStatus.OVERDUE,
+];
+
 type LoanForPayment = {
   status: LoanStatus;
   amount: Prisma.Decimal;
@@ -90,8 +100,15 @@ function assertPaymentFitsLoan(
   amount: number,
 ): asserts loan is NonNullable<LoanForPayment> {
   if (!loan) throw new ApiError(404, "Loan not found");
-  if (loan.status !== LoanStatus.ACTIVE) {
-    throw new ApiError(409, "Only active loans can receive payments");
+  // Overdue loans accept online payments on purpose: repayment is how a
+  // delinquent member cures the default, so the path most needed is the one
+  // that must not be blocked. This mirrors the statuses that officer
+  // verification and manual recording already accept.
+  if (!PAYABLE_LOAN_STATUSES.includes(loan.status)) {
+    throw new ApiError(
+      409,
+      "This loan cannot receive payments. Only active or overdue loans can.",
+    );
   }
 
   const paid = loan.payments.reduce(

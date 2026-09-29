@@ -566,7 +566,7 @@ function SupplyModal({
         <select className={inputClass} value={supplyId} onChange={(e) => setSupplyId(e.target.value)} required>
           {supplies.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.productName} — ₱{s.price.toLocaleString()} · stock {s.quantity}
+              {s.productName} — ₱{s.price.toLocaleString()} · {s.quantity} available
             </option>
           ))}
         </select>

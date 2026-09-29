@@ -10,10 +10,14 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { userId } = await requireUser([
+    // Includes SECRETARY: an overdue member can now hand the machine back, but
+    // the return still has to be confirmed by an officer, so the secretary
+    // needs this route to complete the hand-in.
+    const { userId, userRole } = await requireUser([
       Role.MEMBER,
       Role.TREASURER,
       Role.PRESIDENT,
+      Role.SECRETARY,
     ]);
     const { id } = await params;
 
@@ -23,7 +27,9 @@ export async function POST(
         include: { machine: { select: { name: true } } },
       });
       if (!request) throw new ApiError(404, "Request not found");
-      if (request.userId !== userId) {
+      // A member may only act on their own request; officers may confirm the
+      // return of any request.
+      if (userRole === Role.MEMBER && request.userId !== userId) {
         throw new ApiError(403, "You can only return your own requests");
       }
 

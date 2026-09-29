@@ -16,12 +16,17 @@ import { writeAudit } from "@/lib/activity";
 import { apiErrorResponse, ApiError, requireUser } from "@/lib/api";
 import prisma from "@/lib/client";
 import { RECORDS_ROLES } from "@/lib/permissions";
+import { endOfBusinessDay } from "@/lib/business-time";
 import { principalFromAmount } from "@/lib/services/loan-interest";
 import {
-  BLOCKING_MACHINE_STATUSES,
   daysBetween,
   isMachineRequestOverdueAsOf,
 } from "@/lib/services/overdue";
+import { MACHINE_HELD_STATUSES } from "@/lib/lifecycles";
+import {
+  APPLICATION_STATUS_DOMAIN,
+  validateStatuses,
+} from "@/lib/report-filters";
 import {
   asOfPrisma,
   dateRangePrisma,
@@ -44,6 +49,7 @@ const GenerateReportSchema = z.object({
   to: z.string().optional(),
   memberId: z.string().optional(),
   statuses: z.array(z.string()).optional(),
+  applicationStatuses: z.array(z.string()).optional(),
   preview: z.boolean().optional(),
   config: z
     .object({
@@ -66,6 +72,18 @@ const FINANCIAL_REPORT_TYPES: readonly ReportType[] = [
   ReportType.LOANS,
   ReportType.PAYMENTS,
   ReportType.SUPPLIES,
+];
+
+/**
+ * Report types that honour a `memberId` filter. Mirrors `memberFilter` on each
+ * entry in components/reports/catalog.ts — the two must stay in step.
+ */
+const MEMBER_FILTER_TYPES: readonly ReportType[] = [
+  ReportType.MEMBERS,
+  ReportType.LOANS,
+  ReportType.PAYMENTS,
+  ReportType.SUPPLIES,
+  ReportType.MACHINES,
 ];
 
 // Statuses shown in payment breakdowns.
@@ -99,7 +117,7 @@ function overdueMachineRequestsAsOfPrisma(filters: ReportFilters) {
   const asOf = reportDateBoundary(filters.to ?? filters.from, "start");
   return asOf
     ? {
-        status: { in: [...BLOCKING_MACHINE_STATUSES] },
+        status: { in: [...MACHINE_HELD_STATUSES] },
         endDate: { lt: asOf },
         returnedAt: null,
       }
@@ -121,7 +139,7 @@ function machineRequestStatusCounts(
     requests.map((request) => request.status),
     Object.values(MachineStatus),
   );
-  const overdueStatuses = BLOCKING_MACHINE_STATUSES as readonly MachineStatus[];
+  const overdueStatuses = MACHINE_HELD_STATUSES as readonly MachineStatus[];
   byStatus[MachineStatus.OVERDUE] = asOf
     ? requests.filter(
         (request) =>
@@ -170,13 +188,12 @@ function countsBy<T extends string>(
   );
 }
 
-// End of the current calendar day, used as the "as of" instant for reports
+// End of the current business day, used as the "as of" instant for reports
 // generated without an explicit date range so still-overdue obligations match
-// what officers see live on the dashboard.
+// what officers see live on the dashboard. Resolved in the business timezone so
+// a UTC deployment does not shift the cutoff by 8 hours.
 function currentDayEnd() {
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  return today;
+  return endOfBusinessDay(new Date());
 }
 
 function jsonData(value: unknown): Prisma.InputJsonValue {
@@ -188,6 +205,7 @@ type ReportFilters = {
   to?: string;
   memberId?: string;
   statuses?: string[];
+  applicationStatuses?: string[];
 };
 
 const whereFromFilters = (filters: ReportFilters): Prisma.UserWhereInput => ({
@@ -195,13 +213,20 @@ const whereFromFilters = (filters: ReportFilters): Prisma.UserWhereInput => ({
 });
 
 async function generateMembersReport(filters: ReportFilters = {}) {
+  // The two status domains on this report are unrelated enums and must never
+  // share one filter: `role` is a Role, `status` is an ApplicationStatus.
+  const roleFilter = validateStatuses(ReportType.MEMBERS, filters.statuses);
+  const applicationFilter = validateStatuses(
+    ReportType.MEMBERS,
+    filters.applicationStatuses,
+    APPLICATION_STATUS_DOMAIN,
+  );
+
   const [users, applications] = await Promise.all([
     prisma.user.findMany({
       where: {
         ...whereFromFilters(filters),
-        ...(filters.statuses && filters.statuses.length
-          ? { role: { in: filters.statuses as Role[] } }
-          : {}),
+        ...(roleFilter ? { role: { in: roleFilter as Role[] } } : {}),
         ...(filters.from || filters.to
           ? { createdAt: asOfPrisma(filters) }
           : {}),
@@ -220,8 +245,8 @@ async function generateMembersReport(filters: ReportFilters = {}) {
       orderBy: { createdAt: "desc" },
       where: {
         ...(filters.memberId ? { userId: filters.memberId } : {}),
-        ...(filters.statuses && filters.statuses.length
-          ? { status: { in: filters.statuses as ApplicationStatus[] } }
+        ...(applicationFilter
+          ? { status: { in: applicationFilter as ApplicationStatus[] } }
           : {}),
         ...(filters.from || filters.to
           ? { createdAt: asOfPrisma(filters) }
@@ -293,6 +318,7 @@ async function generateMembersReport(filters: ReportFilters = {}) {
 }
 
 async function generateLoansReport(filters: ReportFilters = {}) {
+  const statusFilter = validateStatuses(ReportType.LOANS, filters.statuses);
   const hasRange = Boolean(filters.from || filters.to);
   const loans = await prisma.loan.findMany({
     where: {
@@ -314,8 +340,8 @@ async function generateLoansReport(filters: ReportFilters = {}) {
               }
             : {}),
         },
-        ...(filters.statuses && filters.statuses.length
-          ? [{ status: { in: filters.statuses as LoanStatus[] } }]
+        ...(statusFilter
+          ? [{ status: { in: statusFilter as LoanStatus[] } }]
           : []),
       ],
     },
@@ -468,11 +494,12 @@ async function generateLoansReport(filters: ReportFilters = {}) {
 }
 
 async function generatePaymentsReport(filters: ReportFilters = {}) {
+  const statusFilter = validateStatuses(ReportType.PAYMENTS, filters.statuses);
   const payments = await prisma.payment.findMany({
     where: {
       ...(filters.memberId ? { userId: filters.memberId } : {}),
-      ...(filters.statuses && filters.statuses.length
-        ? { status: { in: filters.statuses as PaymentStatus[] } }
+      ...(statusFilter
+        ? { status: { in: statusFilter as PaymentStatus[] } }
         : {}),
       ...(filters.from || filters.to
         ? {
@@ -581,7 +608,8 @@ loan: { select: { id: true, name: true, type: true } },
 }
 
 async function generateSuppliesReport(filters: ReportFilters = {}) {
-  const [supplies, repayments, rejectedPayments, completedTxns] =
+  const statusFilter = validateStatuses(ReportType.SUPPLIES, filters.statuses);
+  const [supplies, repayments, rejectedPayments, reservedTxns] =
     await Promise.all([
       prisma.supply.findMany({
         orderBy: { productName: "asc" },
@@ -595,8 +623,8 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
             orderBy: { createdAt: "desc" },
             where: {
               ...(filters.memberId ? { userId: filters.memberId } : {}),
-              ...(filters.statuses && filters.statuses.length
-                ? { status: { in: filters.statuses as TransactionStatus[] } }
+              ...(statusFilter
+                ? { status: { in: statusFilter as TransactionStatus[] } }
                 : {}),
               ...(filters.from || filters.to
                 ? { createdAt: dateRangePrisma(filters) }
@@ -636,7 +664,17 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
         },
       }),
       prisma.supplyTransaction.findMany({
-        where: { status: TransactionStatus.COMPLETED },
+        // Stock is deducted once, when a request is APPROVED (reserved), and is
+        // not deducted again on completion. Reconstructing on-hand stock as of
+        // a past date therefore has to consider every transaction still holding
+        // a reservation, not only the completed ones — otherwise units approved
+        // after the report date read as still available when they were already
+        // committed to a member.
+        where: {
+          status: {
+            in: [TransactionStatus.APPROVED, TransactionStatus.COMPLETED],
+          },
+        },
         select: {
           supplyId: true,
           quantity: true,
@@ -656,24 +694,30 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
     (transaction) => transaction.type === SupplyTransactionType.LOAN,
   );
 
-  // Stock is a rolling figure: reconstruct the on-hand quantity as of the end
-  // of the report period by adding back completed dispatches after that date
-  // (the stored quantity already reflects every completed dispatch to date).
+  // Stock is a rolling figure. `Supply.quantity` is decremented when a request
+  // is approved (units are reserved for that member) and is not decremented
+  // again on completion, so reconstructing on-hand stock as of a past report
+  // date means adding back every reservation taken *after* that date — whether
+  // the request has since been completed or is still awaiting dispatch.
+  //
+  // Rejected requests are excluded from the query above because rejecting an
+  // approved request releases the reservation; their units were correctly
+  // reserved on the report date, so they must not be added back.
   const asOf = reportDateBoundary(filters.to, "end");
-  const completedAfterAsOf = new Map<string, number>();
+  const reservedAfterAsOf = new Map<string, number>();
   if (asOf) {
-    for (const t of completedTxns) {
-      const dispatchedAt = t.reviewedAt ?? t.createdAt;
-      if (dispatchedAt.getTime() > asOf.getTime()) {
-        completedAfterAsOf.set(
+    for (const t of reservedTxns) {
+      const reservedAt = t.reviewedAt ?? t.createdAt;
+      if (reservedAt.getTime() > asOf.getTime()) {
+        reservedAfterAsOf.set(
           t.supplyId,
-          (completedAfterAsOf.get(t.supplyId) ?? 0) + t.quantity,
+          (reservedAfterAsOf.get(t.supplyId) ?? 0) + t.quantity,
         );
       }
     }
   }
   const stockAsOf = (supply: { id: string; quantity: number }): number =>
-    supply.quantity + (completedAfterAsOf.get(supply.id) ?? 0);
+    supply.quantity + (reservedAfterAsOf.get(supply.id) ?? 0);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -756,6 +800,7 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
 }
 
 async function generateMachinesReport(filters: ReportFilters = {}) {
+  const statusFilter = validateStatuses(ReportType.MACHINES, filters.statuses);
   const hasRange = Boolean(filters.from || filters.to);
   const machineAsOf =
     reportDateBoundary(filters.to ?? filters.from, "end") ?? currentDayEnd();
@@ -766,8 +811,8 @@ async function generateMachinesReport(filters: ReportFilters = {}) {
         orderBy: { requestDate: "desc" },
         where: {
           ...(filters.memberId ? { userId: filters.memberId } : {}),
-          ...(filters.statuses && filters.statuses.length
-            ? { status: { in: filters.statuses as MachineStatus[] } }
+          ...(statusFilter
+            ? { status: { in: statusFilter as MachineStatus[] } }
             : {}),
           ...(hasRange
             ? {
@@ -788,8 +833,8 @@ async function generateMachinesReport(filters: ReportFilters = {}) {
   const overdueRequests = requests
     .filter(
       (request) =>
-        BLOCKING_MACHINE_STATUSES.includes(
-          request.status as (typeof BLOCKING_MACHINE_STATUSES)[number],
+        MACHINE_HELD_STATUSES.includes(
+          request.status as (typeof MACHINE_HELD_STATUSES)[number],
         ) &&
         isMachineRequestOverdueAsOf(
           request.endDate,
@@ -874,7 +919,7 @@ async function generateAuditReport(filters: ReportFilters = {}) {
 
 async function generateSummaryReport(filters: ReportFilters = {}) {
   const hasRange = Boolean(filters.from || filters.to);
-  const [users, loans, payments, supplies, machines, requests, audits, supplyRepayments, completedTxns] =
+  const [users, loans, payments, supplies, machines, requests, audits, supplyRepayments, reservedTxns] =
     await Promise.all([
       prisma.user.findMany({
         where:
@@ -941,9 +986,10 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
           createdAt: true,
           transactions: {
             where: {
-              ...(filters.statuses && filters.statuses.length
-                ? { status: { in: filters.statuses as TransactionStatus[] } }
-                : {}),
+              // The Summary aggregates five unrelated status domains (loans,
+              // payments, supply transactions, machines, applications), so a
+              // single status filter has no coherent meaning here and is not
+              // offered in the UI. See SUMMARY in components/reports/catalog.ts.
               ...(hasRange ? { createdAt: dateRangePrisma(filters) } : {}),
             },
             select: {
@@ -989,7 +1035,17 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
         select: { amount: true },
       }),
       prisma.supplyTransaction.findMany({
-        where: { status: TransactionStatus.COMPLETED },
+        // Stock is deducted once, when a request is APPROVED (reserved), and is
+        // not deducted again on completion. Reconstructing on-hand stock as of
+        // a past date therefore has to consider every transaction still holding
+        // a reservation, not only the completed ones — otherwise units approved
+        // after the report date read as still available when they were already
+        // committed to a member.
+        where: {
+          status: {
+            in: [TransactionStatus.APPROVED, TransactionStatus.COMPLETED],
+          },
+        },
         select: {
           supplyId: true,
           quantity: true,
@@ -1011,7 +1067,11 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
       payable,
       amount: payable,
       amountPaid,
-      outstandingBalance: payable - amountPaid,
+      // Clamped at zero: an over-collection must not read as a negative
+      // balance, which would silently understate portfolio exposure and imply
+      // the cooperative owes the member a refund.
+      outstandingBalance: Math.max(payable - amountPaid, 0),
+      overpaidAmount: Math.max(amountPaid - payable, 0),
       status: loan.status,
       due: loan.due?.toISOString() ?? null,
     };
@@ -1027,24 +1087,30 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
     (t) => t.type === SupplyTransactionType.LOAN,
   );
 
-  // Stock is a rolling figure: reconstruct the on-hand quantity as of the end
-  // of the report period by adding back completed dispatches after that date
-  // (the stored quantity already reflects every completed dispatch to date).
+  // Stock is a rolling figure. `Supply.quantity` is decremented when a request
+  // is approved (units are reserved for that member) and is not decremented
+  // again on completion, so reconstructing on-hand stock as of a past report
+  // date means adding back every reservation taken *after* that date — whether
+  // the request has since been completed or is still awaiting dispatch.
+  //
+  // Rejected requests are excluded from the query above because rejecting an
+  // approved request releases the reservation; their units were correctly
+  // reserved on the report date, so they must not be added back.
   const asOf = reportDateBoundary(filters.to, "end");
-  const completedAfterAsOf = new Map<string, number>();
+  const reservedAfterAsOf = new Map<string, number>();
   if (asOf) {
-    for (const t of completedTxns) {
-      const dispatchedAt = t.reviewedAt ?? t.createdAt;
-      if (dispatchedAt.getTime() > asOf.getTime()) {
-        completedAfterAsOf.set(
+    for (const t of reservedTxns) {
+      const reservedAt = t.reviewedAt ?? t.createdAt;
+      if (reservedAt.getTime() > asOf.getTime()) {
+        reservedAfterAsOf.set(
           t.supplyId,
-          (completedAfterAsOf.get(t.supplyId) ?? 0) + t.quantity,
+          (reservedAfterAsOf.get(t.supplyId) ?? 0) + t.quantity,
         );
       }
     }
   }
   const stockAsOf = (supply: { id: string; quantity: number }): number =>
-    supply.quantity + (completedAfterAsOf.get(supply.id) ?? 0);
+    supply.quantity + (reservedAfterAsOf.get(supply.id) ?? 0);
 
   const activeLoanList = loanList.filter(
     (l) => l.status !== "REJECTED",
@@ -1238,6 +1304,17 @@ export async function POST(req: NextRequest) {
       !FINANCIAL_REPORT_TYPES.includes(result.data.type)
     ) {
       throw new ApiError(403, "Financial reports only");
+    }
+
+    // A member filter is only meaningful for the per-member reports. SUMMARY
+    // and AUDIT are cooperative-wide, so a memberId there used to be accepted
+    // and then silently ignored — an officer could believe a summary was scoped
+    // to one member when it was not. Reject it instead of dropping it.
+    if (result.data.memberId && !MEMBER_FILTER_TYPES.includes(result.data.type)) {
+      throw new ApiError(
+        400,
+        "This report cannot be scoped to a single member",
+      );
     }
 
     const actorMe = await prisma.user.findUnique({

@@ -198,6 +198,46 @@ export interface SeasonCapacityUsage {
 }
 
 /**
+ * The single season occurrence that fully contains the booking [start, end], or
+ * null when the booking crosses a season boundary or no seasons are configured.
+ *
+ * A booking that spans two seasons would consume capacity in both, which the
+ * per-member pool cannot represent. The cooperative rule is to deny such
+ * bookings outright rather than split or pro-rate them, so a member books
+ * within one season. The end date is treated as inclusive of the whole day: a
+ * booking ending on the final day of a season is still inside that season.
+ */
+export function seasonContainingBooking(
+  seasons: SeasonLike[],
+  start: Date,
+  end: Date,
+): SeasonInstance | null {
+  if (seasons.length === 0) return null;
+
+  const instance = currentInstance(seasons, start);
+  if (!instance) return null;
+
+  // Exclusive upper bound: the instant the next season begins.
+  if (end.getTime() >= instance.end.getTime()) return null;
+  return instance;
+}
+
+/**
+ * Machine-days a member has already committed in the given season instance,
+ * for the capacity re-check performed at approval time.
+ */
+export function bookedInInstance(
+  usage: SeasonCapacityUsage[],
+  seasonId: string,
+  userId: string,
+) {
+  return (
+    usage.find((u) => u.seasonId === seasonId && u.userId === userId)
+      ?.bookedHectareDays ?? 0
+  );
+}
+
+/**
  * Booked machine-days per member for the relevant instance of each season,
  * summed across ALL machines (a member draws from one season pool). Computed
  * live from machine requests so usage resets when a season changes.

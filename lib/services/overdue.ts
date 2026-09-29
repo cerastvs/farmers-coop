@@ -1,30 +1,44 @@
 import { LoanStatus, MachineStatus, Prisma } from "@/app/generated/prisma";
-import { notifyUser, writeAudit } from "@/lib/activity";
-import { ApiError } from "@/lib/errors";
+import { notifyUser } from "@/lib/activity";
+import { businessDaysBetween, startOfBusinessDay } from "@/lib/business-time";
+import { MEMBER_RETURNABLE_MACHINE_STATUSES } from "@/lib/lifecycles";
 
-const BLOCKING_MACHINE_STATUSES = [
-  MachineStatus.APPROVED,
-  MachineStatus.IN_USE,
-  MachineStatus.OVERDUE,
+/**
+ * Loan states that still represent an unsettled obligation. An obligation is
+ * selected by these statuses *and* by the business condition (past due, with a
+ * balance), never by the pre-transition status alone — otherwise a row that has
+ * already been flipped to OVERDUE silently drops out of the working list.
+ */
+const OPEN_LOAN_STATUSES = [LoanStatus.ACTIVE, LoanStatus.OVERDUE];
+
+/**
+ * Machine request states that still represent an unreturned machine. Mirrors
+ * OPEN_LOAN_STATUSES: OVERDUE is an unreturned machine, not a closed one.
+ *
+ * This is the member-facing "I still owe you this machine" set and is
+ * intentionally narrower than MACHINE_HELD_STATUSES: a request the member has
+ * already flagged for return (RETURN_PENDING) is not yet unreturned in the
+ * sense this list needs, while an APPROVED request has not left the office yet.
+ */
+const UNRETURNED_MACHINE_STATUSES = [
+  ...MEMBER_RETURNABLE_MACHINE_STATUSES,
 ];
 
 function toDayStart(date: Date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  return startOfBusinessDay(date);
 }
 
 /**
  * Returns the number of full days between two dates (positive if `from` is
- * before `to`). Used to compute "days overdue".
+ * before `to`). Used to compute "days overdue". Counted in business-timezone
+ * calendar days so the answer does not shift with the host's local zone.
  */
 export function daysBetween(from: Date, to: Date) {
-  const ms = toDayStart(to).getTime() - toDayStart(from).getTime();
-  return Math.floor(ms / (1000 * 60 * 60 * 24));
+  return businessDaysBetween(from, to);
 }
 
 export function isDateOverdue(dueDate: Date, now: Date = new Date()) {
-  return toDayStart(now) > toDayStart(dueDate);
+  return toDayStart(now).getTime() > toDayStart(dueDate).getTime();
 }
 
 /**
@@ -115,8 +129,14 @@ export interface OverdueRecord {
 
 /**
  * Scans the database for overdue loan and machine obligations and returns a
- * combined list. Optionally auto-marks active records as OVERDUE (recommended
- * for a "run detection" pass).
+ * combined list. Optionally auto-marks records as OVERDUE (recommended for a
+ * "run detection" pass).
+ *
+ * Selection is by business condition — the obligation is open (ACTIVE or
+ * already OVERDUE), past its due date, and still carrying a balance. Records
+ * that were already flagged OVERDUE on an earlier run are still returned, so
+ * the list only shrinks when a member actually settles or returns. The
+ * status transition itself remains idempotent.
  */
 export async function detectOverdueObligations(
   tx: Prisma.TransactionClient,
@@ -125,12 +145,12 @@ export async function detectOverdueObligations(
   const now = new Date();
   const overdue: OverdueRecord[] = [];
 
-  const activeLoans = await tx.loan.findMany({
-    where: { status: LoanStatus.ACTIVE },
+  const openLoans = await tx.loan.findMany({
+    where: { status: { in: OPEN_LOAN_STATUSES } },
     include: { payments: true, user: { select: { id: true, name: true, username: true } } },
   });
 
-  for (const loan of activeLoans) {
+  for (const loan of openLoans) {
     if (!isDateOverdue(loan.due, now)) continue;
     const paid = loan.payments.reduce(
       (sum, p) => sum.plus(p.amount),
@@ -154,12 +174,12 @@ export async function detectOverdueObligations(
     });
   }
 
-  const inUseMachines = await tx.machineRequest.findMany({
-    where: { status: MachineStatus.IN_USE },
+  const unreturnedMachines = await tx.machineRequest.findMany({
+    where: { status: { in: UNRETURNED_MACHINE_STATUSES } },
     include: { machine: true, user: { select: { id: true, name: true, username: true } } },
   });
 
-  for (const request of inUseMachines) {
+  for (const request of unreturnedMachines) {
     if (!request.endDate || !isDateOverdue(request.endDate, now)) continue;
     if (opts.autoMark) {
       await markMachineRequestOverdue(tx, request.id, now);
@@ -217,4 +237,4 @@ export function requiredDurationDays(farmSize: number) {
   return Math.ceil(farmSize);
 }
 
-export { BLOCKING_MACHINE_STATUSES };
+export { OPEN_LOAN_STATUSES, UNRETURNED_MACHINE_STATUSES };

@@ -52,7 +52,15 @@ const MEMBERS: ReportTypeCatalog = {
   type: "MEMBERS",
   label: "Member Records Report",
   memberFilter: true,
+  // Role and ApplicationStatus are unrelated enums; they get separate filter
+  // groups so one can never be cast into the other.
   statusOptions: ["APPLICANT", "MEMBER", "TREASURER", "PRESIDENT", "SECRETARY"],
+  applicationStatusOptions: [
+    "PENDING_PAYMENT",
+    "PENDING_APPLICATION_REVIEW",
+    "APPROVED",
+    "REJECTED",
+  ],
   notes: [
     "Member and application counts reflect records as of the report date range.",
     "Only member roles applicable to cooperative officers are listed.",
@@ -703,8 +711,13 @@ const SUMMARY: ReportTypeCatalog = {
   type: "SUMMARY",
   label: "Cooperative Summary Report",
   memberFilter: false,
-  statusOptions: ["PENDING", "VERIFIED", "REJECTED", "ACTIVE", "OVERDUE", "PAID"],
+  // No statusOptions: this report aggregates five unrelated status domains
+  // (loans, payments, supply transactions, machines, applications). A single
+  // status filter would either mean nothing or silently narrow only part of
+  // the summary. Use the dedicated per-domain reports to filter by status.
   notes: [
+    "This summary is cooperative-wide; it is not scoped to a single member.",
+    "Use the Loan, Payment, Supply, Machine or Member Records report to filter by status.",
     "Rejected loan requests are excluded from financial totals.",
     "Date filters limit visible records to activity in the selected period.",
     "Rejected payment submissions are reported separately.",

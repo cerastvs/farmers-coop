@@ -811,7 +811,7 @@ export default function AdminPage() {
                     <Record
                       key={supply.id}
                       title={supply.productName}
-                      meta={`₱${supply.price.toLocaleString()} · ${supply.quantity} in stock${supply.loanLimitPerHectare != null ? ` · limit ${supply.loanLimitPerHectare}/ha` : ""}`}
+                      meta={`₱${supply.price.toLocaleString()} · ${supply.quantity} available${supply.loanLimitPerHectare != null ? ` · limit ${supply.loanLimitPerHectare}/ha` : ""}`}
                     >
                       <div className="flex items-start gap-3">
                         <img

@@ -1,12 +1,22 @@
 import { z } from "zod";
 
-import { PaymentMethod } from "@/app/generated/prisma";
+import {
+  PaymentMethod,
+  PaymentStatus,
+  Prisma,
+} from "@/app/generated/prisma";
+import { APPLICATION_DENIAL_REASONS } from "@/lib/application-fee-constants";
 import { ApiError } from "@/lib/errors";
 import {
   MAX_PAYMENT_REQUEST_BYTES,
   readMultipartFormData,
   readProofOfPaymentFile,
 } from "@/lib/payment-proof";
+
+// Re-exported so server-side callers keep importing it from here. Client
+// components must import it from "@/lib/application-fee-constants" directly —
+// this module pulls in node:fs via payment-proof.
+export { APPLICATION_DENIAL_REASONS };
 
 export const SearchSchema = z
   .object({
@@ -22,15 +32,6 @@ export const SearchSchema = z
       .optional(),
   })
   .strict();
-
-export const APPLICATION_DENIAL_REASONS = [
-  "Incomplete application",
-  "Invalid information",
-  "Does not meet membership requirements",
-  "Required documents missing",
-  "Application information could not be verified",
-  "Other",
-] as const;
 
 export const MembershipReviewSchema = z.discriminatedUnion("action", [
   z
@@ -63,6 +64,32 @@ export function getApplicationFeeAmount() {
   const amount = Number(raw);
   if (!Number.isFinite(amount) || amount <= 0) return 500;
   return Math.round(amount * 100) / 100;
+}
+
+/**
+ * The verified application-fee payment that entitles an application to
+ * membership, or null when none qualifies.
+ *
+ * A fee counts as settled when it is VERIFIED and its amount matches the
+ * configured fee exactly. A short payment is not a settled fee: approving
+ * membership on a partial payment would grant full member rights — borrowing,
+ * supply credit, machine access — while part of the fee is still outstanding.
+ * Only a full, verified amount counts.
+ */
+export function findSettledApplicationFee<
+  T extends {
+    status: string;
+    amount: Prisma.Decimal | number;
+  },
+>(payments: readonly T[], feeAmount: number = getApplicationFeeAmount()) {
+  const required = new Prisma.Decimal(feeAmount);
+  return (
+    payments.find(
+      (payment) =>
+        payment.status === PaymentStatus.VERIFIED &&
+        new Prisma.Decimal(payment.amount).equals(required),
+    ) ?? null
+  );
 }
 
 export function getApplicationFeeQrUrl() {

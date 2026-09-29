@@ -229,13 +229,17 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
       debit: true,
     })),
     ...supplyTransactions.map((t) => ({
+      // A purchase is money the member actually paid at the office; a supply loan
+      // is goods received on credit, which increases debt without cash leaving
+      // the account. Both were shown as a plain debit of `totalPrice`, so a
+      // credit purchase read identically to a cash one.
       type:
         t.type === "LOAN"
-          ? `Supply loan: ${t.supply.productName}`
-          : `Purchase: ${t.supply.productName}`,
+          ? `Supply loan (on credit): ${t.supply.productName}`
+          : `Purchase paid: ${t.supply.productName}`,
       date: t.createdAt.toISOString(),
       amount: Number(t.totalPrice),
-      debit: true,
+      debit: t.type !== "LOAN",
     })),
   ]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())

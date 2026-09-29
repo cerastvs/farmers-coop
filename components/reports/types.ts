@@ -15,6 +15,7 @@ export interface ReportFilters {
   to?: string;
   memberId?: string;
   statuses?: string[];
+  applicationStatuses?: string[];
 }
 
 export type SortDir = "asc" | "desc";
@@ -116,6 +117,12 @@ export interface ReportTypeCatalog {
   defaultSections: string[];
   presets: Record<PresetId, PresetDef>;
   statusOptions?: string[];
+  /**
+   * Second, independent status domain for reports that span two unrelated
+   * enums (Member Records spans Role and ApplicationStatus). Rendered as its
+   * own filter group and sent as `applicationStatuses`.
+   */
+  applicationStatusOptions?: string[];
   memberFilter?: boolean;
   notes: string[];
 }

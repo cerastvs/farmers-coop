@@ -17,7 +17,12 @@ import {
 import { notifyUser, writeAudit } from "@/lib/activity";
 import { ApiError } from "@/lib/errors";
 import prisma from "@/lib/client";
-import { calculateLoanDueDate } from "@/lib/lifecycles";
+import {
+  calculateLoanDueDate,
+  MACHINE_HELD_STATUSES,
+  OPEN_SUPPLY_STATUSES,
+} from "@/lib/lifecycles";
+import { MAX_LOAN_PRINCIPAL } from "@/lib/payment-proof";
 import {
   auditMetadata,
   ManualContext,
@@ -26,17 +31,28 @@ import {
 import {
   applyVerifiedLoanPayment,
   generateReceiptNo,
+  nextReceiptOrdinal,
 } from "@/lib/services/loan-payments";
 import {
   applyLoanInterest,
   getLoanInterestRate,
 } from "@/lib/services/loan-interest";
 import { requiredDurationDays } from "@/lib/services/overdue";
-import { getMemberCurrentSeasonCapacity } from "@/lib/services/seasons";
+import {
+  bookedInInstance,
+  computeCapacityUsage,
+  seasonContainingBooking,
+  type SeasonInstance,
+  type SeasonLike,
+} from "@/lib/services/seasons";
 
 export const LoanRequestSchema = z
   .object({
-    amount: z.number().positive().max(5000).multipleOf(0.01),
+    amount: z
+      .number()
+      .positive()
+      .max(MAX_LOAN_PRINCIPAL)
+      .multipleOf(0.01),
     termMonths: z.number().int().min(6).max(24),
     purpose: z.string().trim().min(10).max(500),
     type: z.enum(["SUPPLY", "MONEY"]).default("MONEY"),
@@ -79,16 +95,9 @@ const ACTIVE_LOAN_STATUSES = [
   LoanStatus.ACTIVE,
 ];
 
-const BLOCKING_MACHINE_STATUSES = [
-  MachineStatus.APPROVED,
-  MachineStatus.IN_USE,
-  MachineStatus.OVERDUE,
-];
-
-const OPEN_SUPPLY_STATUSES = [
-  TransactionStatus.PENDING,
-  TransactionStatus.APPROVED,
-];
+// A member with any machine still committed to them is at their capacity, so
+// this is the same "machine is held" set the approval overlap guard uses.
+const BLOCKING_MACHINE_STATUSES = MACHINE_HELD_STATUSES;
 
 async function requireActiveMember(tx: Prisma.TransactionClient, memberId: string) {
   const member = await tx.user.findUnique({
@@ -163,6 +172,11 @@ export async function submitLoanRequest({
         );
       }
 
+      // Provisional due date. `Loan.due` is NOT NULL, so a value is required at
+      // request time, but it is only an estimate: the authoritative term starts
+      // at approval, and `due` is recomputed there from the approval timestamp.
+      // A request left sitting in the officer queue therefore no longer eats
+      // into the member's term. See `recomputeLoanDueDateOnApproval`.
       const due = calculateLoanDueDate(new Date(), input.termMonths);
       const interestRate = await getLoanInterestRate(tx);
 
@@ -227,6 +241,58 @@ export async function submitLoanRequest({
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
   );
+}
+
+export const bookingDayCount = (start: Date, end: Date) =>
+  Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+/** Loads the configured seasons, ordered, as plain rows. */
+export async function listSeasons(
+  tx: Prisma.TransactionClient,
+): Promise<SeasonLike[]> {
+  const rows = await tx.season.findMany({
+    orderBy: [{ startMonth: "asc" }, { startDay: "asc" }],
+    select: { id: true, name: true, startMonth: true, startDay: true },
+  });
+  return rows;
+}
+
+/**
+ * Re-checks a member's per-season machine-day budget at the moment of
+ * approval, not just at request time.
+ *
+ * Requests can sit in the officer queue for days or weeks, during which the
+ * member books other machines or the season rolls over. Re-validating inside
+ * the approval transaction closes that gap, so a member can never be approved
+ * beyond the hectare-day limit their farm size grants for that season.
+ */
+export async function assertSeasonCapacity({
+  tx,
+  memberId,
+  season,
+  requestedDays,
+  farmSize,
+}: {
+  tx: Prisma.TransactionClient;
+  memberId: string;
+  season: SeasonInstance;
+  requestedDays: number;
+  farmSize: number;
+}) {
+  const usage = await computeCapacityUsage(
+    await listSeasons(tx),
+    season.start,
+    tx,
+  );
+  const alreadyBooked = bookedInInstance(usage, season.season.id, memberId);
+  const total = alreadyBooked + requestedDays;
+
+  if (total > farmSize) {
+    throw new ApiError(
+      409,
+      `Approving this request would bring the member to ${total} machine-day(s) in the ${season.season.name}, above their ${farmSize} hectare-day limit for that season (${alreadyBooked} already booked).`,
+    );
+  }
 }
 
 export async function submitMachineRequest({
@@ -294,9 +360,7 @@ export async function submitMachineRequest({
         );
       }
 
-      const requestedDays =
-        Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) +
-        1;
+      const requestedDays = bookingDayCount(start, end);
       if (requestedDays > requiredDays) {
         throw new ApiError(
           400,
@@ -304,20 +368,30 @@ export async function submitMachineRequest({
         );
       }
 
-      const seasonCapacity = await getMemberCurrentSeasonCapacity(
-        memberId,
-        new Date(),
-        tx,
-      );
-      if (seasonCapacity) {
-        const bookedInSeason =
-          seasonCapacity.bookedHectareDays + requestedDays;
-        if (bookedInSeason > farmSize) {
+      // A booking must fall entirely within one harvest season. A booking that
+      // straddles a boundary would draw on two season pools, which the
+      // per-member hectare-day limit cannot represent.
+      //
+      // When no seasons are configured the whole year is treated as a single
+      // pool, so the season layer is skipped. The farm-size duration cap above
+      // still applies, so an unconfigured installation is bounded rather than
+      // unlimited — it just has no seasonal reset.
+      const seasons = await listSeasons(tx);
+      if (seasons.length > 0) {
+        const season = seasonContainingBooking(seasons, start, end);
+        if (!season) {
           throw new ApiError(
             400,
-            `You already have ${seasonCapacity.bookedHectareDays} machine-day(s) booked in the ${seasonCapacity.seasonName}; this request would bring you to ${bookedInSeason} of your ${farmSize} machine-day limit. Cancel an existing request first, then resubmit within your limit.`,
+            "The selected dates fall outside a single harvest season. Book within one season, or split the booking across seasons as separate requests.",
           );
         }
+        await assertSeasonCapacity({
+          tx,
+          memberId,
+          season,
+          requestedDays,
+          farmSize,
+        });
       }
 
       const created = await tx.machineRequest.create({
@@ -584,7 +658,10 @@ export async function recordManualPayment({
             status: PaymentStatus.VERIFIED,
             verifiedBy: actor.userId,
             verifiedAt: new Date(),
-            receiptNo: generateReceiptNo(memberId + loanId + amount),
+            receiptNo: generateReceiptNo(
+              memberId + loanId + amount,
+              await nextReceiptOrdinal(tx),
+            ),
             receiptUrl: proofUrl ?? null,
             ...manual,
           },
@@ -638,7 +715,10 @@ export async function recordManualPayment({
           status: PaymentStatus.VERIFIED,
           verifiedBy: actor.userId,
           verifiedAt: new Date(),
-          receiptNo: generateReceiptNo(memberId + type + amount),
+          receiptNo: generateReceiptNo(
+            memberId + type + amount,
+            await nextReceiptOrdinal(tx),
+          ),
           receiptUrl: proofUrl ?? null,
           ...manual,
         },

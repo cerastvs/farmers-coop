@@ -16,6 +16,17 @@ function matchesRoute(pathname: string, route: string) {
   return pathname === route || pathname.startsWith(`${route}/`);
 }
 
+/**
+ * Navigation gate only — not an authorization boundary.
+ *
+ * The role in the session cookie is a 7-day snapshot, so it can go stale when
+ * an officer edits a member's role. That is deliberately tolerated here: every
+ * API route authorizes through `requireUser`, which re-reads the current role
+ * and `active` flag from the database on each request, so a stale cookie can
+ * only ever show the wrong navigation shell — never reach data it should not.
+ * Adding a database read per navigation to keep the menu in sync would tax
+ * every page load to fix a cosmetic issue that is already contained.
+ */
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const cookie = req.cookies.get("session")?.value;

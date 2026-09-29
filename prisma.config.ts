@@ -11,5 +11,13 @@ export default defineConfig({
   },
   datasource: {
     url: process.env["DATABASE_URL"],
+    // Required by `prisma migrate diff --from-migrations` to rebuild the
+    // migration history in a throwaway database.
+    //
+    // NOTE: the committed migration history is currently known to be
+    // unreplayable, so this check is expected to FAIL until the repair in
+    // docs/migration-repair-runbook.md is done. See that document before
+    // treating a failure here as a new regression.
+    shadowDatabaseUrl: process.env["SHADOW_DATABASE_URL"],
   },
 });

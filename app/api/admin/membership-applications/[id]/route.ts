@@ -3,10 +3,15 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   ApplicationStatus,
   PaymentType,
+  Prisma,
   Role,
 } from "@/app/generated/prisma";
 import { notifyUser, writeAudit } from "@/lib/activity";
-import { MembershipReviewSchema } from "@/lib/application-fee";
+import {
+  findSettledApplicationFee,
+  getApplicationFeeAmount,
+  MembershipReviewSchema,
+} from "@/lib/application-fee";
 import { apiErrorResponse, ApiError, requireUser, readJsonBody } from "@/lib/api";
 import prisma from "@/lib/client";
 
@@ -168,18 +173,53 @@ export async function PATCH(
     const reviewedAt = new Date();
 
     if (parsed.data.action === "approve") {
-      await prisma.$transaction(async (tx) => {
-        await tx.application.update({
-          where: { id },
-          data: {
-            status: ApplicationStatus.APPROVED,
-            reviewedBy: actor.userId,
-            reviewedAt,
-            rejectionReason: null,
-            rejectionDetails: null,
-          },
-        });
-        await tx.user.update({
+      const requiredFee = getApplicationFeeAmount();
+
+      await prisma.$transaction(
+        async (tx) => {
+          // Membership grants borrowing, supply credit and machine access, so
+          // it must not be granted while the application fee is unsettled. A
+          // partial or unverified fee does not entitle the applicant to member
+          // rights. Re-read inside the transaction so a fee reversed between
+          // the check and the write cannot still produce an approval.
+          const feePayments = await tx.payment.findMany({
+            where: {
+              applicationId: application.id,
+              type: PaymentType.APPLICATION_FEE,
+            },
+            select: { status: true, amount: true },
+          });
+          if (!findSettledApplicationFee(feePayments, requiredFee)) {
+            throw new ApiError(
+              409,
+              `The application fee of ₱${requiredFee.toLocaleString()} has not been verified for this application. Verify the fee payment before approving membership.`,
+            );
+          }
+
+          // Conditional on the reviewed states so a concurrent review cannot
+          // double-apply or approve an already-decided application.
+          const claimed = await tx.application.updateMany({
+            where: {
+              id,
+              status: {
+                in: [
+                  ApplicationStatus.PENDING,
+                  ApplicationStatus.PENDING_APPLICATION_REVIEW,
+                ],
+              },
+            },
+            data: {
+              status: ApplicationStatus.APPROVED,
+              reviewedBy: actor.userId,
+              reviewedAt,
+              rejectionReason: null,
+              rejectionDetails: null,
+            },
+          });
+          if (claimed.count === 0) {
+            throw new ApiError(409, "Application is already processed");
+          }
+          await tx.user.update({
           where: { id: application.userId },
           data: { role: Role.MEMBER, active: true },
         });
@@ -211,18 +251,30 @@ export async function PATCH(
     const reason = parsed.data.reason.trim();
     const explanation = parsed.data.explanation?.trim() ?? null;
 
-    await prisma.$transaction(async (tx) => {
-      await tx.application.update({
-        where: { id },
-        data: {
-          status: ApplicationStatus.REJECTED,
-          reviewedBy: actor.userId,
-          reviewedAt,
-          rejectionReason: reason,
-          rejectionDetails: explanation,
-        },
-      });
-      await notifyUser(tx, {
+    await prisma.$transaction(
+      async (tx) => {
+        const claimed = await tx.application.updateMany({
+          where: {
+            id,
+            status: {
+              in: [
+                ApplicationStatus.PENDING,
+                ApplicationStatus.PENDING_APPLICATION_REVIEW,
+              ],
+            },
+          },
+          data: {
+            status: ApplicationStatus.REJECTED,
+            reviewedBy: actor.userId,
+            reviewedAt,
+            rejectionReason: reason,
+            rejectionDetails: explanation,
+          },
+        });
+        if (claimed.count === 0) {
+          throw new ApiError(409, "Application is already processed");
+        }
+        await notifyUser(tx, {
         userId: application.userId,
         title: "Membership Application Denied",
         message: `Unfortunately, your membership application was not approved.\n\nReason: ${reason}\n\nMessage from the President: ${explanation ?? "No additional explanation was provided."}`,
@@ -239,7 +291,9 @@ export async function PATCH(
           reviewedAt: reviewedAt.toISOString(),
         },
       });
-    });
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
 
     return NextResponse.json({
       success: true,

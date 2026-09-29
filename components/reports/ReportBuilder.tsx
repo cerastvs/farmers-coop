@@ -105,6 +105,7 @@ export function ReportBuilder({
   const [to, setTo] = useState(initialTo ?? todayISO());
   const [memberId, setMemberId] = useState("");
   const [statuses, setStatuses] = useState<string[]>([]);
+  const [applicationStatuses, setApplicationStatuses] = useState<string[]>([]);
   const [preset, setPreset] = useState<PresetId>("detailed");
   const [sections, setSections] = useState<string[]>([]);
   const [columns, setColumns] = useState<Record<string, string[]>>({});
@@ -145,8 +146,9 @@ export function ReportBuilder({
       ...(to ? { to } : {}),
       ...(memberId ? { memberId } : {}),
       ...(statuses.length > 0 ? { statuses } : {}),
+      ...(applicationStatuses.length > 0 ? { applicationStatuses } : {}),
     }),
-    [from, to, memberId, statuses],
+    [from, to, memberId, statuses, applicationStatuses],
   );
 
   useEffect(() => {
@@ -160,7 +162,7 @@ export function ReportBuilder({
     }, 600);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type, from, to, memberId, statuses, sections, columns, sortField, sortDir, groupBy, onPreview]);
+  }, [type, from, to, memberId, statuses, applicationStatuses, sections, columns, sortField, sortDir, groupBy, onPreview]);
 
   const groupOptions = useMemo(
     () => (catalog ? aggregateGroupOptions(catalog) : []),
@@ -230,6 +232,12 @@ export function ReportBuilder({
 
   function toggleStatus(value: string) {
     setStatuses((prev) =>
+      prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value],
+    );
+  }
+
+  function toggleApplicationStatus(value: string) {
+    setApplicationStatuses((prev) =>
       prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value],
     );
   }
@@ -408,6 +416,32 @@ export function ReportBuilder({
                                 selected
                                   ? "border-indigo-400 bg-indigo-600 text-white"
                                   : "border-[#dce5d9] bg-white text-[#496558] hover:bg-indigo-50"
+                              }`}
+                            >
+                              {humanizeShort(s)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                  {catalog?.applicationStatusOptions ? (
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-wide text-[#718176]">
+                        Application status
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {catalog.applicationStatusOptions.map((s) => {
+                          const selected = applicationStatuses.includes(s);
+                          return (
+                            <button
+                              key={s}
+                              type="button"
+                              onClick={() => toggleApplicationStatus(s)}
+                              className={`rounded-lg border px-2 py-1 text-[10px] font-bold transition ${
+                                selected
+                                  ? "border-emerald-400 bg-emerald-700 text-white"
+                                  : "border-[#dce5d9] bg-white text-[#496558] hover:bg-emerald-50"
                               }`}
                             >
                               {humanizeShort(s)}

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { PaymentMethod } from "../app/generated/prisma";
+import { PaymentMethod, Prisma } from "../app/generated/prisma";
 import {
+  findSettledApplicationFee,
   getApplicationFeeAmount,
   MembershipReviewSchema,
   parseApplicationFeeSubmission,
@@ -206,5 +207,73 @@ test("membership review rejects unknown actions", () => {
   assert.equal(
     MembershipReviewSchema.safeParse({ action: "maybe" }).success,
     false,
+  );
+});
+
+test("only a fully paid, verified fee settles the application", () => {
+  const exact = new Prisma.Decimal(500);
+
+  assert.ok(findSettledApplicationFee([{ status: "VERIFIED", amount: exact }]));
+
+  // A short payment does not entitle the applicant to borrowing, supply
+  // credit, or machine access.
+  assert.equal(
+    findSettledApplicationFee([{ status: "VERIFIED", amount: new Prisma.Decimal(400) }]),
+    null,
+  );
+  // Nor does an unverified one, however large.
+  assert.equal(
+    findSettledApplicationFee([{ status: "PENDING", amount: new Prisma.Decimal(500) }]),
+    null,
+  );
+  // An overpayment is not an exact match.
+  assert.equal(
+    findSettledApplicationFee([{ status: "VERIFIED", amount: new Prisma.Decimal(600) }]),
+    null,
+  );
+  // No payment at all.
+  assert.equal(findSettledApplicationFee([]), null);
+});
+
+test("a settled fee is found among several payments", () => {
+  const payments = [
+    { status: "REJECTED", amount: new Prisma.Decimal(500) },
+    { status: "PENDING", amount: new Prisma.Decimal(500) },
+    { status: "VERIFIED", amount: new Prisma.Decimal(500) },
+  ];
+
+  assert.ok(findSettledApplicationFee(payments));
+});
+
+test("the fee check is decimal-exact, not float-approximate", () => {
+  // 499.999 and 0.1-style float drift must not pass as 500.
+  assert.equal(
+    findSettledApplicationFee(
+      [{ status: "VERIFIED", amount: new Prisma.Decimal("499.999") }],
+      500,
+    ),
+    null,
+  );
+  assert.ok(
+    findSettledApplicationFee(
+      [{ status: "VERIFIED", amount: new Prisma.Decimal("500.00") }],
+      500,
+    ),
+  );
+});
+
+test("the fee check honours a non-default configured amount", () => {
+  assert.equal(
+    findSettledApplicationFee(
+      [{ status: "VERIFIED", amount: new Prisma.Decimal(500) }],
+      250,
+    ),
+    null,
+  );
+  assert.ok(
+    findSettledApplicationFee(
+      [{ status: "VERIFIED", amount: new Prisma.Decimal(250) }],
+      250,
+    ),
   );
 });

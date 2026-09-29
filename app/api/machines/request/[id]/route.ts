@@ -9,8 +9,15 @@ import { apiErrorResponse, ApiError, requireUser } from "@/lib/api";
 import prisma from "@/lib/client";
 import {
   assertTransition,
+  MACHINE_HELD_STATUSES,
   machineTransitions,
 } from "@/lib/lifecycles";
+import {
+  assertSeasonCapacity,
+  bookingDayCount,
+  listSeasons,
+} from "@/lib/services/member-actions";
+import { seasonContainingBooking } from "@/lib/services/seasons";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -30,11 +37,10 @@ const ACTION_STATUS = {
   ping: MachineStatus.IN_USE,
 } as const;
 
-const BLOCKING_STATUSES = [
-  MachineStatus.APPROVED,
-  MachineStatus.IN_USE,
-  MachineStatus.OVERDUE,
-];
+// States in which the machine is still committed to this member, so an
+// approving request must not overlap them. Shared so the overlap guard cannot
+// drift from the lifecycle it is meant to enforce.
+const BLOCKING_STATUSES = MACHINE_HELD_STATUSES;
 
 const OUTCOME_COPY: Record<
   (typeof ReviewSchema)["_output"]["action"],
@@ -168,6 +174,9 @@ export async function PATCH(
             );
           }
 
+          // Re-checked at approval, not trusted from request time: other
+          // bookings may have been taken for this machine while the request sat
+          // in the officer queue.
           const overlap = await tx.machineRequest.findFirst({
             where: {
               id: { not: id },
@@ -183,6 +192,35 @@ export async function PATCH(
               409,
               "This booking overlaps an approved or active request",
             );
+          }
+
+          // Same reason: the member's per-season hectare-day budget was checked
+          // when they requested, but other bookings and the season boundary may
+          // have moved since. Re-validate inside the approval transaction.
+          const seasons = await listSeasons(tx);
+          if (seasons.length > 0) {
+            const season = seasonContainingBooking(
+              seasons,
+              request.startDate,
+              request.endDate,
+            );
+            if (!season) {
+              throw new ApiError(
+                409,
+                "This booking no longer falls within a single harvest season",
+              );
+            }
+            const farmSize = request.farmSize ?? 1;
+            await assertSeasonCapacity({
+              tx,
+              memberId: request.userId,
+              season,
+              requestedDays: bookingDayCount(
+                request.startDate,
+                request.endDate,
+              ),
+              farmSize,
+            });
           }
         }
 

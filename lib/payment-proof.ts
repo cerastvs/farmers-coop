@@ -17,9 +17,32 @@ export const PAYMENT_PROOF_TYPES = [
   "image/webp",
 ] as const;
 
+/**
+ * Upper bound on the principal a member may borrow. Shared so the loan request
+ * form and the payment form cannot drift apart.
+ */
+export const MAX_LOAN_PRINCIPAL = 5000;
+
+/**
+ * Upper bound on a single loan-payment submission.
+ *
+ * This must be at least the largest *payable* amount, not the largest
+ * principal: interest is added to the principal at disbursement, so a
+ * maximum-principal loan (₱5,000 at the default 2% rate) is payable at
+ * ₱5,100. Capping submissions at the principal made it impossible to settle
+ * such a loan in one payment. The cap is deliberately generous; the real
+ * constraint is the outstanding balance, which is enforced separately when the
+ * payment is recorded.
+ */
+export const MAX_PAYMENT_SUBMISSION = 100_000;
+
 const PaymentFieldsSchema = z.object({
   loanId: z.string().uuid(),
-  amount: z.coerce.number().positive().max(5000).multipleOf(0.01),
+  amount: z.coerce
+    .number()
+    .positive()
+    .max(MAX_PAYMENT_SUBMISSION)
+    .multipleOf(0.01),
 });
 
 export type PaymentSubmission = {

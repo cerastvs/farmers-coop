@@ -9,7 +9,9 @@ import {
   instanceForSeason,
   isValidMonthDay,
   nextInstance,
+  bookedInInstance,
   periodFor,
+  seasonContainingBooking,
   sortSeasons,
 } from "../lib/services/seasons";
 
@@ -138,4 +140,82 @@ test("machine-days consumed = the days booked, rounded up (1 day = 1 ha of farm 
   // Legacy requests without a recorded duration fall back to the farm area (rounded up).
   assert.equal(hectareDayContribution(2.1, null), 3);
   assert.equal(hectareDayContribution(2, null), 2);
+});
+/**
+ * A booking must sit inside a single season.
+ *
+ * The capacity pool resets each season, so a booking spanning two seasons would
+ * have to be charged against two different budgets — and which one it counted
+ * against depended on the day the approval happened to be processed, rather
+ * than on anything the member or the office decided.
+ */
+test("a booking inside one season is accepted", () => {
+  const start = new Date(2026, 5, 1); // 1 Jun 2026, inside the wet season
+  const end = new Date(2026, 9, 30); // 30 Oct 2026
+
+  const instance = seasonContainingBooking(seasons, start, end);
+
+  assert.ok(instance);
+  assert.equal(instance.season.id, "wet");
+});
+
+test("a booking that crosses into the next season is rejected", () => {
+  // Starts in the wet season, ends in the dry one.
+  const start = new Date(2026, 9, 15);
+  const end = new Date(2026, 10, 15);
+
+  assert.equal(seasonContainingBooking(seasons, start, end), null);
+});
+
+test("a booking ending exactly on the next season's start is rejected", () => {
+  // The dry season begins 1 Nov; a booking ending at that instant has left
+  // the wet season, even though the end date looks like "the last day of October".
+  const start = new Date(2026, 9, 20);
+  const end = new Date(2026, 10, 1);
+
+  assert.equal(seasonContainingBooking(seasons, start, end), null);
+});
+
+test("a booking ending on the final day of the season is still inside it", () => {
+  // 31 Oct is the last day of the wet season and must not be treated as
+  // spilling into the dry one.
+  const start = new Date(2026, 9, 30);
+  const end = new Date(2026, 9, 31);
+
+  const instance = seasonContainingBooking(seasons, start, end);
+
+  assert.ok(instance);
+  assert.equal(instance.season.id, "wet");
+});
+
+test("a single-day booking is inside its season", () => {
+  const day = new Date(2026, 5, 15);
+
+  const instance = seasonContainingBooking(seasons, day, day);
+
+  assert.ok(instance);
+  assert.equal(instance.season.id, "wet");
+});
+
+test("with no seasons configured the booking cannot be placed in a season", () => {
+  // There is no budget to charge the booking against, so it cannot be
+  // validated. Returning null makes the caller reject rather than silently
+  // approve an uncounted booking.
+  assert.equal(
+    seasonContainingBooking([], new Date(2026, 5, 1), new Date(2026, 5, 5)),
+    null,
+  );
+});
+
+test("committed machine-days are read per member and per season", () => {
+  const usage = [
+    { seasonId: "wet", userId: "m1", bookedHectareDays: 4 },
+    { seasonId: "wet", userId: "m2", bookedHectareDays: 2 },
+    { seasonId: "dry", userId: "m1", bookedHectareDays: 7 },
+  ];
+
+  assert.equal(bookedInInstance(usage, "wet", "m1"), 4);
+  assert.equal(bookedInInstance(usage, "dry", "m1"), 7);
+  // A member with nothing booked in a season is zero, not an error.
+  assert.equal(bookedInInstance(usage, "wet", "m3"), 0);
 });

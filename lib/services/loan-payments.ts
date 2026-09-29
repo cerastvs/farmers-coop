@@ -19,8 +19,57 @@ export type PaymentWithLoan = Payment & {
   } | null;
 };
 
-export function generateReceiptNo(seed: string) {
-  return `RCP-${new Date().getFullYear()}-${seed.slice(0, 8).toUpperCase()}`;
+/**
+ * Receipt number for a payment: `RCP-<year>-<ordinal>`. The ordinal is unique
+ * across the whole year.
+ *
+ * Previously the number was derived from an 8-character slice of a caller-supplied
+ * seed, which collided: seeds built from the same supply, member, and amount
+ * produced the same receipt number on repeat dispatches within a year, and the
+ * 8-char truncation also made unrelated seeds collide. A per-year sequence
+ * cannot collide and stays readable for auditors.
+ */
+export function generateReceiptNo(seed: string, ordinal: number) {
+  const year = new Date().getFullYear();
+  const suffix = String(ordinal).padStart(6, "0");
+  return `RCP-${year}-${suffix}`;
+}
+
+/**
+ * Next receipt ordinal for the current year.
+ *
+ * Counts both `Payment` (application fees, supply purchases) and `LoanPayment`
+ * (loan repayments) so the sequence is shared and no number is ever issued
+ * twice across the two tables.
+ *
+ * Callers must run this inside the same transaction that writes the payment.
+ * The payment paths use serializable isolation, which makes count-then-insert
+ * safe against concurrent transactions taking the same ordinal.
+ */
+export async function nextReceiptOrdinal(
+  tx: Prisma.TransactionClient,
+): Promise<number> {
+  const year = new Date().getFullYear();
+  const prefix = `RCP-${year}-`;
+
+  const [loanPayments, payments] = await Promise.all([
+    tx.loanPayment.findMany({
+      where: { receiptNo: { startsWith: prefix } },
+      select: { receiptNo: true },
+    }),
+    tx.payment.findMany({
+      where: { receiptNo: { startsWith: prefix } },
+      select: { receiptNo: true },
+    }),
+  ]);
+
+  let max = 0;
+  for (const { receiptNo } of [...loanPayments, ...payments]) {
+    if (!receiptNo) continue;
+    const parsed = Number(receiptNo.slice(prefix.length));
+    if (Number.isInteger(parsed) && parsed > max) max = parsed;
+  }
+  return max + 1;
 }
 
 /**
@@ -67,7 +116,7 @@ export async function applyVerifiedLoanPayment(
     data: {
       loanId: payment.loan.id,
       amount: payment.amount,
-      receiptNo: generateReceiptNo(payment.id),
+      receiptNo: generateReceiptNo(payment.id, await nextReceiptOrdinal(tx)),
     },
   });
 

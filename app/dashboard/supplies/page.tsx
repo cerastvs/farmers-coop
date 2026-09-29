@@ -177,7 +177,10 @@ export default function SuppliesPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h3 className="font-bold text-gray-900">{supply.productName}</h3>
-                      <p className="text-sm text-gray-500">{supply.quantity} in stock</p>
+                      {/* Stock is reserved the moment a request is approved, so
+                          this figure is what is still available to order, not a
+                          physical count of goods in the warehouse. */}
+                      <p className="text-sm text-gray-500">{supply.quantity} available</p>
                       {supply.loanLimitPerHectare != null && (
                         <p className="text-xs text-orange-600 font-medium">Loan limit: {supply.loanLimitPerHectare} per hectare</p>
                       )}

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ImageModal } from "@/components/ImageModal";
-import { APPLICATION_DENIAL_REASONS } from "@/lib/application-fee";
+import { APPLICATION_DENIAL_REASONS } from "@/lib/application-fee-constants";
 import { Money } from "@/components/Money";
 import {
   ArrowLeft,

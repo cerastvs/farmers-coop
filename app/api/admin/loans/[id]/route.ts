@@ -8,7 +8,11 @@ import {
   requireUuid,
 } from "@/lib/api";
 import prisma from "@/lib/client";
-import { assertTransition, loanTransitions } from "@/lib/lifecycles";
+import {
+  assertTransition,
+  calculateLoanDueDate,
+  loanTransitions,
+} from "@/lib/lifecycles";
 import { FINANCE_ROLES } from "@/lib/permissions";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -47,16 +51,22 @@ export async function PATCH(
             : LoanStatus.REJECTED;
         assertTransition(loanTransitions, loan.status, nextStatus, "Loan");
 
+        const approvedAt = new Date();
         const claimed = await tx.loan.updateMany({
           where: { id, status: loan.status },
           data: {
             status: nextStatus,
             reviewedBy: actor.userId,
-            reviewedAt: new Date(),
+            reviewedAt: approvedAt,
             rejectionReason:
               nextStatus === LoanStatus.REJECTED
                 ? result.data.reason ?? null
                 : null,
+            // The term runs from approval, not from application, so time spent
+            // waiting in the officer queue does not shorten it.
+            ...(nextStatus === LoanStatus.ACTIVE
+              ? { due: calculateLoanDueDate(approvedAt, loan.termMonths) }
+              : {}),
           },
         });
         if (claimed.count !== 1) {

@@ -326,6 +326,9 @@ export interface ReportDocumentProps {
   generatedByName?: string | null;
   memberName?: string | null;
   statuses?: string[];
+  /** Second status domain (e.g. ApplicationStatus on Member Records), shown
+      separately so the two are never conflated in the printed header. */
+  applicationStatuses?: string[];
   isPreview?: boolean;
 }
 
@@ -340,6 +343,7 @@ export function ReportDocument({
   generatedByName,
   memberName,
   statuses,
+  applicationStatuses,
   isPreview,
 }: ReportDocumentProps) {
   const catalog = getCatalog(type);
@@ -374,6 +378,8 @@ export function ReportDocument({
   if (from || to) filterParts.push(period);
   if (memberName) filterParts.push(`Member: ${memberName}`);
   if (statuses && statuses.length > 0) filterParts.push(`Statuses: ${statuses.join(", ")}`);
+  if (applicationStatuses && applicationStatuses.length > 0)
+    filterParts.push(`Application status: ${applicationStatuses.join(", ")}`);
 
   const generatedLabel = generatedAt
     ? new Date(generatedAt).toLocaleString("en-PH")

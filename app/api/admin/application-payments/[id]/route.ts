@@ -109,57 +109,57 @@ export async function PATCH(
         if (nextStatus === PaymentStatus.VERIFIED && payment.application) {
           const previousStatus = payment.application.status;
 
-          // Verifying the fee moves the application into the President's review
-          // queue — it does NOT grant membership by itself. Approving membership
-          // is a separate, explicit decision (and the only thing that grants
-          // member rights). Previously this single action both verified the fee
-          // and approved the application, so membership was effectively
-          // self-approving as soon as any fee was verified.
+          // Verifying the application fee IS the membership decision. Once the
+          // fee is verified the applicant is a member: the cooperative's
+          // membership requirement is the fee, so the treasurer confirming the
+          // payment is the point at which member rights begin. There is no
+          // separate presidential sign-off to wait for.
           const updated = await tx.application.updateMany({
-            where: { id: payment.application.id },
+            where: {
+              id: payment.application.id,
+              status: {
+                in: [
+                  ApplicationStatus.PENDING,
+                  ApplicationStatus.PENDING_PAYMENT,
+                  ApplicationStatus.PENDING_APPLICATION_REVIEW,
+                ],
+              },
+            },
             data: {
-              status: ApplicationStatus.PENDING_APPLICATION_REVIEW,
+              status: ApplicationStatus.APPROVED,
+              reviewedBy: actor.userId,
+              reviewedAt: now,
             },
           });
           if (updated.count !== 1) {
             throw new ApiError(409, "Application status changed during review");
           }
 
+          await tx.user.updateMany({
+            where: { id: payment.application.userId },
+            data: { role: Role.MEMBER, active: true },
+          });
+
           await writeAudit(tx, {
             userId: actor.userId,
             userRole: actor.userRole,
-            action: "APPLICATION_FEE_VERIFIED_FOR_REVIEW",
+            action: "MEMBERSHIP_APPLICATION_APPROVED",
             entity: "Application",
             entityId: payment.application.id,
             previousStatus,
-            newStatus: ApplicationStatus.PENDING_APPLICATION_REVIEW,
+            newStatus: ApplicationStatus.APPROVED,
           });
-
-          // The application now waits on the President, so tell them.
-          const presidents = await tx.user.findMany({
-            where: { role: Role.PRESIDENT, active: true },
-            select: { id: true },
-          });
-          await Promise.all(
-            presidents.map((president) =>
-              notifyUser(tx, {
-                userId: president.id,
-                title: "Membership application ready for review",
-                message: `The application fee for ${payment.application!.fullName} has been verified. Their membership application is awaiting your decision.`,
-              }),
-            ),
-          );
         }
 
         await notifyUser(tx, {
           userId: payment.userId,
           title:
             nextStatus === PaymentStatus.VERIFIED
-              ? "Payment verified"
+              ? "Membership approved"
               : "Payment proof declined",
           message:
             nextStatus === PaymentStatus.VERIFIED
-              ? "Your application fee payment was verified. Your membership application is now awaiting the President's review."
+              ? "Congratulations! Your application fee payment was verified. You are now an official member of the cooperative."
               : `Your submitted application fee proof could not be approved.${
                   result.data.reason
                     ? ` Reason: ${result.data.reason}`

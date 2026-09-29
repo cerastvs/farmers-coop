@@ -274,7 +274,11 @@ export default function AdminPage() {
     approvedMembers: 0,
   });
   const [feeAmount, setFeeAmount] = useState(0);
-  const [memFilter, setMemFilter] = useState("PENDING_APPLICATION_REVIEW");
+  // Default to the queue that actually needs action. Verifying the fee is
+  // what grants membership, so applications awaiting a decision are the ones
+  // still waiting on a verified payment proof — "awaiting President review" is
+  // no longer a populated state.
+  const [memFilter, setMemFilter] = useState("PENDING_PAYMENT");
   const [proofModalUrl, setProofModalUrl] = useState<string | null>(null);
   const [viewReport, setViewReport] = useState<Report | null>(null);
   const [feeSearch, setFeeSearch] = useState("");
@@ -690,10 +694,10 @@ export default function AdminPage() {
                     placeholder="Search by name, application ID, or contact"
                   />
                   <select className={fieldClass} value={memFilter} onChange={(e) => setMemFilter(e.target.value)}>
-                    <option value="PENDING_APPLICATION_REVIEW">Awaiting President review</option>
-                    <option value="REJECTED">Denied</option>
+                    <option value="PENDING_PAYMENT">Awaiting fee verification</option>
+                    <option value="PENDING">Pending</option>
                     <option value="APPROVED">Approved</option>
-                    <option value="PENDING_PAYMENT">Pending payment</option>
+                    <option value="REJECTED">Denied</option>
                     <option value="">All applications</option>
                   </select>
                   <button disabled={loading} className={buttonClass}>Filter</button>

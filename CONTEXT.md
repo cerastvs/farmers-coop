@@ -51,25 +51,30 @@ An in-app message informing one user of a workflow outcome.
 
 ## Membership Fee and Approval
 
-A membership application passes through four states, and each is a distinct
-decision made by a distinct actor:
+A membership application moves through these states:
 
 1. `PENDING` — the applicant has submitted the application.
-2. `PENDING_PAYMENT` — the application fee is owed.
-3. `PENDING_APPLICATION_REVIEW` — a verified fee has been recorded and the
-   application is waiting on the President.
-4. `APPROVED` or `REJECTED` — the President's decision.
+2. `PENDING_PAYMENT` — the application fee is owed, and a payment proof is
+   either uploaded or recorded at the office.
+3. `APPROVED` or `REJECTED` — the outcome. `APPROVED` is reached automatically
+   when the fee is verified; `REJECTED` is a decision made before payment.
 
-**Recording or verifying the application fee is not approving membership.** It
-moves the application to `PENDING_APPLICATION_REVIEW` and nothing more. Only the
-membership review endpoints grant membership, and they re-verify the fee
-themselves inside the approval transaction.
+**Verifying the application fee is what approves membership.** Once the fee is
+verified — whether uploaded as proof or recorded at the office — the applicant
+becomes a member and gains member rights immediately. The fee *is* the
+membership requirement, so confirming payment is the decision; there is no
+separate sign-off to wait for. `PENDING_APPLICATION_REVIEW` is a legacy state
+and should no longer be produced.
 
 The fee must be `VERIFIED` and exactly equal the configured fee amount. A short
 payment is not a settled fee: membership grants borrowing, supply credit, and
-machine access, and none of those are earned in part. The check runs inside the
-approval transaction, not before it, so a fee reversed in between cannot produce
-an approval.
+machine access, and none of those are earned in part. The amount is re-read from
+the stored payment inside the approval transaction, not taken from the request
+body, so a fee recorded at the wrong amount cannot grant membership.
+
+Because approval follows automatically from payment, rejecting an application is
+a **pre-payment** action. An application already marked `APPROVED` cannot be
+rejected through the review endpoints.
 
 ## Money and Time
 

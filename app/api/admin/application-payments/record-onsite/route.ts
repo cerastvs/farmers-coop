@@ -188,14 +188,13 @@ async function completeOnSiteApplicationFee(
         select: { userId: true, fullName: true, status: true },
       });
 
-      // Recording a fee is not the same decision as granting membership. The
-      // application moves into the President's review queue; only the
-      // membership review endpoints promote it to APPROVED and set the member
-      // role, and those endpoints re-verify this exact fee.
+      // Recording the fee at the office IS the membership decision. The
+      // application is approved and the member role is granted here, in the
+      // same transaction that records the payment.
       //
       // The amount is re-read from the stored payment rather than from the
-      // request body, so a fee recorded at the wrong amount cannot enter the
-      // review queue on the strength of the requested figure.
+      // request body, so a fee recorded at the wrong amount cannot grant
+      // membership on the strength of the requested figure.
       const settledFee = await tx.payment.findFirst({
         where: {
           id: paymentId,
@@ -227,20 +226,27 @@ async function completeOnSiteApplicationFee(
           },
         },
         data: {
-          status: ApplicationStatus.PENDING_APPLICATION_REVIEW,
+          status: ApplicationStatus.APPROVED,
+          reviewedBy: actorId,
+          reviewedAt: new Date(),
         },
       });
       if (claimed.count === 0) {
         throw new ApiError(409, "Application is no longer awaiting review");
       }
 
+      await tx.user.updateMany({
+        where: { id: application!.userId },
+        data: { role: Role.MEMBER, active: true },
+      });
+
       await writeAudit(tx, {
         userId: actorId,
         userRole: Role.PRESIDENT,
-        action: "APPLICATION_FEE_RECORDED_ON_SITE",
+        action: "MEMBERSHIP_APPLICATION_APPROVED",
         entity: "Application",
         entityId: applicationId,
-        newStatus: ApplicationStatus.PENDING_APPLICATION_REVIEW,
+        newStatus: ApplicationStatus.APPROVED,
       });
 
       await writeAudit(tx, {
@@ -258,9 +264,9 @@ async function completeOnSiteApplicationFee(
 
       await notifyUser(tx, {
         userId: application!.userId,
-        title: "Payment recorded",
+        title: "Membership approved",
         message:
-          "Your on-site application fee payment was recorded. Your membership application is now awaiting the President's review.",
+          "Congratulations! Your on-site application fee payment was recorded. You are now an official member of the cooperative.",
       });
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },

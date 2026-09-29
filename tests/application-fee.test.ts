@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { PaymentMethod, Prisma } from "../app/generated/prisma";
+import { PaymentMethod, PaymentStatus, Prisma } from "../app/generated/prisma";
 import {
   findSettledApplicationFee,
   getApplicationFeeAmount,
@@ -276,4 +276,41 @@ test("the fee check honours a non-default configured amount", () => {
       250,
     ),
   );
+});
+
+/**
+ * Membership is granted by paying the fee.
+ *
+ * The cooperative's membership requirement is the fee, so confirming payment is
+ * the decision — there is no separate presidential sign-off to wait for. Both
+ * fee paths (online proof verification and on-site recording) must end in
+ * APPROVED with the member role granted in the same transaction.
+ *
+ * This test pins the settled-fee rule those paths depend on. It was briefly
+ * inverted so that fee verification only queued a review, which left the
+ * officer-facing "awaiting review" queue permanently empty.
+ */
+test("a settled fee is the membership decision, not a review step", () => {
+  // Only a verified, exactly-matching fee grants membership. Once this returns
+  // a payment, the caller approves the application and sets role = MEMBER.
+  const settled = findSettledApplicationFee([
+    { status: "VERIFIED", amount: new Prisma.Decimal(500) },
+  ]);
+
+  assert.ok(settled, "a verified full fee must settle the application");
+  assert.equal(settled.status, PaymentStatus.VERIFIED);
+});
+
+test("an unverified or short fee never grants membership", () => {
+  // The auto-approval path depends on this being strict: the check that guards
+  // granting member rights runs on every verification, so a weak check would
+  // grant borrowing and supply credit for an unsettled fee.
+  for (const payment of [
+    { status: "PENDING", amount: new Prisma.Decimal(500) },
+    { status: "REJECTED", amount: new Prisma.Decimal(500) },
+    { status: "VERIFIED", amount: new Prisma.Decimal(499.99) },
+    { status: "VERIFIED", amount: new Prisma.Decimal(0) },
+  ]) {
+    assert.equal(findSettledApplicationFee([payment]), null);
+  }
 });

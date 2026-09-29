@@ -12,7 +12,7 @@ import {
 } from "../components/BookingCalendar";
 import { IconChevronLeft } from "@/components/icons";
 import { ImageModal } from "@/components/ImageModal";
-import { Tractor, X } from "lucide-react";
+import { Tractor, X, CalendarDays, FileCheck } from "lucide-react";
 import { useMarkAlertSeen } from "../hooks/useAlertSeen";
 import { fetchWithTimeout } from "../hooks/fetchWithTimeout";
 
@@ -114,32 +114,46 @@ export default function RentMachinePage() {
     setEndDate("");
   }
 
-  async function handleBorrow(machineId: string) {
+  const [consentMachineId, setConsentMachineId] = useState<string | null>(null);
+  const [agreeChecked, setAgreeChecked] = useState(false);
+
+  function borrowFormError(): string | null {
     if (!startDate || !endDate) {
-      setMessage({ type: "error", text: "Please select both start and end dates" });
-      return;
+      return "Please select both start and end dates";
     }
-
     if (endDate < startDate) {
-      setMessage({ type: "error", text: "End date must be on or after start date" });
-      return;
+      return "End date must be on or after start date";
     }
-
     const days = selectedDurationDays();
     if (days !== null && days > allowedDurationDays) {
-      setMessage({
-        type: "error",
-        text: `Your ${farmSize} ha farm allows at most ${allowedDurationDays} day(s) of machine use (1 day per hectare).`,
-      });
+      return `Your ${farmSize} ha farm allows at most ${allowedDurationDays} day(s) of machine use (1 day per hectare).`;
+    }
+    if (exceedsSeasonCapacity) {
+      return `This would bring you to ${prospectiveDays} of your ${farmSize} machine-day season limit. Cancel one of your current requests first, then resubmit within your limit.`;
+    }
+    return null;
+  }
+
+  function openConsent(machineId: string) {
+    const error = borrowFormError();
+    if (error) {
+      setMessage({ type: "error", text: error });
       return;
     }
+    setConsentMachineId(machineId);
+    setAgreeChecked(false);
+  }
 
-    if (exceedsSeasonCapacity) {
-      setMessage({
-        type: "error",
-        text: `This would bring you to ${prospectiveDays} of your ${farmSize} machine-day season limit. Cancel one of your current requests first, then resubmit within your limit.`,
-      });
-      return;
+  function closeConsent() {
+    setConsentMachineId(null);
+    setAgreeChecked(false);
+  }
+
+  async function handleBorrow(machineId: string): Promise<boolean> {
+    const error = borrowFormError();
+    if (error) {
+      setMessage({ type: "error", text: error });
+      return false;
     }
 
     setBorrowing(machineId);
@@ -158,14 +172,22 @@ export default function RentMachinePage() {
         setMessage({ type: "success", text: data.message });
         closeBorrowForm();
         fetchMachines();
-      } else {
-        setMessage({ type: "error", text: data.error });
+        return true;
       }
+      setMessage({ type: "error", text: data.error });
+      return false;
     } catch {
       setMessage({ type: "error", text: "Failed to submit request" });
+      return false;
     } finally {
       setBorrowing(null);
     }
+  }
+
+  async function confirmConsentSubmit() {
+    if (!consentMachineId || !agreeChecked) return;
+    const ok = await handleBorrow(consentMachineId);
+    if (ok) closeConsent();
   }
 
   async function handleCancel(requestId: string) {
@@ -295,28 +317,84 @@ export default function RentMachinePage() {
         )}
 
         {seasonCapacity && (
-          <div
-            className={`rounded-xl border px-4 py-3 text-sm font-medium ${
-              bookedInSeason >= farmSize
-                ? "bg-red-50 text-red-700 border-red-200"
-                : "bg-emerald-50 text-emerald-800 border-emerald-200"
-            }`}
-          >
-            <span className="font-bold">{seasonCapacity.seasonName}:</span> you have{" "}
-            <span className="font-bold">
-              {bookedInSeason} of {farmSize} machine-day
-              {farmSize !== 1 ? "s" : ""}
-            </span>{" "}
-            booked this season
-            {bookedInSeason < farmSize && (
-              <> — <span className="font-bold">{remainingInSeason}</span> remain</>
-            )}
-            {bookedInSeason >= farmSize && (
-              <span className="block mt-0.5 text-xs">
-                You&apos;ve reached your limit. Cancel one of your current requests to free capacity.
-              </span>
-            )}
-          </div>
+          (() => {
+            const atLimit = bookedInSeason >= farmSize;
+            const low = !atLimit && remainingInSeason <= 1;
+            const state = atLimit ? "limit" : low ? "low" : "ok";
+            const fmt = (n: number) =>
+              n.toLocaleString("en-US", { maximumFractionDigits: 1 });
+            const pct = farmSize > 0 ? Math.max(2, Math.min(100, Math.round((bookedInSeason / farmSize) * 100))) : 0;
+            const accent =
+              state === "limit"
+                ? { text: "text-[#a8431f]", icon: "bg-red-50 text-red-700", fill: "bg-[#c4522a]", chip: "bg-red-50 text-red-700 border-red-100", bar: "bg-red-50" }
+                : state === "low"
+                  ? { text: "text-[#9a6a12]", icon: "bg-amber-50 text-amber-700", fill: "bg-[#d9a013]", chip: "bg-amber-50 text-amber-700 border-amber-100", bar: "bg-amber-50" }
+                  : { text: "text-[#1d6f3d]", icon: "bg-emerald-50 text-emerald-700", fill: "bg-[#39733e]", chip: "bg-emerald-50 text-emerald-700 border-emerald-100", bar: "bg-emerald-50/60" };
+            const chipLabel =
+              state === "limit"
+                ? "Limit reached"
+                : state === "low"
+                  ? "Almost at your limit"
+                  : `${fmt(remainingInSeason)} day${remainingInSeason === 1 ? "" : "s"} left`;
+            return (
+              <div className="rounded-2xl border border-[#e2e7dc] border-l-4 bg-white px-4 py-3.5 shadow-sm"
+                style={{ borderLeftColor: atLimit ? "#c4522a" : low ? "#d9a013" : "#39733e" }}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${accent.icon}`}>
+                      <CalendarDays size={15} />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-[#718176]">
+                        {seasonCapacity.seasonName} · season capacity
+                      </p>
+                      <p className="truncate text-xs font-semibold text-[#173a2b]">
+                        {fmt(bookedInSeason)} of {fmt(farmSize)} machine-day{fmt(farmSize) === "1" ? "" : "s"} booked
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-bold ${accent.chip}`}>
+                    {chipLabel}
+                  </span>
+                </div>
+
+                <div className="mt-3 flex items-baseline gap-1.5">
+                  <span className={`font-mono text-3xl font-black leading-none ${accent.text}`}>
+                    {fmt(remainingInSeason)}
+                  </span>
+                  <span className="text-xs font-semibold text-[#5a7267]">
+                    machine-days available
+                  </span>
+                </div>
+
+                <div
+                  role="progressbar"
+                  aria-valuenow={Math.round(pct)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-[#e9efe7]"
+                >
+                  <div className={`h-full rounded-full ${accent.fill}`} style={{ width: `${pct}%` }} />
+                </div>
+
+                <div className="mt-2.5 flex items-center gap-4 text-[11px] font-semibold text-[#5a7267]">
+                  <span className="flex items-center gap-1.5">
+                    <span className={`h-1.5 w-1.5 rounded-full ${accent.fill}`} />
+                    {fmt(bookedInSeason)} booked
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#c9d6c9]" />
+                    {fmt(remainingInSeason)} available
+                  </span>
+                  {atLimit && (
+                    <span className="ml-auto rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                      cancel a request to free days
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })()
         )}
 
         <section>
@@ -494,7 +572,7 @@ export default function RentMachinePage() {
                             Cancel
                           </button>
                           <button
-                            onClick={() => handleBorrow(machine.id)}
+                            onClick={() => openConsent(machine.id)}
                             disabled={borrowing === machine.id || !startDate || !endDate || hasDateConflict || exceedsAllowedDuration || exceedsSeasonCapacity}
                             className={`rounded-xl px-5 py-2 text-sm font-bold transition-colors ${
                               borrowing === machine.id || !startDate || !endDate
@@ -685,6 +763,92 @@ export default function RentMachinePage() {
                   {returning !== null ? "Returning..." : "Yes, Return"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {consentMachineId && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl max-h-[90vh]">
+            <div className="flex items-start justify-between gap-3 border-b border-[#eef2e8] px-6 pb-4 pt-6">
+              <div className="flex items-center gap-3">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
+                  <FileCheck size={19} />
+                </span>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">
+                    Borrow request terms
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    Review and accept before submitting.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={closeConsent}
+                disabled={borrowing === consentMachineId}
+                className="shrink-0 rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="flex-1 space-y-3 overflow-y-auto px-6 py-4 text-sm text-gray-600">
+              {[
+                "Machines are for your own farm use only, during the exact dates you booked.",
+                "Each day booked counts toward your seasonal machine-day limit (1 hectare = 1 machine-day). Pending and approved requests reserve those days until cancelled, rejected, or returned.",
+                "Your request is sent to the secretary for review — it is not confirmed until approved.",
+                "Once approved, confirm pickup to take possession of the machine.",
+                "You are responsible for the machine while it is in your possession. Return it on time and in reasonable condition; the secretary confirms the return.",
+                "Report any damage or issues to the cooperative immediately.",
+                "You can cancel a pending request at any time; cancelling or a rejection frees its machine-days again.",
+              ].map((term) => (
+                <p key={term} className="flex items-start gap-2.5">
+                  <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-emerald-600" />
+                  {term}
+                </p>
+              ))}
+            </div>
+
+            <div className="border-t border-[#eef2e8] px-6 py-4">
+              <label className="flex cursor-pointer items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={agreeChecked}
+                  onChange={(e) => setAgreeChecked(e.target.checked)}
+                  disabled={borrowing === consentMachineId}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                  style={{ accentColor: "#39733e" }}
+                />
+                <span className="text-sm font-semibold text-[#173a2b]">
+                  I have read and agree to the terms above
+                </span>
+              </label>
+            </div>
+
+            <div className="flex gap-3 px-6 pb-6">
+              <button
+                onClick={closeConsent}
+                disabled={borrowing === consentMachineId}
+                className="flex-1 rounded-2xl bg-gray-100 py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-200 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmConsentSubmit}
+                disabled={!agreeChecked || borrowing === consentMachineId}
+                className={`flex-1 items-center justify-center gap-2 rounded-2xl py-3 text-sm font-bold text-white transition disabled:opacity-50 ${
+                  borrowing === consentMachineId
+                    ? "bg-[#174b36]"
+                    : "bg-[#174b36] hover:bg-[#1a5c42] active:scale-[0.99]"
+                }`}
+              >
+                {borrowing === consentMachineId
+                  ? "Submitting..."
+                  : "Agree & Submit Request"}
+              </button>
             </div>
           </div>
         </div>

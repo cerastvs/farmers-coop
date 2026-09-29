@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { Role } from "@/app/generated/prisma";
 import { apiErrorResponse, ApiError, requireUser } from "@/lib/api";
+import { loadAccountStatus } from "@/lib/account-status";
 import prisma from "@/lib/client";
 import { MEMBER_ROLES, RECORDS_ROLES } from "@/lib/permissions";
 
@@ -95,10 +96,17 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    const accountStatuses = await loadAccountStatus(members.map((m) => m.id));
+
     return NextResponse.json({
       members: members.map(({ applications, loans, ...member }) => ({
         ...member,
         application: applications[0] ?? null,
+        account: accountStatuses.get(member.id) ?? {
+          openReactivationRequest: null,
+          deactivationReason: null,
+          deactivatedAt: null,
+        },
         loans: loans.map(({ payments, ...loan }) => {
           const paid = payments.reduce(
             (sum, p) => sum + Number(p.amount),

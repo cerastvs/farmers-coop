@@ -76,6 +76,37 @@ Because approval follows automatically from payment, rejecting an application is
 a **pre-payment** action. An application already marked `APPROVED` cannot be
 rejected through the review endpoints.
 
+## Account Deactivation and Reactivation
+
+An officer can disable a member's account from the member records workspace.
+The `active` flag alone is not enough to explain the decision, so the officer is
+prompted to confirm and may give a reason, and that reason is what the member
+is shown.
+
+A disabled account keeps its session but loses every API call, so it is
+redirected to a notice page rather than a dashboard it cannot use. The redirect
+reads the database rather than the session cookie, so deactivating someone
+takes effect on their next navigation instead of whenever their token happens
+to expire.
+
+From the notice page the member can **request reactivation**, which notifies the
+President and Secretary. Only those two roles answer reactivation requests, so
+the Treasurer is neither notified nor given the panel — the same pair that the
+membership admin workspace already treats as the membership officers. Pending
+requests are badged on the member records tab and reactivation closes the
+request automatically, so no one has to remember to dismiss it.
+
+There is no column for any of this. State is derived from three audit events —
+`MEMBER_DEACTIVATED`, `REACTIVATION_REQUESTED`, `MEMBER_REACTIVATED` — where
+the newest decides where the account stands. The audit trail is already the
+durable, append-only record of who changed what and why, so the reason lives
+there, and a stale column could disagree with the trail. Deriving it means
+reactivation cannot be silently forgotten in the UI.
+
+The consequence worth knowing: rejection and deactivation are different tools.
+Rejection is a pre-payment decision about an application; deactivation is an
+operational action against a member, reversible through this request flow.
+
 ## Money and Time
 
 **Philippine Time**:

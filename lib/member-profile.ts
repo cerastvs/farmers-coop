@@ -2,6 +2,7 @@ import { FarmOwnership, Prisma, Role } from "@/app/generated/prisma";
 import { z } from "zod";
 
 import { notifyUser, writeAudit } from "@/lib/activity";
+import { recordDeactivation, recordReactivation } from "@/lib/account-status";
 import { ApiError } from "@/lib/errors";
 import prisma from "@/lib/client";
 import { toTitleCase } from "@/lib/format";
@@ -51,6 +52,7 @@ export const MemberUpdateSchema = z
       .optional(),
     role: z.nativeEnum(Role).optional(),
     active: z.boolean().optional(),
+    deactivationReason: z.string().trim().max(500).optional(),
     profile: ProfileUpdateSchema.optional(),
   })
   .strict()
@@ -112,11 +114,13 @@ type MemberRecord = Prisma.UserGetPayload<{ select: typeof memberSelect }>;
  */
 export async function updateMemberRecord({
   actorId,
+  actorRole,
   memberId,
   data,
   extraMetadata,
 }: {
   actorId: string;
+  actorRole?: Role;
   memberId: string;
   data: MemberUpdate;
   extraMetadata?: Record<string, unknown>;
@@ -156,6 +160,10 @@ export async function updateMemberRecord({
   if (data.profile && !existing.applications[0]) {
     throw new ApiError(409, "Member does not have an application profile");
   }
+  // An officer must not be able to lock themselves out mid-session.
+  if (data.active === false && memberId === actorId) {
+    throw new ApiError(409, "You cannot deactivate your own account");
+  }
 
   const previousProfile = existing.applications[0]
     ? {
@@ -184,6 +192,30 @@ export async function updateMemberRecord({
       },
       select: memberSelect,
     });
+
+    // Only record a status transition when the flag actually flips, so a
+    // re-save of an unchanged record does not manufacture a fresh deactivation
+    // (and wipe the reason the member is still being shown).
+    const deactivatedNow =
+      data.active === false && existing.active === true;
+    const reactivatedNow =
+      data.active === true && existing.active === false;
+
+    if (deactivatedNow) {
+      await recordDeactivation(tx, {
+        actorId,
+        actorRole: actorRole ?? Role.APPLICANT,
+        memberId,
+        reason: data.deactivationReason,
+      });
+    }
+    if (reactivatedNow) {
+      await recordReactivation(tx, {
+        actorId,
+        actorRole: actorRole ?? Role.APPLICANT,
+        memberId,
+      });
+    }
 
     if (data.profile) {
       const { cropType, farmMachinery, ...scalarProfile } = data.profile;
@@ -237,12 +269,31 @@ export async function updateMemberRecord({
     });
 
     if (actorId !== memberId) {
-      await notifyUser(tx, {
-        userId: memberId,
-        title: "Member record updated",
-        message:
-          "An authorized cooperative officer updated your member record.",
-      });
+      if (deactivatedNow) {
+        const reason = data.deactivationReason?.trim() ?? "";
+        await notifyUser(tx, {
+          userId: memberId,
+          title: "Your account has been disabled",
+          message:
+            "A cooperative officer has disabled your account. Sign in to see the details and request reactivation." +
+            (reason.length > 0 ? `\n\nReason given: ${reason}` : ""),
+          link: "/account-disabled",
+        });
+      } else if (reactivatedNow) {
+        await notifyUser(tx, {
+          userId: memberId,
+          title: "Your account has been reactivated",
+          message:
+            "A cooperative officer has reactivated your account. You have full access to the cooperative again.",
+        });
+      } else {
+        await notifyUser(tx, {
+          userId: memberId,
+          title: "Member record updated",
+          message:
+            "An authorized cooperative officer updated your member record.",
+        });
+      }
     }
 
     return tx.user.findUniqueOrThrow({

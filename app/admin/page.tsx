@@ -21,6 +21,30 @@ type Tab =
 type User = { id: string; name: string | null; username: string; role: Role };
 type Notice = { kind: "success" | "error"; text: string };
 
+const ALL_TABS: Tab[] = [
+  "loans",
+  "payments",
+  "applicationPayments",
+  "membershipApplications",
+  "supplies",
+  "members",
+  "reports",
+  "posts",
+];
+
+/** Tabs a role may open, in display order. */
+function tabsForRole(role: Role): Tab[] {
+  const result: Tab[] = ["members", "reports", "posts"];
+  if (["PRESIDENT", "TREASURER"].includes(role)) result.unshift("loans", "payments");
+  if (role === "PRESIDENT") result.splice(result.indexOf("members"), 0, "applicationPayments", "membershipApplications");
+  if (["SECRETARY", "TREASURER"].includes(role)) result.splice(result.includes("payments") ? 2 : 0, 0, "supplies");
+  return result;
+}
+
+function canAccessTab(tab: Tab, role: Role) {
+  return tabsForRole(role).includes(tab);
+}
+
 interface Loan {
   id: string;
   borrower: { name: string | null; username: string };
@@ -73,7 +97,24 @@ interface Member {
   active: boolean;
   createdAt: string;
   application?: { contact?: string; crops?: string[]; status?: string; fullName?: string; id?: string } | null;
+  account?: {
+    openReactivationRequest: { at: string; message: string | null } | null;
+    deactivationReason: string | null;
+    deactivatedAt: string | null;
+  } | null;
   loans?: MemberLoan[];
+}
+
+interface ReactivationRequest {
+  id: string;
+  name: string | null;
+  username: string;
+  role: Role;
+  active: boolean;
+  requestedAt: string;
+  message: string | null;
+  deactivationReason: string | null;
+  deactivatedAt: string | null;
 }
 
 interface MemberLoan {
@@ -302,14 +343,19 @@ export default function AdminPage() {
   const [editSupplyRemoveImage, setEditSupplyRemoveImage] = useState<Record<string, boolean>>({});
   const editSupplyFileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  const tabs = useMemo(() => {
-    if (!user) return [] as Tab[];
-    const result: Tab[] = ["members", "reports", "posts"];
-    if (["PRESIDENT", "TREASURER"].includes(user.role)) result.unshift("loans", "payments");
-    if (user.role === "PRESIDENT") result.splice(result.indexOf("members"), 0, "applicationPayments", "membershipApplications");
-    if (["SECRETARY", "TREASURER"].includes(user.role)) result.splice(result.includes("payments") ? 2 : 0, 0, "supplies");
-    return result;
-  }, [user]);
+  const tabs = useMemo(() => (user ? tabsForRole(user.role) : []), [user]);
+
+  const [reactivationRequests, setReactivationRequests] = useState<ReactivationRequest[]>([]);
+
+  const loadReactivationRequests = useCallback(async () => {
+    try {
+      const data = await requestJson("/api/admin/reactivation-requests");
+      setReactivationRequests(data.requests ?? []);
+    } catch {
+      // The badge is cosmetic; a failure here must not break the workspace.
+      setReactivationRequests([]);
+    }
+  }, []);
 
   const loadTab = useCallback(async (selected: Tab) => {
     const endpoints: Record<Tab, string> = {
@@ -362,15 +408,26 @@ export default function AdminPage() {
     requestJson("/api/me")
       .then((currentUser: User) => {
         setUser(currentUser);
-        const initial: Tab = ["PRESIDENT", "TREASURER"].includes(currentUser.role) ? "loans" : currentUser.role === "SECRETARY" ? "supplies" : "members";
+        // Lets a reactivation notification land the officer directly on the
+        // member records tab instead of stranding them on their default view.
+        const requested = new URLSearchParams(window.location.search).get("tab");
+        const initial: Tab =
+          requested && ALL_TABS.includes(requested as Tab) && canAccessTab(requested as Tab, currentUser.role)
+            ? (requested as Tab)
+            : ["PRESIDENT", "TREASURER"].includes(currentUser.role) ? "loans" : currentUser.role === "SECRETARY" ? "supplies" : "members";
         setTab(initial);
+        // Only the President and Secretary answer reactivation requests, so the
+        // Treasurer never asks for a list they are not allowed to see.
+        if (["PRESIDENT", "SECRETARY"].includes(currentUser.role)) {
+          void loadReactivationRequests();
+        }
         return loadTab(initial);
       })
       .catch((error) => {
         setNotice({ kind: "error", text: error instanceof Error ? error.message : "Unable to load account" });
         setLoading(false);
       });
-  }, [loadTab]);
+  }, [loadTab, loadReactivationRequests]);
 
   async function mutate(key: string, url: string, body: unknown, success: string, method = "PATCH") {
     setBusy(key);
@@ -383,7 +440,10 @@ export default function AdminPage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
           }),
-        refresh: () => loadTab(tab),
+        refresh: async () => {
+          await loadTab(tab);
+          await loadReactivationRequests();
+        },
         onSuccess: () => setNotice({ kind: "success", text: success }),
         onError: (error) =>
           setNotice({
@@ -491,6 +551,14 @@ export default function AdminPage() {
               className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold ${tab === item ? "bg-[#26633f] text-white" : "border border-[#dce5d9] bg-white text-[#496558]"}`}
             >
               {tabLabel(item)}
+              {item === "members" && reactivationRequests.length > 0 && (
+                <span
+                  className="ml-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
+                  aria-label={`${reactivationRequests.length} pending reactivation request${reactivationRequests.length === 1 ? "" : "s"}`}
+                >
+                  {reactivationRequests.length}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -886,9 +954,83 @@ export default function AdminPage() {
 
             {tab === "members" && (
               <AdminSection title="Member Records" description="Update names, roles, and account access.">
+                {reactivationRequests.length > 0 && (
+                  <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 p-4">
+                    <p className="flex items-center gap-2 text-sm font-black text-red-800">
+                      <span className="inline-block h-2 w-2 rounded-full bg-red-500 ring-2 ring-red-200" />
+                      {reactivationRequests.length} reactivation{" "}
+                      {reactivationRequests.length === 1 ? "request" : "requests"}
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {reactivationRequests.map((request) => (
+                        <div
+                          key={request.id}
+                          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-white px-3 py-2"
+                        >
+                          <div>
+                            <p className="text-sm font-bold text-[#173a2b]">
+                              {request.name ?? request.username}
+                              <span className="ml-2 text-xs font-normal text-[#8a968d]">
+                                @{request.username}
+                              </span>
+                            </p>
+                            <p className="text-xs text-[#718176]">
+                              Requested{" "}
+                              {new Date(request.requestedAt).toLocaleString()}
+                              {request.message ? ` — "${request.message}"` : ""}
+                            </p>
+                            {request.deactivationReason && (
+                              <p className="mt-0.5 text-xs text-[#a15c1c]">
+                                Disabled because: {request.deactivationReason}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            disabled={busy === request.id}
+                            onClick={() =>
+                              void mutate(
+                                request.id,
+                                `/api/admin/members/${request.id}/reactivate`,
+                                {},
+                                `${request.name ?? request.username} has been reactivated.`,
+                                "POST",
+                              )
+                            }
+                            className={buttonClass}
+                          >
+                            Reactivate
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <RecordList empty="No member records found.">
                   {members.map((member) => (
                     <Record key={member.id} title={member.name ?? member.username} meta={`@${member.username} · Joined ${new Date(member.createdAt).toLocaleDateString()}`} status={member.active ? member.role : "INACTIVE"}>
+                      {!member.active && member.account?.deactivationReason && (
+                        <p className="mb-2 text-xs text-[#a15c1c]">
+                          Disabled because: {member.account.deactivationReason}
+                        </p>
+                      )}
+                      {!member.active && (
+                        <button
+                          disabled={busy === member.id}
+                          onClick={() =>
+                            void mutate(
+                              member.id,
+                              `/api/admin/members/${member.id}/reactivate`,
+                              {},
+                              `${member.name ?? member.username} has been reactivated.`,
+                              "POST",
+                            )
+                          }
+                          className={`${secondaryButton} mb-2`}
+                        >
+                          Reactivate account
+                        </button>
+                      )}
                       {member.loans && member.loans.length > 0 && (
                         <div className="flex flex-wrap gap-2">
                           {member.loans.map((loan) => (
@@ -910,10 +1052,41 @@ export default function AdminPage() {
                         onSubmit={(event: FormEvent<HTMLFormElement>) => {
                           event.preventDefault();
                           const form = new FormData(event.currentTarget);
+                          const nextActive = form.get("active") === "true";
+
+                          // Disabling an account cuts the member off from loans,
+                          // supplies, and machines the moment they save, so it
+                          // gets a confirmation and a reason they will be shown
+                          // on their notice page — not a silent dropdown flip.
+                          if (!nextActive && member.active) {
+                            const who = member.name ?? member.username;
+                            if (member.id === user?.id) {
+                              setNotice({ kind: "error", text: "You cannot deactivate your own account." });
+                              return;
+                            }
+                            askReason(
+                              `Disable ${who}'s account?`,
+                              `They will lose access to loans, supplies, and machine bookings immediately, and will see this page explaining why. They can request reactivation from it. The reason is optional.`,
+                              (reason) =>
+                                void mutate(
+                                  member.id,
+                                  `/api/admin/members/${member.id}`,
+                                  {
+                                    name: form.get("name"),
+                                    role: form.get("role"),
+                                    active: false,
+                                    ...(reason ? { deactivationReason: reason } : {}),
+                                  },
+                                  `${who}'s account has been disabled.`,
+                                ),
+                            );
+                            return;
+                          }
+
                           void mutate(member.id, `/api/admin/members/${member.id}`, {
                             name: form.get("name"),
                             role: form.get("role"),
-                            active: form.get("active") === "true",
+                            active: nextActive,
                           }, "Member record updated.");
                         }}
                       >

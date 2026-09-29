@@ -15,6 +15,8 @@ export interface DashboardUser {
   role: string;
   hasApplied: boolean;
   applicationStatus: string | null;
+  /** False once an officer disables the account; drives the notice page. */
+  active: boolean;
 }
 
 export interface DashboardStats {
@@ -61,6 +63,7 @@ export async function getDashboardUser(
         name: true,
         username: true,
         role: true,
+        active: true,
       },
     }),
     prisma.application.findFirst({
@@ -76,6 +79,7 @@ export async function getDashboardUser(
     role: user.role,
     hasApplied,
     applicationStatus: application?.status ?? null,
+    active: user.active,
   };
 }
 

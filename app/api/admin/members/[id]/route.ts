@@ -23,6 +23,7 @@ export async function PATCH(
 
     const member = await updateMemberRecord({
       actorId: actor.userId,
+      actorRole: actor.userRole,
       memberId: id,
       data: parsed.data,
     });

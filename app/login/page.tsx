@@ -37,6 +37,14 @@ export default function Login() {
           <p className="mt-1 text-sm text-[#718176]">Sign in to your FarmCoop account</p>
         </div>
         <form className="space-y-4" action={loginAction}>
+          {state?.message && (
+            <p
+              role="alert"
+              className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+            >
+              {state.message}
+            </p>
+          )}
           <div>
             {state?.errors?.username?.[0] && (
               <p className="text-red-500 text-sm">{state.errors.username[0]}</p>

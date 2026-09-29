@@ -76,16 +76,8 @@ export async function login(prevState: ActionState, formData: FormData) {
     return { errors: { username: ["User not found"] } };
   }
 
-  if (!user.active) {
-    await writeActivityLog({
-      userId: user.id,
-      action: "LOGIN",
-      success: false,
-      info: "Login rejected because account is inactive",
-    });
-    return { message: "Your account is inactive. Contact a cooperative officer." };
-  }
-
+  // The password is checked before anything else that could hand out a
+  // session, so knowing a disabled account's username gets an attacker nothing.
   const isValid = await bcrypt.compare(password, user.password);
 
   if (!isValid) {
@@ -101,6 +93,22 @@ export async function login(prevState: ActionState, formData: FormData) {
   const application = await prisma.application.findFirst({
     where: { userId: user.id },
   });
+
+  // A disabled account still signs in, but only far enough to read the notice
+  // page explaining why it was disabled and to ask for it back. Refusing the
+  // login outright would leave that page unreachable — the session is what gets
+  // someone to it. It grants no access: every API still rejects an inactive
+  // account, and the dashboard layout redirects it here on first load.
+  if (!user.active) {
+    await createSession(user.id, user.role, !!application);
+    await writeActivityLog({
+      userId: user.id,
+      action: "LOGIN",
+      success: true,
+      info: "Signed in to a disabled account to view the notice page",
+    });
+    redirect("/account-disabled");
+  }
 
   await createSession(user.id, user.role, !!application);
   await writeActivityLog({

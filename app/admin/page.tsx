@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ImagePlus } from "lucide-react";
 import { ImageModal } from "@/components/ImageModal";
 import { ReportModal } from "@/components/ReportModal";
+import { ReactivateMemberModal } from "@/components/ReactivateMemberModal";
 import { runAdminMutation } from "@/lib/admin-mutation";
 import { Money } from "@/components/Money";
 
@@ -346,6 +347,7 @@ export default function AdminPage() {
   const tabs = useMemo(() => (user ? tabsForRole(user.role) : []), [user]);
 
   const [reactivationRequests, setReactivationRequests] = useState<ReactivationRequest[]>([]);
+  const [reactivateTarget, setReactivateTarget] = useState<{ id: string; name: string; username: string } | null>(null);
 
   const loadReactivationRequests = useCallback(async () => {
     try {
@@ -988,13 +990,11 @@ export default function AdminPage() {
                           <button
                             disabled={busy === request.id}
                             onClick={() =>
-                              void mutate(
-                                request.id,
-                                `/api/admin/members/${request.id}/reactivate`,
-                                {},
-                                `${request.name ?? request.username} has been reactivated.`,
-                                "POST",
-                              )
+                              setReactivateTarget({
+                                id: request.id,
+                                name: request.name ?? request.username,
+                                username: request.username,
+                              })
                             }
                             className={buttonClass}
                           >
@@ -1018,13 +1018,11 @@ export default function AdminPage() {
                         <button
                           disabled={busy === member.id}
                           onClick={() =>
-                            void mutate(
-                              member.id,
-                              `/api/admin/members/${member.id}/reactivate`,
-                              {},
-                              `${member.name ?? member.username} has been reactivated.`,
-                              "POST",
-                            )
+                            setReactivateTarget({
+                              id: member.id,
+                              name: member.name ?? member.username,
+                              username: member.username,
+                            })
                           }
                           className={`${secondaryButton} mb-2`}
                         >
@@ -1267,6 +1265,28 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {reactivateTarget && (
+        <ReactivateMemberModal
+          memberName={reactivateTarget.name}
+          username={reactivateTarget.username}
+          hasPendingRequest={reactivationRequests.some((r) => r.id === reactivateTarget.id)}
+          onCancel={() => setReactivateTarget(null)}
+          onConfirm={() => {
+            const target = reactivateTarget;
+            setReactivateTarget(null);
+            if (target) {
+              void mutate(
+                target.id,
+                `/api/admin/members/${target.id}/reactivate`,
+                {},
+                `${target.name} has been reactivated.`,
+                "POST",
+              );
+            }
+          }}
+        />
       )}
 
       {reasonModal && (

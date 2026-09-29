@@ -6,6 +6,8 @@ import Link from "next/link";
 import { IconLeaf, IconLoan, IconMachine } from "@/components/icons";
 import { ImageModal } from "@/components/ImageModal";
 import { GuarantorApprovalsCard } from "@/components/GuarantorApprovalsCard";
+import { DeactivateMemberModal } from "@/components/DeactivateMemberModal";
+import { ReactivateMemberModal } from "@/components/ReactivateMemberModal";
 import { PaymentConfirmModal } from "@/components/PaymentConfirmModal";
 import { ReportModal } from "@/components/ReportModal";
 import { ReportBuilder } from "@/components/reports/ReportBuilder";
@@ -101,6 +103,18 @@ interface Member {
     amount: number;
     remainingBalance: number;
   }[];
+}
+
+interface ReactivationRequest {
+  id: string;
+  name: string | null;
+  username: string;
+  role: string;
+  active: boolean;
+  requestedAt: string;
+  message: string | null;
+  deactivationReason: string | null;
+  deactivatedAt: string | null;
 }
 
 interface Loan {
@@ -2263,12 +2277,16 @@ function MembersSection({
   expanded,
   onToggle,
   onEdit,
+  onDeactivate,
+  onReactivate,
   busy,
 }: {
   items: Member[];
   expanded: boolean;
   onToggle: () => void;
   onEdit: (id: string, data: { name: string; role: string; active: boolean }) => void;
+  onDeactivate: (member: Member) => void;
+  onReactivate: (member: Member) => void;
   busy: string | null;
 }) {
   const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
@@ -2330,6 +2348,13 @@ function MembersSection({
                     <button
                       disabled={busy === m.id}
                       onClick={() => {
+                        // Disabling cuts the member off right away, so it goes
+                        // through a confirmation with a reason they will be
+                        // shown rather than saving silently.
+                        if (!editActive && m.active) {
+                          onDeactivate(m);
+                          return;
+                        }
                         onEdit(m.id, { name: editName, role: editRole, active: editActive });
                         setEditingId(null);
                       }}
@@ -2411,12 +2436,23 @@ function MembersSection({
                       </div>
                     )}
                   </div>
-                  <button
-                    onClick={() => startEdit(m)}
-                    className="shrink-0 rounded-lg border border-[#dce5d9] p-1.5 text-[#718176] hover:bg-[#edf5df] transition"
-                  >
-                    <Pencil size={12} />
-                  </button>
+                  <div className="flex shrink-0 flex-col gap-1.5">
+                    {!m.active && (
+                      <button
+                        onClick={() => onReactivate(m)}
+                        disabled={busy === m.id}
+                        className="rounded-lg border border-green-200 bg-green-50 px-2 py-1 text-[10px] font-bold text-green-700 transition hover:bg-green-100 disabled:opacity-50"
+                      >
+                        Reactivate
+                      </button>
+                    )}
+                    <button
+                      onClick={() => startEdit(m)}
+                      className="rounded-lg border border-[#dce5d9] p-1.5 text-[#718176] hover:bg-[#edf5df] transition"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -2597,7 +2633,7 @@ function LoansSection({
         />
       )}
       {rejecting && (
-        <PaymentConfirmModal
+      <PaymentConfirmModal
           title="Reject loan request?"
           memberName={rejecting.borrower.name}
           amount={rejecting.amount}
@@ -3673,6 +3709,10 @@ export default function OfficerDashboard({
   );
   const [data, setData] = useState<SecretaryData | null>(null);
   const [guarantorPending, setGuarantorPending] = useState(0);
+  const [reactivationRequests, setReactivationRequests] = useState<ReactivationRequest[]>([]);
+  const [deactivateTarget, setDeactivateTarget] = useState<Member | null>(null);
+  const [reactivateTarget, setReactivateTarget] = useState<Member | null>(null);
+
   const [seasonsData, setSeasonsData] = useState<HarvestSeasonsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
@@ -3750,6 +3790,25 @@ export default function OfficerDashboard({
   }, [role]);
 
   useEffect(() => { fetchSeasons(); }, [fetchSeasons]);
+
+  const loadReactivationRequests = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/reactivation-requests");
+      if (!res.ok) return;
+      const result = await res.json();
+      setReactivationRequests(result.requests ?? []);
+    } catch {
+      // The badge is cosmetic; never let it break the dashboard.
+    }
+  }, []);
+
+  useEffect(() => {
+    // Only the President and Secretary answer reactivation requests, so the
+    // Treasurer never requests a list they cannot see.
+    if (role === "PRESIDENT" || role === "SECRETARY") {
+      void loadReactivationRequests();
+    }
+  }, [role, loadReactivationRequests]);
 
   useEffect(() => {
     let cancelled = false;
@@ -3939,7 +3998,7 @@ export default function OfficerDashboard({
     );
     return {
       applications: data.applications.filter((a) => a.status === "PENDING").length,
-      members: 0,
+      members: reactivationRequests.length,
       loans:
         data.loans.filter((l) => l.status === "PENDING").length +
         guarantorPending,
@@ -3954,7 +4013,7 @@ export default function OfficerDashboard({
       overdue: 0,
       harvest: seasonsData && seasonsData.seasons.length === 0 ? 1 : 0,
     };
-  }, [data, guarantorPending, seasonsData]);
+  }, [data, guarantorPending, seasonsData, reactivationRequests]);
 
   function togglePendingFilter(section: Section) {
     setPendingFilter((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -4064,13 +4123,48 @@ export default function OfficerDashboard({
     } catch { setNotice({ kind: "error", text: `Failed to ${action} payment` }); } finally { setBusy(null); }
   }
 
-  async function handleMemberEdit(memberId: string, payload: { name: string; role: string; active: boolean }) {
+
+  async function handleMemberEdit(memberId: string, payload: { name: string; role: string; active: boolean }, deactivationReason?: string) {
     setBusy(memberId);
     try {
-      const res = await fetch(`/api/admin/members/${memberId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const res = await fetch(`/api/admin/members/${memberId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...payload, ...(deactivationReason ? { deactivationReason } : {}) }) });
       const result = await res.json();
-      if (res.ok) { await fetchData(); } else { setNotice({ kind: "error", text: result.error || "Failed to update member" }); }
+      if (res.ok) { await fetchData(); await loadReactivationRequests(); } else { setNotice({ kind: "error", text: result.error || "Failed to update member" }); }
     } catch { setNotice({ kind: "error", text: "Failed to update member" }); } finally { setBusy(null); }
+  }
+
+  function requestReactivateMember(member: Member) {
+    setReactivateTarget(member);
+  }
+
+  async function handleReactivateMember(member: Member) {
+    setBusy(member.id);
+    try {
+      const res = await fetch(`/api/admin/members/${member.id}/reactivate`, { method: "POST" });
+      const result = await res.json();
+      if (res.ok) {
+        setNotice({ kind: "success", text: `${member.name} has been reactivated.` });
+        await fetchData();
+        await loadReactivationRequests();
+      } else {
+        setNotice({ kind: "error", text: result.error || "Failed to reactivate member" });
+      }
+    } catch {
+      setNotice({ kind: "error", text: "Failed to reactivate member" });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function confirmDeactivate(reason?: string) {
+    const target = deactivateTarget;
+    setDeactivateTarget(null);
+    if (!target) return;
+    await handleMemberEdit(
+      target.id,
+      { name: target.name, role: target.role, active: false },
+      reason,
+    );
   }
 
   async function handleAddSupply(fd: FormData) {
@@ -4401,11 +4495,67 @@ export default function OfficerDashboard({
             )}
 
             {activeTab === "members" && data && (
+              <div className="space-y-3">
+                {reactivationRequests.length > 0 && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-4 animate-fadeIn">
+                    <p className="flex items-center gap-2 text-sm font-bold text-red-800">
+                      <span className="inline-block h-2 w-2 rounded-full bg-red-500 ring-2 ring-red-200" />
+                      {reactivationRequests.length} reactivation{" "}
+                      {reactivationRequests.length === 1 ? "request" : "requests"}
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {reactivationRequests.map((request) => {
+                        const member = data.members.find((m) => m.id === request.id);
+                        return (
+                          <div
+                            key={request.id}
+                            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-white px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-[#173a2b] truncate">
+                                {request.name}
+                                <span className="ml-2 text-[11px] font-normal text-[#718176]">
+                                  @{request.username}
+                                </span>
+                              </p>
+                              <p className="text-[11px] text-[#718176]">
+                                Requested{" "}
+                                {new Date(request.requestedAt).toLocaleString()}
+                                {request.message ? ` — "${request.message}"` : ""}
+                              </p>
+                              {request.deactivationReason && (
+                                <p className="mt-0.5 text-[11px] text-[#a15c1c]">
+                                  Disabled because: {request.deactivationReason}
+                                </p>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => member && requestReactivateMember(member)}
+                              disabled={busy === request.id}
+                              className="rounded-lg bg-[#1b5e3b] px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-[#154a2f] disabled:opacity-50"
+                            >
+                              Reactivate
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
                 <div className="border-b border-[#e2ebe6] px-5 py-4"><h3 className="text-sm font-bold text-[#0f2318]">Members Directory</h3><p className="text-[11px] text-[#5a7267]">{data.members.length} members</p></div>
                 <div className="p-4">
-                  <MembersSection items={searchedMembers} expanded={true} onToggle={() => {}} onEdit={handleMemberEdit} busy={busy} />
+                  <MembersSection
+                    items={searchedMembers}
+                    expanded={true}
+                    onToggle={() => {}}
+                    onEdit={handleMemberEdit}
+                    onDeactivate={setDeactivateTarget}
+                    onReactivate={requestReactivateMember}
+                    busy={busy}
+                  />
                 </div>
+              </div>
               </div>
             )}
 
@@ -4719,6 +4869,29 @@ export default function OfficerDashboard({
             </div>
           </div>
         </div>
+      )}
+
+      {reactivateTarget && (
+        <ReactivateMemberModal
+          memberName={reactivateTarget.name}
+          username={reactivateTarget.username}
+          hasPendingRequest={reactivationRequests.some((r) => r.id === reactivateTarget.id)}
+          onCancel={() => setReactivateTarget(null)}
+          onConfirm={async () => {
+            const target = reactivateTarget;
+            setReactivateTarget(null);
+            if (target) await handleReactivateMember(target);
+          }}
+        />
+      )}
+
+      {deactivateTarget && (
+        <DeactivateMemberModal
+          memberName={deactivateTarget.name}
+          username={deactivateTarget.username}
+          onCancel={() => setDeactivateTarget(null)}
+          onConfirm={confirmDeactivate}
+        />
       )}
 
       {confirmSupply && (

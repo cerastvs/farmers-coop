@@ -27,6 +27,7 @@ import {
   getCatalog,
 } from "./catalog";
 import { ReportDocument, ReportPrintCopy } from "./ReportDocument";
+import { MemberFilter } from "./MemberFilter";
 import type {
   PresetId,
   ReportConfig,
@@ -48,7 +49,7 @@ export interface ReportRecordLike {
 
 interface ReportBuilderProps {
   reportTypes: string[];
-  members: { id: string; name: string }[];
+  members: { id: string; name: string; username: string }[];
   busy: string | null;
   initialType?: string;
   initialFrom?: string;
@@ -381,23 +382,11 @@ export function ReportBuilder({
                     </div>
                   </div>
                   {catalog?.memberFilter && members.length > 0 && (
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wide text-[#718176]">
-                        Member
-                      </label>
-                      <select
-                        value={memberId}
-                        onChange={(e) => setMemberId(e.target.value)}
-                        className="rounded-lg border border-[#dce5d9] bg-white px-2 py-1.5 text-xs outline-none"
-                      >
-                        <option value="">All members</option>
-                        {members.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <MemberFilter
+                      members={members}
+                      value={memberId}
+                      onChange={setMemberId}
+                    />
                   )}
                   {catalog?.statusOptions ? (
                     <div className="flex flex-col gap-1.5">

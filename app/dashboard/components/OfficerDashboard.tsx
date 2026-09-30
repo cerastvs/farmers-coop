@@ -3190,7 +3190,7 @@ function ReportsSection({
   onPreview: (req: { type: string; filters?: ReportFilters; config?: ReportConfig }) => Promise<ReportRecord | null>;
   busy: string | null;
   role?: OfficerRole;
-  members?: { id: string; name: string }[];
+  members?: { id: string; name: string; username: string }[];
   userName?: string | null;
 }) {
   const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
@@ -4766,7 +4766,7 @@ export default function OfficerDashboard({
               <div className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm animate-fadeIn">
                 <div className="border-b border-[#e2ebe6] px-5 py-4"><h3 className="text-sm font-bold text-[#0f2318]">Reports & Analytics</h3><p className="text-[11px] text-[#5a7267]">{data.reports.length} reports generated</p></div>
                 <div className="p-4">
-                  <ReportsSection items={data.reports} expanded={true} onToggle={() => {}} onGenerate={handleGenerateReport} onPreview={handlePreviewReport} busy={busy} role={role} members={data.members.map((m) => ({ id: m.id, name: m.name }))} />
+                  <ReportsSection items={data.reports} expanded={true} onToggle={() => {}} onGenerate={handleGenerateReport} onPreview={handlePreviewReport} busy={busy} role={role} members={data.members.map((m) => ({ id: m.id, name: m.name, username: m.username }))} />
                 </div>
               </div>
             )}

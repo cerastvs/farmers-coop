@@ -6,7 +6,7 @@ import { Money } from "@/components/Money";
 import { ArrowRight } from "lucide-react";
 
 interface ApplyLoanCardProps {
-  currentBalance: number | null;
+  cashBalance: number | null;
   hasGuarantor?: boolean | null;
   guarantorStatus?: string | null;
   hasPendingRequest?: boolean;
@@ -18,8 +18,8 @@ function roundMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-export function ApplyLoanCard({ currentBalance, hasGuarantor, guarantorStatus, hasPendingRequest, isLoading, onSubmitted }: ApplyLoanCardProps) {
-  const hasBalance = currentBalance !== null && currentBalance > 0;
+export function ApplyLoanCard({ cashBalance, hasGuarantor, guarantorStatus, hasPendingRequest, isLoading, onSubmitted }: ApplyLoanCardProps) {
+  const hasBalance = cashBalance !== null && cashBalance > 0;
   const missingGuarantor = hasGuarantor !== null && hasGuarantor === false;
   const guarantorPending = guarantorStatus === "PENDING";
   const guarantorRejected = guarantorStatus === "REJECTED";
@@ -114,9 +114,9 @@ export function ApplyLoanCard({ currentBalance, hasGuarantor, guarantorStatus, h
           </div>
 
           <div className="bg-blue-100/60 rounded-xl p-4">
-            <p className="text-sm text-gray-600">Current Loan Balance</p>
+            <p className="text-sm text-gray-600">Current Cash Loan Balance</p>
             <p className="text-2xl font-bold text-blue-700">
-              {isLoading ? "..." : <Money value={currentBalance || 0} />}
+              {isLoading ? "..." : <Money value={cashBalance || 0} />}
             </p>
           </div>
         </div>

@@ -90,10 +90,32 @@ export const ManualPaymentSchema = z
 
 type Actor = { userId: string; userRole: Role };
 
-const ACTIVE_LOAN_STATUSES = [
+const ACTIVE_LOAN_STATUSES: LoanStatus[] = [
   LoanStatus.PENDING,
   LoanStatus.ACTIVE,
 ];
+
+/**
+ * The existing loans that would block a new request of `type`.
+ *
+ * Scoped to the kind being requested on purpose. A cash loan and a supply
+ * loan are separate accounts and a member may hold both at once, so an
+ * outstanding supply loan must not stop a cash application, and a cash loan
+ * must not stop a supply application. Only another loan of the same kind, in
+ * the same state, blocks.
+ *
+ * This filter used to be applied only when the request was for a supply loan.
+ * A cash request therefore matched any active loan of any type, so a member
+ * with supply debt could not borrow cash at all, even with nothing owed on
+ * their cash loan, and even once that cash loan was fully paid off.
+ */
+export function conflictingLoanWhere(memberId: string, type: LoanType) {
+  return {
+    userId: memberId,
+    status: { in: ACTIVE_LOAN_STATUSES },
+    type,
+  };
+}
 
 // A member with any machine still committed to them is at their capacity, so
 // this is the same "machine is held" set the approval overlap guard uses.
@@ -155,13 +177,8 @@ export async function submitLoanRequest({
         }
       }
 
-      const isSupply = input.type === "SUPPLY";
       const existing = await tx.loan.findFirst({
-        where: {
-          userId: memberId,
-          status: { in: ACTIVE_LOAN_STATUSES },
-          ...(isSupply ? { type: LoanType.SUPPLY } : {}),
-        },
+        where: conflictingLoanWhere(memberId, input.type),
         select: { id: true, type: true },
       });
       if (existing) {

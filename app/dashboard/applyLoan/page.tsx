@@ -12,10 +12,12 @@ import { IconChevronLeft, IconInfoCircle } from "@/components/icons";
 import { Money } from "@/components/Money";
 import { useMarkAlertSeen } from "../hooks/useAlertSeen";
 import { fetchWithTimeout } from "../hooks/fetchWithTimeout";
+import { cashLoanBalance, hasOpenCashLoan } from "./eligibility";
 
 export default function ApplyLoanPage() {
   useMarkAlertSeen("rejectedLoans");
-  const [totalDebt, setTotalDebt] = useState<number | null>(null);
+  const [cashDebt, setCashDebt] = useState<number | null>(null);
+  const [supplyDebt, setSupplyDebt] = useState<number | null>(null);
   const [hasGuarantor, setHasGuarantor] = useState<boolean | null>(null);
   const [guarantorStatus, setGuarantorStatus] = useState<string | null>(null);
   const [loans, setLoans] = useState<LoanRequest[]>([]);
@@ -26,7 +28,17 @@ export default function ApplyLoanPage() {
       const res = await fetchWithTimeout("/api/dashboard/stats");
       if (res.ok) {
         const data = await res.json();
-        setTotalDebt(data.totalDebt);
+        // This page applies for a cash loan, so only the cash balance can
+        // block it. The stats endpoint already reports cash and supply debt
+        // separately; this used to gate on the combined total, so a member
+        // who owed nothing on a cash loan but still owed for supplies was told
+        // their balance was outstanding and the form stayed disabled.
+        const { balance, supplyBalance } = cashLoanBalance({
+          cash: typeof data.cashDebt === "number" ? data.cashDebt : 0,
+          supply: typeof data.supplyDebt === "number" ? data.supplyDebt : 0,
+        });
+        setCashDebt(balance);
+        setSupplyDebt(supplyBalance);
         setHasGuarantor(data.hasGuarantor);
         setGuarantorStatus(
           typeof data.guarantorStatus === "string"
@@ -61,9 +73,11 @@ export default function ApplyLoanPage() {
     fetchLoans();
   }, []);
 
-  const hasPendingRequest =
-    loans.filter((l) => l.status === "PENDING" || l.status === "ACTIVE")
-      .length > 0;
+  // Scoped to cash loans for the same reason as the balance gate above: an
+  // open supply loan is a separate account and does not stop a cash
+  // application. Previously any pending or active loan counted here, so
+  // holding supplies locked a member out of the cash form entirely.
+  const hasPendingRequest = hasOpenCashLoan(loans);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -156,23 +170,40 @@ export default function ApplyLoanPage() {
           </div>
         )}
 
-        {totalDebt !== null && totalDebt > 0 && (
+        {cashDebt !== null && cashDebt > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 items-start animate-in fade-in slide-in-from-top-2">
             <IconInfoCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
             <div>
               <p className="text-sm font-bold text-amber-800">
-                Outstanding Balance Detected
+                Outstanding Cash Balance Detected
               </p>
               <p className="text-xs text-amber-700 mt-1 leading-relaxed">
-                You still have an outstanding balance of <span className="font-bold"><Money value={totalDebt} /></span>. 
-                Please note that new loan applications may not be approved until your current balance is fully settled.
+                You still owe <span className="font-bold"><Money value={cashDebt} /></span> on your cash loan.
+                Please note that new cash loan applications may not be approved until your current balance is fully settled.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Shown for context, not as a blocker: supply debt is a separate
+            account that does not prevent applying for a cash loan. */}
+        {supplyDebt !== null && supplyDebt > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 items-start animate-in fade-in slide-in-from-top-2">
+            <IconInfoCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-blue-800">
+                Outstanding Supply Balance
+              </p>
+              <p className="text-xs text-blue-700 mt-1 leading-relaxed">
+                You still owe <span className="font-bold"><Money value={supplyDebt} /></span> on your supply loan.
+                This does not prevent you from applying for a cash loan.
               </p>
             </div>
           </div>
         )}
 
         <ApplyLoanCard
-          currentBalance={totalDebt}
+          cashBalance={cashDebt}
           hasGuarantor={hasGuarantor}
           guarantorStatus={guarantorStatus}
           hasPendingRequest={hasPendingRequest}

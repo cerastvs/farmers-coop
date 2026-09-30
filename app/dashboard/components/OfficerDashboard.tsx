@@ -16,7 +16,7 @@ import type {
   ReportFilters,
 } from "@/components/reports/types";
 import { logout } from "../../login/actions";
-import { machineActiveOverdueDays, machineRequestOverdueDays, isMachineRequestOverdue, loanOverdueDays, isLoanOverdue, daysBetween } from "../../lib/client-overdue";
+import { machineActiveOverdueDays, isMachineRequestOverdue, worstOverdueRequest, loanOverdueDays, isLoanOverdue, daysBetween } from "../../lib/client-overdue";
 import AdminActionsPanel, { ProfileModal, type MemberSummary } from "../secretary/AdminActionsPanel";
 import { HarvestSeasonPanel } from "@/app/dashboard/components/HarvestSeasonPanel";
 import type { HarvestSeasonsData } from "@/app/dashboard/components/HarvestSeasonPanel";
@@ -2764,19 +2764,36 @@ function MachinesSection({
                 <p className="text-[11px] text-[#718176] truncate">Available</p>
               )}
             </div>
-            <span
-              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                machineActiveOverdueDays(machine.requests) > 0
-                  ? "bg-red-100 text-red-700 ring-1 ring-red-300"
-                  : machine.isBorrowed
-                    ? "bg-orange-100 text-orange-700"
-                    : "bg-green-100 text-green-700"
-              }`}
-            >
-              {machineActiveOverdueDays(machine.requests) > 0
-                ? "Overdue · " + machineActiveOverdueDays(machine.requests) + " days"
-                : machine.isBorrowed ? "In Use" : "Available"}
-            </span>
+            {(() => {
+              // A machine card lists every member's bookings, so the badge has
+              // to say whose it is. Naming the member stops one member's late
+              // return from reading as a fault of the machine — or of whoever
+              // happens to be looking at the screen.
+              const late = worstOverdueRequest(machine.requests);
+              const lateDays = late?.overdueDays ?? 0;
+              const lateHolder = late ? (machine.requests.find((r) => r.id === late.id)?.member?.name ?? null) : null;
+              return (
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                    lateDays > 0
+                      ? "bg-red-100 text-red-700 ring-1 ring-red-300"
+                      : machine.isBorrowed
+                        ? "bg-orange-100 text-orange-700"
+                        : "bg-green-100 text-green-700"
+                  }`}
+                  title={
+                    lateDays > 0 && lateHolder
+                      ? `${lateHolder} has not returned this machine`
+                      : undefined
+                  }
+                >
+                  {lateDays > 0
+                    ? "Overdue · " + lateDays + (lateDays === 1 ? " day" : " days") +
+                      (lateHolder ? ` · ${lateHolder}` : "")
+                    : machine.isBorrowed ? "In Use" : "Available"}
+                </span>
+              );
+            })()}
           </button>
         ))
       ) : (

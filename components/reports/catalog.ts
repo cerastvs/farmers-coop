@@ -13,6 +13,7 @@ import {
   renderDate,
   renderDateTime,
 } from "./format";
+import { DEFAULT_RETURN_CONDITION_NOTE, returnConditionText } from "@/lib/machine-return";
 
 const byStatus = (data: ReportData, key: string): Record<string, number> =>
   (data[key] as Record<string, number>) ?? {};
@@ -565,6 +566,7 @@ const MACHINES: ReportTypeCatalog = {
         { id: "machines", label: "Machines", value: (d) => (d.totals?.machines ?? 0) },
         { id: "requests", label: "Requests", value: (d) => (d.totals?.requests ?? 0) },
         { id: "overdue", label: "Overdue Machines", value: (d) => (d.totals?.overdue ?? 0) },
+        { id: "returnsWithIssue", label: "Returned With Issue", value: (d) => (d.totals?.returnsWithIssues ?? 0) },
       ],
     },
     {
@@ -608,6 +610,7 @@ const MACHINES: ReportTypeCatalog = {
                 startISO: r.startDate,
                 endISO: r.endDate,
                 returnedISO: r.returnedAt,
+                returnNote: returnConditionText(r),
               });
             }
           }
@@ -621,11 +624,28 @@ const MACHINES: ReportTypeCatalog = {
           { id: "start", label: "Start", get: (r) => dateValue(r.startISO), render: (r) => renderDate(r.startISO) },
           { id: "end", label: "End", get: (r) => dateValue(r.endISO), render: (r) => renderDate(r.endISO) },
           { id: "returned", label: "Returned", get: (r) => dateValue(r.returnedISO), render: (r) => renderDate(r.returnedISO) },
+          { id: "condition", label: "Condition on Return", get: (r) => r.returnNote ?? "", render: (r) => r.returnNote ?? "—" },
         ],
         groupFields: [
           { key: "status", label: "Status", get: (r) => r.status ?? null },
           { key: "machine", label: "Machine", get: (r) => r.machine ?? null },
         ],
+      },
+    },
+    {
+      id: "returnsWithIssues",
+      label: "Returned With Issue",
+      kind: "table",
+      hideWhenEmpty: (d) => ((d.returnsWithIssues as unknown[]) ?? []).length === 0,
+      table: {
+        rows: (d) => ((d.returnsWithIssues as unknown[]) ?? []) as Record<string, any>[],
+        columns: [
+          { id: "member", label: "Member", get: (r) => (r.member as Record<string, any>)?.name ?? "", render: (r) => (r.member as Record<string, any>)?.name ?? "—" },
+          { id: "machine", label: "Machine", get: (r) => r.machine ?? "", render: (r) => r.machine ?? "—" },
+          { id: "condition", label: "Condition Noted", get: (r) => r.condition ?? "", render: (r) => r.condition ?? DEFAULT_RETURN_CONDITION_NOTE },
+          { id: "returned", label: "Returned", get: (r) => dateValue(r.returnedAt), render: (r) => renderDate(r.returnedAt) },
+        ],
+        groupFields: [],
       },
     },
     {
@@ -643,14 +663,14 @@ const MACHINES: ReportTypeCatalog = {
       },
     },
   ],
-  defaultSections: ["totals", "byStatus", "overdueTable", "requestsTable"],
+  defaultSections: ["totals", "byStatus", "overdueTable", "returnsWithIssues", "requestsTable"],
   presets: {
     summary: { id: "summary", label: "Summary", sections: ["totals", "byStatus", "overdueTable"] },
-    detailed: { id: "detailed", label: "Detailed", sections: ["totals", "byStatus", "overdueTable", "requestsTable"] },
+    detailed: { id: "detailed", label: "Detailed", sections: ["totals", "byStatus", "overdueTable", "returnsWithIssues", "requestsTable"] },
     full: {
       id: "full",
       label: "Full Details",
-      sections: ["totals", "byStatus", "overdueTable", "requestsTable", "machineList"],
+      sections: ["totals", "byStatus", "overdueTable", "returnsWithIssues", "requestsTable", "machineList"],
     },
   },
 };

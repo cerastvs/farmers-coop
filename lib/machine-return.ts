@@ -32,3 +32,20 @@ export function resolveReturnCondition(note: string | null | undefined): {
   }
   return { note: trimmed, hasIssue: true };
 }
+
+/**
+ * The condition to display for a stored request, for report tables.
+ *
+ * A request only has a condition once the machine has actually come back, so
+ * anything still out shows a dash rather than implying it was inspected.
+ * Returns predating this feature have no note stored and fall back to the
+ * good-condition wording, which is the reading those rows already carried.
+ */
+export function returnConditionText(row: {
+  returnedAt?: unknown;
+  returnNote?: unknown;
+}): string {
+  if (!row.returnedAt) return "—";
+  const note = typeof row.returnNote === "string" ? row.returnNote.trim() : "";
+  return note || DEFAULT_RETURN_CONDITION_NOTE;
+}

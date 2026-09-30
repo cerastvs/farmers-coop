@@ -4,6 +4,7 @@ import { useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { getCatalog } from "./catalog";
 import { formatReportPeriod, humanize } from "./format";
+import { returnConditionText } from "@/lib/machine-return";
 import type {
   ColumnDef,
   GroupField,
@@ -258,6 +259,7 @@ function SectionView({
                     <th>Status</th>
                     <th>Start</th>
                     <th>End</th>
+                    <th>Condition on Return</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -280,6 +282,7 @@ function SectionView({
                           ? new Date(r.endDate as string).toLocaleDateString("en-PH")
                           : "—"}
                       </td>
+                      <td>{returnConditionText(r)}</td>
                     </tr>
                   ))}
                 </tbody>

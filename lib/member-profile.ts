@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { notifyUser, writeAudit } from "@/lib/activity";
 import { recordDeactivation, recordReactivation } from "@/lib/account-status";
+import { canChangeRole } from "@/lib/member-profile-core";
 import { ApiError } from "@/lib/errors";
 import prisma from "@/lib/client";
 import { toTitleCase } from "@/lib/format";
@@ -163,6 +164,12 @@ export async function updateMemberRecord({
   // An officer must not be able to lock themselves out mid-session.
   if (data.active === false && memberId === actorId) {
     throw new ApiError(409, "You cannot deactivate your own account");
+  }
+  // Changing a member's role is a privilege reserved for the president alone.
+  // Every editor and API shares this service, so the rule holds no matter how a
+  // request reaches it; an unchanged role is a harmless no-op and is allowed.
+  if (!canChangeRole(actorRole, existing.role, data.role)) {
+    throw new ApiError(403, "Only the president can change a member's role");
   }
 
   const previousProfile = existing.applications[0]

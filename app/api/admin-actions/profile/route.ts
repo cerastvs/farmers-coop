@@ -28,6 +28,7 @@ export async function PATCH(req: NextRequest) {
 
     const member = await updateMemberRecord({
       actorId: actor.userId,
+      actorRole: actor.userRole,
       memberId,
       data: fields,
       extraMetadata: {

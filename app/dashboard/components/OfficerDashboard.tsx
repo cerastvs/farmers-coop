@@ -17,7 +17,7 @@ import type {
 } from "@/components/reports/types";
 import { logout } from "../../login/actions";
 import { machineActiveOverdueDays, machineRequestOverdueDays, isMachineRequestOverdue, loanOverdueDays, isLoanOverdue, daysBetween } from "../../lib/client-overdue";
-import AdminActionsPanel from "../secretary/AdminActionsPanel";
+import AdminActionsPanel, { ProfileModal, type MemberSummary } from "../secretary/AdminActionsPanel";
 import { HarvestSeasonPanel } from "@/app/dashboard/components/HarvestSeasonPanel";
 import type { HarvestSeasonsData } from "@/app/dashboard/components/HarvestSeasonPanel";
 import { Money } from "@/components/Money";
@@ -2279,14 +2279,18 @@ function MembersSection({
   onEdit,
   onDeactivate,
   onReactivate,
+  onEditProfile,
+  canEditRole,
   busy,
 }: {
   items: Member[];
   expanded: boolean;
   onToggle: () => void;
-  onEdit: (id: string, data: { name: string; role: string; active: boolean }) => void;
+  onEdit: (id: string, data: { name: string; role?: string; active: boolean }) => void;
   onDeactivate: (member: Member) => void;
   onReactivate: (member: Member) => void;
+  onEditProfile: (member: Member) => void;
+  canEditRole: boolean;
   busy: string | null;
 }) {
   const visible = expanded ? items : items.slice(0, VISIBLE_COUNT);
@@ -2326,15 +2330,24 @@ function MembersSection({
                     className="w-full rounded-lg border border-[#dce5d9] bg-white px-3 py-1.5 text-sm outline-none focus:border-[#39733e]"
                   />
                   <div className="flex gap-2">
-                    <select
-                      value={editRole}
-                      onChange={(e) => setEditRole(e.target.value)}
-                      className="rounded-lg border border-[#dce5d9] bg-white px-2 py-1.5 text-xs font-semibold outline-none"
-                    >
-                      {["MEMBER", "SECRETARY", "TREASURER", "PRESIDENT"].map((r) => (
-                        <option key={r}>{r}</option>
-                      ))}
-                    </select>
+                    {canEditRole ? (
+                      <select
+                        value={editRole}
+                        onChange={(e) => setEditRole(e.target.value)}
+                        className="rounded-lg border border-[#dce5d9] bg-white px-2 py-1.5 text-xs font-semibold outline-none"
+                      >
+                        {["MEMBER", "SECRETARY", "TREASURER", "PRESIDENT"].map((r) => (
+                          <option key={r}>{r}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      // Only the president may change a role. Everyone else
+                      // sees it as a fixed value so nobody wonders whether the
+                      // dropdown is broken.
+                      <span className="rounded-lg border border-[#dce5d9] bg-[#f6f8f4] px-2 py-1.5 text-xs font-semibold text-[#5a7267]">
+                        {m.role}
+                      </span>
+                    )}
                     <select
                       value={String(editActive)}
                       onChange={(e) => setEditActive(e.target.value === "true")}
@@ -2355,7 +2368,7 @@ function MembersSection({
                           onDeactivate(m);
                           return;
                         }
-                        onEdit(m.id, { name: editName, role: editRole, active: editActive });
+                        onEdit(m.id, { name: editName, role: canEditRole ? editRole : undefined, active: editActive });
                         setEditingId(null);
                       }}
                       className="rounded-lg bg-green-600 px-3 py-1 text-[11px] font-bold text-white hover:bg-green-700 disabled:opacity-50"
@@ -2451,6 +2464,13 @@ function MembersSection({
                       className="rounded-lg border border-[#dce5d9] p-1.5 text-[#718176] hover:bg-[#edf5df] transition"
                     >
                       <Pencil size={12} />
+                    </button>
+                    <button
+                      onClick={() => onEditProfile(m)}
+                      disabled={busy === m.id}
+                      className="rounded-lg border border-[#dce5d9] px-2 py-1 text-[10px] font-bold text-[#0f2318] transition hover:bg-[#edf5df] disabled:opacity-50"
+                    >
+                      Edit profile
                     </button>
                   </div>
                 </div>
@@ -3712,6 +3732,7 @@ export default function OfficerDashboard({
   const [reactivationRequests, setReactivationRequests] = useState<ReactivationRequest[]>([]);
   const [deactivateTarget, setDeactivateTarget] = useState<Member | null>(null);
   const [reactivateTarget, setReactivateTarget] = useState<Member | null>(null);
+  const [profileTarget, setProfileTarget] = useState<MemberSummary | null>(null);
 
   const [seasonsData, setSeasonsData] = useState<HarvestSeasonsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -4124,13 +4145,39 @@ export default function OfficerDashboard({
   }
 
 
-  async function handleMemberEdit(memberId: string, payload: { name: string; role: string; active: boolean }, deactivationReason?: string) {
+  async function handleMemberEdit(memberId: string, payload: { name: string; role?: string; active: boolean }, deactivationReason?: string) {
     setBusy(memberId);
     try {
-      const res = await fetch(`/api/admin/members/${memberId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...payload, ...(deactivationReason ? { deactivationReason } : {}) }) });
+      // The role key is only sent when this officer may change it. Sending it
+      // for an officer who cannot would be rejected by the service anyway, and
+      // a stripped request keeps the audit trail honest about what changed.
+      const body: { name: string; role?: string; active: boolean; deactivationReason?: string } = {
+        name: payload.name,
+        active: payload.active,
+      };
+      if (payload.role !== undefined) body.role = payload.role;
+      if (deactivationReason) body.deactivationReason = deactivationReason;
+      const res = await fetch(`/api/admin/members/${memberId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const result = await res.json();
       if (res.ok) { await fetchData(); await loadReactivationRequests(); } else { setNotice({ kind: "error", text: result.error || "Failed to update member" }); }
     } catch { setNotice({ kind: "error", text: "Failed to update member" }); } finally { setBusy(null); }
+  }
+
+  async function requestProfileEdit(member: Member) {
+    setBusy(member.id);
+    try {
+      const res = await fetch(`/api/admin-actions/members?id=${encodeURIComponent(member.id)}`);
+      const data = await res.json();
+      if (res.ok && data.members?.[0]) {
+        setProfileTarget(data.members[0]);
+      } else {
+        setNotice({ kind: "error", text: data.error || "Could not load member profile" });
+      }
+    } catch {
+      setNotice({ kind: "error", text: "Could not load member profile" });
+    } finally {
+      setBusy(null);
+    }
   }
 
   function requestReactivateMember(member: Member) {
@@ -4162,7 +4209,7 @@ export default function OfficerDashboard({
     if (!target) return;
     await handleMemberEdit(
       target.id,
-      { name: target.name, role: target.role, active: false },
+      { name: target.name, role: role === "PRESIDENT" ? target.role : undefined, active: false },
       reason,
     );
   }
@@ -4474,7 +4521,7 @@ export default function OfficerDashboard({
             )}
 
             {activeTab === "admin-actions" && (
-              <AdminActionsPanel onDone={fetchData} />
+              <AdminActionsPanel onDone={fetchData} actorRole={role} />
             )}
 
             {activeTab === "applications" && data && (
@@ -4552,6 +4599,8 @@ export default function OfficerDashboard({
                     onEdit={handleMemberEdit}
                     onDeactivate={setDeactivateTarget}
                     onReactivate={requestReactivateMember}
+                    onEditProfile={requestProfileEdit}
+                    canEditRole={role === "PRESIDENT"}
                     busy={busy}
                   />
                 </div>
@@ -4869,6 +4918,18 @@ export default function OfficerDashboard({
             </div>
           </div>
         </div>
+      )}
+
+      {profileTarget && (
+        <ProfileModal
+          member={profileTarget}
+          canEditRole={role === "PRESIDENT"}
+          onClose={() => setProfileTarget(null)}
+          onSuccess={() => {
+            setProfileTarget(null);
+            void fetchData();
+          }}
+        />
       )}
 
       {reactivateTarget && (

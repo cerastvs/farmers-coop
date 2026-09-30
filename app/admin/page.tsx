@@ -1051,6 +1051,9 @@ export default function AdminPage() {
                           event.preventDefault();
                           const form = new FormData(event.currentTarget);
                           const nextActive = form.get("active") === "true";
+                          // Only rendered for the president, so it is absent for
+                          // everyone else and must not be echoed back as a change.
+                          const nextRole = form.get("role") as string | null;
 
                           // Disabling an account cuts the member off from loans,
                           // supplies, and machines the moment they save, so it
@@ -1071,7 +1074,7 @@ export default function AdminPage() {
                                   `/api/admin/members/${member.id}`,
                                   {
                                     name: form.get("name"),
-                                    role: form.get("role"),
+                                    ...(nextRole ? { role: nextRole } : {}),
                                     active: false,
                                     ...(reason ? { deactivationReason: reason } : {}),
                                   },
@@ -1083,15 +1086,21 @@ export default function AdminPage() {
 
                           void mutate(member.id, `/api/admin/members/${member.id}`, {
                             name: form.get("name"),
-                            role: form.get("role"),
+                            ...(nextRole ? { role: nextRole } : {}),
                             active: nextActive,
                           }, "Member record updated.");
                         }}
                       >
                         <input aria-label="Member name" className={`${fieldClass} min-w-44 flex-1`} name="name" defaultValue={member.name ?? ""} required />
-                        <select aria-label="Role" className={fieldClass} name="role" defaultValue={member.role}>
-                          {["APPLICANT", "MEMBER", "SECRETARY", "TREASURER", "PRESIDENT"].map((role) => <option key={role}>{role}</option>)}
-                        </select>
+                        {user?.role === "PRESIDENT" ? (
+                          <select aria-label="Role" className={fieldClass} name="role" defaultValue={member.role}>
+                            {["APPLICANT", "MEMBER", "SECRETARY", "TREASURER", "PRESIDENT"].map((role) => <option key={role}>{role}</option>)}
+                          </select>
+                        ) : (
+                          // Role is the president's call alone. Other officers
+                          // see the current value but get no control over it.
+                          <span className={`${fieldClass} cursor-default`} title="Only the president can change a role">{member.role}</span>
+                        )}
                         <select aria-label="Account status" className={fieldClass} name="active" defaultValue={String(member.active)}>
                           <option value="true">Active</option>
                           <option value="false">Inactive</option>

@@ -29,6 +29,8 @@ type MemberApplication = {
   crops: string[];
   machines: string[];
   yearsFarming: number;
+  farmOwnership: string;
+  farmOwnershipDetails: string | null;
 } | null;
 
 type LoanInfo = {
@@ -68,7 +70,7 @@ type PaymentInfo = {
   createdAt: string | null;
 };
 
-type MemberSummary = {
+export type MemberSummary = {
   id: string;
   name: string;
   username: string;
@@ -749,12 +751,15 @@ function PaymentModal({
   );
 }
 
-function ProfileModal({
+export function ProfileModal({
   member,
+  canEditRole = false,
   onClose,
   onSuccess,
 }: {
   member: MemberSummary;
+  /** Only the president may change a role; officers see it as read-only. */
+  canEditRole?: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -770,6 +775,9 @@ function ProfileModal({
   const [farmSize, setFarmSize] = useState(app ? String(app.farmSize) : "");
   const [cropType, setCropType] = useState<string[]>(app?.crops ?? []);
   const [yearsFarming, setYearsFarming] = useState(app ? String(app.yearsFarming) : "");
+  const [farmOwnership, setFarmOwnership] = useState(app?.farmOwnership ?? "");
+  const [farmOwnershipDetails, setFarmOwnershipDetails] = useState(app?.farmOwnershipDetails ?? "");
+  const [farmMachinery, setFarmMachinery] = useState<string[]>(app?.machines ?? []);
   const [context, setContext] = useState({ source: "OFFICE", remarks: "", reason: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -780,7 +788,7 @@ function ProfileModal({
     try {
       const fields: Record<string, unknown> = {};
       if (name !== member.name) fields.name = name;
-      if (role !== member.role) fields.role = role;
+      if (canEditRole && role !== member.role) fields.role = role;
       if (active !== member.active) fields.active = active;
 
       const profile: Record<string, unknown> = {};
@@ -795,6 +803,11 @@ function ProfileModal({
           profile.cropType = cropType.filter((c) => c.trim());
         }
         if (yearsFarming !== String(app.yearsFarming)) profile.yearsFarming = Number(yearsFarming);
+        if (farmOwnership !== app.farmOwnership) profile.farmOwnership = farmOwnership;
+        if (farmOwnershipDetails !== (app.farmOwnershipDetails ?? "")) profile.farmOwnershipDetails = farmOwnershipDetails;
+        if (JSON.stringify(farmMachinery) !== JSON.stringify(app.machines)) {
+          profile.farmMachinery = farmMachinery.filter((m) => m.trim());
+        }
       }
       if (Object.keys(profile).length > 0) fields.profile = profile;
 
@@ -836,12 +849,18 @@ function ProfileModal({
         </div>
         <div>
           <label className={labelClass}>Role</label>
-          <select className={inputClass} value={role} onChange={(e) => setRole(e.target.value)}>
-            <option value="MEMBER">Member</option>
-            <option value="TREASURER">Treasurer</option>
-            <option value="PRESIDENT">President</option>
-            <option value="SECRETARY">Secretary</option>
-          </select>
+          {canEditRole ? (
+            <select className={inputClass} value={role} onChange={(e) => setRole(e.target.value)}>
+              <option value="MEMBER">Member</option>
+              <option value="TREASURER">Treasurer</option>
+              <option value="PRESIDENT">President</option>
+              <option value="SECRETARY">Secretary</option>
+            </select>
+          ) : (
+            <p className="rounded-lg border border-[#e2ebe6] bg-[#fafdf9] px-3 py-2 text-sm font-semibold text-[#0f2318]">
+              {role}
+            </p>
+          )}
         </div>
       </div>
       <label className="flex items-center gap-2 text-sm font-medium text-[#0f2318]">
@@ -920,6 +939,53 @@ function ProfileModal({
               + Add crop
             </button>
           </div>
+          <div>
+            <label className={labelClass}>Farm ownership</label>
+            <select className={inputClass} value={farmOwnership} onChange={(e) => setFarmOwnership(e.target.value)}>
+              <option value="FARM_OWNER">Farm owner</option>
+              <option value="FARM_WORKER">Farm worker / tenant</option>
+              <option value="OTHERS">Others</option>
+            </select>
+          </div>
+          {farmOwnership === "OTHERS" && (
+            <div>
+              <label className={labelClass}>Specify farm role</label>
+              <input className={inputClass} value={farmOwnershipDetails} onChange={(e) => setFarmOwnershipDetails(e.target.value)} placeholder="e.g. Farm caretaker" />
+            </div>
+          )}
+          <div>
+            <label className={labelClass}>Farm machinery</label>
+            <div className="space-y-2">
+              {farmMachinery.map((machine, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    className={inputClass}
+                    value={machine}
+                    onChange={(e) => {
+                      const next = [...farmMachinery];
+                      next[i] = e.target.value;
+                      setFarmMachinery(next);
+                    }}
+                    placeholder="e.g. 4WD tractor"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setFarmMachinery(farmMachinery.filter((_, j) => j !== i))}
+                    className="shrink-0 rounded-lg px-2 py-1.5 text-xs text-[#b4523a] hover:bg-red-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setFarmMachinery([...farmMachinery, ""])}
+              className="mt-2 rounded-lg border border-[#4f7e38]/30 px-3 py-1.5 text-xs font-semibold text-[#4f7e38] hover:bg-[#4f7e38]/5"
+            >
+              + Add machinery
+            </button>
+          </div>
         </>
       ) : (
         <p className="rounded-lg bg-gray-50 px-3.5 py-2.5 text-xs text-[#5a7267]">
@@ -931,7 +997,7 @@ function ProfileModal({
   );
 }
 
-export default function AdminActionsPanel({ onDone }: { onDone?: () => void }) {
+export default function AdminActionsPanel({ onDone, actorRole }: { onDone?: () => void; actorRole?: string }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<MemberSummary[]>([]);
   const [searching, setSearching] = useState(false);
@@ -1229,7 +1295,7 @@ export default function AdminActionsPanel({ onDone }: { onDone?: () => void }) {
         <PaymentModal member={selected} onClose={handleCloseModal} onSuccess={handleActionSuccess} />
       )}
       {action === "profile" && selected && (
-        <ProfileModal member={selected} onClose={handleCloseModal} onSuccess={handleActionSuccess} />
+        <ProfileModal member={selected} canEditRole={actorRole === "PRESIDENT"} onClose={handleCloseModal} onSuccess={handleActionSuccess} />
       )}
     </div>
   );

@@ -120,6 +120,8 @@ export async function GET(req: NextRequest) {
                 crops: app.crops.map((c) => c.name),
                 machines: app.machines.map((m) => m.name),
                 yearsFarming: app.yearsFarming,
+                farmOwnership: app.farmOwnership,
+                farmOwnershipDetails: app.farmOwnershipDetails,
               }
             : null,
           loans,

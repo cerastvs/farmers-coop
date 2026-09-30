@@ -104,6 +104,14 @@ export const MEMBER_RETURNABLE_MACHINE_STATUSES: readonly MachineStatus[] = [
   MachineStatus.OVERDUE,
 ];
 
+// Defined in a Prisma-free module so the client-side return prompt and the
+// server-side return record share one wording. Re-exported here because most
+// server callers already import lifecycle rules from this file.
+export {
+  DEFAULT_RETURN_CONDITION_NOTE,
+  resolveReturnCondition,
+} from "./machine-return";
+
 /**
  * Supply request states in which the request still consumes the member's
  * allowance and holds a claim on stock. Derived from `supplyTransitions`:

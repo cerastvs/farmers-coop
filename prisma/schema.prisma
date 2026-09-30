@@ -389,6 +389,16 @@ model MachineRequest {
   startedAt    DateTime?
   returnedAt   DateTime?
 
+  /// Condition recorded when the machine came back, written at the moment of
+  /// return so the wording is preserved even if the default text changes
+  /// later. A blank QC box is still recorded, as the good-condition
+  /// default, so every return carries a condition rather than a silent null.
+  returnNote    String?
+  /// True when the officer typed a condition note, i.e. flagged something
+  /// worth following up. Kept as a column rather than inferred from the
+  /// note text so reports can filter on it without matching on prose.
+  returnHasIssue Boolean  @default(false)
+
   farmSize     Float?
   durationDays Int?
 

@@ -830,6 +830,13 @@ async function generateMachinesReport(filters: ReportFilters = {}) {
     },
   });
   const requests = machines.flatMap((machine) => machine.requests);
+  // Returns where the officer flagged a condition. Surfaced as its own total
+  // and section because "which machines came back damaged" is the question a
+  // utilization report exists to answer, and it is invisible if the note is
+  // only buried in a per-request table.
+  const returnsWithIssues = requests.filter(
+    (request) => request.returnedAt && request.returnHasIssue,
+  );
   const overdueRequests = requests
     .filter(
       (request) =>
@@ -866,8 +873,21 @@ async function generateMachinesReport(filters: ReportFilters = {}) {
       requests: requests.length,
       requestsByStatus: machineRequestStatusCounts(requests, machineAsOf),
       overdue: overdueRequests.length,
+      returnsWithIssues: returnsWithIssues.length,
     },
     overdueRequests,
+    returnsWithIssues: returnsWithIssues.map((request) => {
+      const machine = machines.find((m) =>
+        m.requests.some((r) => r.id === request.id),
+      );
+      return {
+        id: request.id,
+        machine: machine?.name,
+        member: request.user,
+        condition: request.returnNote,
+        returnedAt: request.returnedAt?.toISOString() ?? null,
+      };
+    }),
     machines: machines.map((machine) => ({
       id: machine.id,
       name: machine.name,

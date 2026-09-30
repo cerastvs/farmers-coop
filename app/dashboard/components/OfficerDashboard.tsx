@@ -17,6 +17,7 @@ import type {
 } from "@/components/reports/types";
 import { logout } from "../../login/actions";
 import { machineActiveOverdueDays, isMachineRequestOverdue, worstOverdueRequest, loanOverdueDays, isLoanOverdue, daysBetween } from "../../lib/client-overdue";
+import { DEFAULT_RETURN_CONDITION_NOTE } from "@/lib/machine-return";
 import AdminActionsPanel, { ProfileModal, type MemberSummary } from "../secretary/AdminActionsPanel";
 import { HarvestSeasonPanel } from "@/app/dashboard/components/HarvestSeasonPanel";
 import type { HarvestSeasonsData } from "@/app/dashboard/components/HarvestSeasonPanel";
@@ -511,8 +512,21 @@ function MachineDetailModal({
     title: string;
     message: string;
     confirmLabel: string;
+    /** Carried so the ping dialog can hand off to the return dialog, which
+     *  needs the member's name to word its prompt. */
+    memberName?: string;
   } | null>(null);
   const [machineActionBusy, setMachineActionBusy] = useState(false);
+  // Condition note for the return being confirmed. Reset whenever a new
+  // action is opened so a note typed for one machine never carries over to
+  // the next confirmation.
+  const [returnConditionNote, setReturnConditionNote] = useState("");
+
+  // Clear the condition box whenever a different action is opened, so a note
+  // typed for one machine cannot be submitted against another after a cancel.
+  useEffect(() => {
+    setReturnConditionNote("");
+  }, [confirmAction?.requestId, confirmAction?.action]);
 
   const pending = machine.requests?.filter((r) => r.status === "QUEUED") ?? [];
   const returnPending = machine.requests?.filter((r) => r.status === "RETURN_PENDING") ?? [];
@@ -1094,6 +1108,7 @@ function MachineDetailModal({
                               title: `${req.member.name} — not yet returned`,
                               message: `This booking ended on ${new Date(req.endDate!).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })} but hasn't been marked as returned. What would you like to do?`,
                               confirmLabel: "Remind to return",
+                              memberName: req.member.name,
                             })
                           }
                           className="w-full flex items-center justify-between rounded-lg bg-white border border-amber-200 px-3 py-2.5 text-left transition hover:border-amber-300 hover:bg-amber-50/50 active:scale-[0.99]"
@@ -1273,6 +1288,31 @@ function MachineDetailModal({
             <p className="text-sm text-gray-500 mb-6">
               {confirmAction.message}
             </p>
+            {confirmAction.action === "return" && (
+              <div className="mb-5 text-left">
+                <label
+                  htmlFor="return-condition"
+                  className="block text-xs font-bold text-gray-600 mb-1.5"
+                >
+                  Condition on return{" "}
+                  <span className="font-normal text-gray-400">(optional)</span>
+                </label>
+                <textarea
+                  id="return-condition"
+                  rows={3}
+                  maxLength={500}
+                  value={returnConditionNote}
+                  onChange={(e) => setReturnConditionNote(e.target.value)}
+                  placeholder={DEFAULT_RETURN_CONDITION_NOTE}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-green-600 focus:outline-none resize-none"
+                />
+                <p className="mt-1.5 text-[11px] text-gray-400">
+                  {returnConditionNote.trim()
+                    ? "Recorded as a condition issue on this return."
+                    : `Left blank, this is recorded as "${DEFAULT_RETURN_CONDITION_NOTE}".`}
+                </p>
+              </div>
+            )}
             {confirmAction.action === "ping" ? (
               <div className="flex gap-3">
                 <button
@@ -1298,21 +1338,25 @@ function MachineDetailModal({
                   {machineActionBusy ? "Processing..." : "Remind to return"}
                 </button>
                 <button
-                  onClick={async () => {
-                    setMachineActionBusy(true);
-                    try {
-                      await onLifecycle(confirmAction.requestId, "return");
-                    } finally {
-                      setMachineActionBusy(false);
-                      setConfirmAction(null);
-                    }
-                  }}
+                  onClick={() =>
+                    // Hand off to the return dialog rather than returning
+                    // directly, so a machine coming back late is still given
+                    // the condition prompt. Recording a return without ever
+                    // asking would leave the most likely time to spot damage
+                    // as the one time it cannot be reported.
+                    setConfirmAction({
+                      requestId: confirmAction.requestId,
+                      action: "return",
+                      title: "Confirm Return",
+                      message: `Confirm that ${confirmAction.memberName ?? "the member"} has returned the machine?`,
+                      confirmLabel: "Yes, Confirm Return",
+                    })
+                  }
                   disabled={machineActionBusy}
                   className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold transition disabled:opacity-50"
                 >
-                  {machineActionBusy ? "Processing..." : "Mark as returned"}
-                </button>
-              </div>
+                  Mark as returned
+                </button>              </div>
             ) : (
               <div className="flex gap-3">
                 <button
@@ -1326,7 +1370,13 @@ function MachineDetailModal({
                   onClick={async () => {
                     setMachineActionBusy(true);
                     try {
-                      await onLifecycle(confirmAction.requestId, confirmAction.action);
+                      await onLifecycle(
+                        confirmAction.requestId,
+                        confirmAction.action,
+                        confirmAction.action === "return"
+                          ? returnConditionNote
+                          : undefined,
+                      );
                     } finally {
                       setMachineActionBusy(false);
                       setConfirmAction(null);

@@ -11,6 +11,7 @@ import {
   assertTransition,
   MACHINE_HELD_STATUSES,
   machineTransitions,
+  resolveReturnCondition,
 } from "@/lib/lifecycles";
 import {
   assertSeasonCapacity,
@@ -63,8 +64,10 @@ const OUTCOME_COPY: Record<
   },
   return: {
     title: "Machine return recorded",
-    message: (machineName) =>
-      `The return of "${machineName}" has been recorded.`,
+    message: (machineName, reason) =>
+      reason
+        ? `The return of "${machineName}" has been recorded. Condition noted: ${reason}`
+        : `The return of "${machineName}" has been recorded.`,
   },
   overdue: {
     title: "Machine booking overdue",
@@ -228,6 +231,14 @@ export async function PATCH(
           }
         }
 
+        // The QC note is optional: a blank box means the officer saw nothing
+        // to flag, which is recorded as the good-condition default rather than
+        // left null, so every return carries a condition.
+        const returnCondition =
+          nextStatus === MachineStatus.RETURNED
+            ? resolveReturnCondition(result.data.message)
+            : null;
+
         const machineRequest = await tx.machineRequest.update({
           where: { id },
           data: {
@@ -240,6 +251,10 @@ export async function PATCH(
               nextStatus === MachineStatus.IN_USE ? new Date() : undefined,
             returnedAt:
               nextStatus === MachineStatus.RETURNED ? new Date() : undefined,
+            returnNote: returnCondition?.note,
+            // Only ever set on return; undefined leaves an existing value
+            // alone if a request is re-adjudicated for another reason.
+            returnHasIssue: returnCondition?.hasIssue,
           },
         });
 
@@ -259,7 +274,10 @@ export async function PATCH(
           type: notifyType,
           link: "/dashboard",
           title: copy.title,
-          message: copy.message(request.machine.name, result.data.message),
+          message: copy.message(
+            request.machine.name,
+            returnCondition?.hasIssue ? returnCondition.note : undefined,
+          ),
         });
         await writeAudit(tx, {
           userId: actor.userId,
@@ -269,9 +287,11 @@ export async function PATCH(
           entityId: id,
           previousStatus: request.status,
           newStatus: nextStatus,
-          metadata: result.data.message
-            ? { reason: result.data.message }
-            : undefined,
+          metadata: returnCondition
+            ? { condition: returnCondition.note, hasIssue: returnCondition.hasIssue }
+            : result.data.message
+              ? { reason: result.data.message }
+              : undefined,
         });
 
         return machineRequest;

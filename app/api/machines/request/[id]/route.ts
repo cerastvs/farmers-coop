@@ -7,6 +7,7 @@ import {
 import { notifyUser, writeAudit } from "@/lib/activity";
 import { apiErrorResponse, ApiError, requireUser } from "@/lib/api";
 import prisma from "@/lib/client";
+import { canBorrowMachines } from "@/lib/farm-access-core";
 import {
   assertTransition,
   MACHINE_HELD_STATUSES,
@@ -174,6 +175,21 @@ export async function PATCH(
             throw new ApiError(
               409,
               "The request must have a start and end date before approval",
+            );
+          }
+
+          // A member may have queued this while they still farmed their own
+          // land and changed to farm worker since. Machines are borrowed
+          // against the member's own hectares, so re-check the role here
+          // rather than trusting the farm size snapshotted at request time.
+          const borrowerApplication = await tx.application.findFirst({
+            where: { userId: request.userId },
+            select: { farmOwnership: true },
+          });
+          if (borrowerApplication && !canBorrowMachines(borrowerApplication.farmOwnership)) {
+            throw new ApiError(
+              409,
+              "This member is a farm worker, and farm workers cannot borrow machines. Reject the request or have the member update their farm role.",
             );
           }
 

@@ -16,6 +16,7 @@ import {
 } from "@/app/generated/prisma";
 import { notifyUser, writeAudit } from "@/lib/activity";
 import { ApiError } from "@/lib/errors";
+import { canBorrowMachines, hectareBasis } from "@/lib/farm-access-core";
 import prisma from "@/lib/client";
 import {
   calculateLoanDueDate,
@@ -356,8 +357,19 @@ export async function submitMachineRequest({
 
       const application = await tx.application.findFirst({
         where: { userId: memberId },
-        select: { farmSize: true },
+        select: { farmSize: true, farmOwnership: true },
       });
+
+      // Machine capacity is measured in the member's own hectares: one hectare
+      // is one machine-day. A farm worker farms land that is not theirs, so
+      // there is no land to draw days from and they cannot borrow machines.
+      if (application && !canBorrowMachines(application.farmOwnership)) {
+        throw new ApiError(
+          403,
+          "Machines are borrowed against a member's own farm, and farm workers do not have one of their own. Please contact the cooperative office.",
+        );
+      }
+
       const farmSize = application?.farmSize ?? 1;
       // Same rounding rule the season cap uses, so a booking is never accepted
       // here at a length that approval would then refuse.
@@ -517,22 +529,35 @@ export async function submitSupplyTransaction({
         );
       }
 
+      // A supply that caps loans per hectare needs a farm size to divide by.
+      // A farm worker has no land of their own and the field is optional, so
+      // such a supply is not offered to them at all. The supplies page already
+      // withholds these; this is the same rule enforced at the door, since
+      // hiding a row in the UI is not by itself a control.
+      const application = await tx.application.findFirst({
+        where: { userId: memberId },
+        select: { farmSize: true, farmOwnership: true },
+      });
+      const hectareFarmSize = hectareBasis(
+        application?.farmOwnership,
+        application?.farmSize,
+      );
+      if (supply.loanLimitPerHectare != null && hectareFarmSize === null) {
+        throw new ApiError(
+          400,
+          application
+            ? `${supply.productName} is limited per hectare and there is no farm size on file for you, so it is not available to you.`
+            : `No application on file — ${supply.productName} is limited per hectare and cannot be requested`,
+        );
+      }
+
       if (
         type === SupplyTransactionType.LOAN &&
-        supply.loanLimitPerHectare != null
+        supply.loanLimitPerHectare != null &&
+        hectareFarmSize !== null
       ) {
-        const application = await tx.application.findFirst({
-          where: { userId: memberId },
-          select: { farmSize: true },
-        });
-        if (!application) {
-          throw new ApiError(
-            400,
-            "No application on file — cannot verify farm size",
-          );
-        }
         const maxAllowed = Math.floor(
-          application.farmSize * supply.loanLimitPerHectare,
+          hectareFarmSize * supply.loanLimitPerHectare,
         );
 
         const existingLoanQty = await tx.supplyTransaction.aggregate({
@@ -549,13 +574,13 @@ export async function submitSupplyTransaction({
         if (remaining <= 0) {
           throw new ApiError(
             400,
-            `Loan limit reached — member can borrow at most ${maxAllowed} units of ${supply.productName} for a ${application.farmSize} ha farm`,
+            `Loan limit reached — member can borrow at most ${maxAllowed} units of ${supply.productName} for a ${hectareFarmSize} ha farm`,
           );
         }
         if (quantity > remaining) {
           throw new ApiError(
             400,
-            `Member can only borrow ${remaining} more units of ${supply.productName} (limit: ${supply.loanLimitPerHectare} per ha × ${application.farmSize} ha = ${maxAllowed} total, ${alreadyLoaned} already loaned)`,
+            `Member can only borrow ${remaining} more units of ${supply.productName} (limit: ${supply.loanLimitPerHectare} per ha × ${hectareFarmSize} ha = ${maxAllowed} total, ${alreadyLoaned} already loaned)`,
           );
         }
       }

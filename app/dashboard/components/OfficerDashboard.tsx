@@ -6,6 +6,7 @@ import Link from "next/link";
 import { IconLeaf, IconLoan, IconMachine } from "@/components/icons";
 import { ImageModal } from "@/components/ImageModal";
 import { GuarantorApprovalsCard } from "@/components/GuarantorApprovalsCard";
+import { FarmSizeApprovalsCard } from "@/components/FarmSizeApprovalsCard";
 import { DeactivateMemberModal } from "@/components/DeactivateMemberModal";
 import { ReactivateMemberModal } from "@/components/ReactivateMemberModal";
 import { PaymentConfirmModal } from "@/components/PaymentConfirmModal";
@@ -3796,6 +3797,7 @@ export default function OfficerDashboard({
   );
   const [data, setData] = useState<SecretaryData | null>(null);
   const [guarantorPending, setGuarantorPending] = useState(0);
+  const [farmSizePending, setFarmSizePending] = useState(0);
   const [reactivationRequests, setReactivationRequests] = useState<ReactivationRequest[]>([]);
   const [deactivateTarget, setDeactivateTarget] = useState<Member | null>(null);
   const [reactivateTarget, setReactivateTarget] = useState<Member | null>(null);
@@ -3897,6 +3899,26 @@ export default function OfficerDashboard({
       void loadReactivationRequests();
     }
   }, [role, loadReactivationRequests]);
+
+  // Fetched here rather than only by the card, because the card is mounted
+  // inside the Members tab. Counting it from the tab would mean the badge
+  // stayed empty until the tab was opened, so the request would be invisible
+  // to anyone not already looking in the right place.
+  useEffect(() => {
+    if (role !== "PRESIDENT" && role !== "SECRETARY") return;
+    let cancelled = false;
+    fetch("/api/admin/farm-sizes")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((result) => {
+        if (!cancelled && result) setFarmSizePending(result.pending?.length ?? 0);
+      })
+      .catch(() => {
+        // The badge is cosmetic; never let it break the dashboard.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [role]);
 
   useEffect(() => {
     let cancelled = false;
@@ -4086,7 +4108,7 @@ export default function OfficerDashboard({
     );
     return {
       applications: data.applications.filter((a) => a.status === "PENDING").length,
-      members: reactivationRequests.length,
+      members: reactivationRequests.length + farmSizePending,
       loans:
         data.loans.filter((l) => l.status === "PENDING").length +
         guarantorPending,
@@ -4101,7 +4123,7 @@ export default function OfficerDashboard({
       overdue: 0,
       harvest: seasonsData && seasonsData.seasons.length === 0 ? 1 : 0,
     };
-  }, [data, guarantorPending, seasonsData, reactivationRequests]);
+  }, [data, guarantorPending, seasonsData, reactivationRequests, farmSizePending]);
 
   function togglePendingFilter(section: Section) {
     setPendingFilter((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -4610,6 +4632,7 @@ export default function OfficerDashboard({
 
             {activeTab === "members" && data && (
               <div className="space-y-3">
+                <FarmSizeApprovalsCard onCountChange={setFarmSizePending} />
                 {reactivationRequests.length > 0 && (
                   <div className="rounded-xl border border-red-200 bg-red-50 p-4 animate-fadeIn">
                     <p className="flex items-center gap-2 text-sm font-bold text-red-800">

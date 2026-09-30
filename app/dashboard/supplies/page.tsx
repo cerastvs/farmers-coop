@@ -34,6 +34,7 @@ export default function SuppliesPage() {
   const [requests, setRequests] = useState<SupplyRequest[]>([]);
   const [hasGuarantor, setHasGuarantor] = useState<boolean | null>(null);
   const [guarantorStatus, setGuarantorStatus] = useState<string | null>(null);
+  const [hasHectares, setHasHectares] = useState(true);
   const [loading, setLoading] = useState(true);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -47,6 +48,7 @@ export default function SuppliesPage() {
       setSupplies(data.supplies);
       setRequests(data.requests);
       setHasGuarantor(data.hasGuarantor);
+      if (typeof data.hasHectares === "boolean") setHasHectares(data.hasHectares);
       setGuarantorStatus(
         typeof data.guarantorStatus === "string" ? data.guarantorStatus : null,
       );
@@ -167,6 +169,13 @@ export default function SuppliesPage() {
 
         <section>
           <h2 className="mb-3 font-bold text-gray-800">Available Inventory</h2>
+          {!hasHectares && (
+            <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-800">
+              Some supplies are limited per hectare, and there is no farm size
+              on file for you, so those are not listed. Everything shown here is
+              available to you as it is.
+            </p>
+          )}
           {loading ? (
             <p className="rounded-2xl bg-white p-8 text-center text-sm text-gray-500">Loading supplies…</p>
           ) : supplies.length === 0 ? (

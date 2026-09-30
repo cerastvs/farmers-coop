@@ -6,6 +6,7 @@ import {
   requireUser,
 } from "@/lib/api";
 import prisma from "@/lib/client";
+import { canUseSupply, hasHectareBasis } from "@/lib/farm-access-core";
 import { MEMBER_ROLES } from "@/lib/permissions";
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -27,7 +28,12 @@ export async function GET() {
       prisma.application.findFirst({
         where: { userId: actor.userId },
         orderBy: { createdAt: "desc" },
-        select: { guarantor: true, guarantorStatus: true },
+        select: {
+          guarantor: true,
+          guarantorStatus: true,
+          farmSize: true,
+          farmOwnership: true,
+        },
       }),
     ]);
 
@@ -45,10 +51,25 @@ export async function GET() {
     const hasGuarantor =
       hasGuarantorOnFile && guarantorStatus === GuarantorStatus.APPROVED;
 
+    // A per-hectare loan cap needs a farm size to multiply by. A member with no
+    // farm size of their own — a farm worker, or an owner who left the field
+    // blank — is not shown the supplies that depend on one. Supplies with no
+    // per-hectare cap stay available to everyone.
+    const hasHectares = hasHectareBasis(
+      application?.farmOwnership,
+      application?.farmSize,
+    );
+    const availableSupplies = supplies.filter((supply) =>
+      canUseSupply(supply.loanLimitPerHectare, hasHectares),
+    );
+
     return NextResponse.json({
       hasGuarantor,
       guarantorStatus,
-      supplies: supplies.map((supply) => ({
+      farmSize: application?.farmSize ?? null,
+      farmOwnership: application?.farmOwnership ?? null,
+      hasHectares,
+      supplies: availableSupplies.map((supply) => ({
         ...supply,
         price: Number(supply.price),
       })),

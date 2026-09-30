@@ -25,7 +25,9 @@ export const ProfileUpdateSchema = z
     gender: z.enum(["Male", "Female"]).optional(),
     address: z.string().trim().min(5).max(300).optional(),
     contact: z.string().trim().regex(/^[0-9]{10,15}$/).optional(),
-    farmSize: z.coerce.number().positive().optional(),
+    // An officer setting the farm size is the review, so it applies straight
+    // away. Nullable, because a farm worker has no land of their own.
+    farmSize: z.coerce.number().positive().nullish().optional(),
     yearsFarming: z.coerce.number().int().min(0).max(80).optional(),
     farmOwnership: z.nativeEnum(FarmOwnership).optional(),
     farmOwnershipDetails: z.string().trim().max(300).transform(toTitleCase).optional(),

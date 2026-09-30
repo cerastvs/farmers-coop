@@ -14,6 +14,7 @@ import {
   requireUuid,
 } from "@/lib/api";
 import prisma from "@/lib/client";
+import { hectareBasis } from "@/lib/farm-access-core";
 import {
   assertTransition,
   OPEN_SUPPLY_STATUSES,
@@ -102,13 +103,35 @@ export async function PATCH(
           // in the officer queue — a staff farm-size correction or a lowered
           // per-hectare limit would otherwise let an approval exceed the cap
           // the member is actually entitled to.
+          // A per-hectare limited supply is not offered to a member with no
+          // farm size at all, and that holds however the request was made. A
+          // request queued before the member became a farm worker is one of
+          // these, so the same rule is applied at approval.
+          const requestApplication = await tx.application.findFirst({
+            where: { userId: request.userId },
+            select: { farmSize: true, farmOwnership: true },
+          });
+          if (
+            request.supply.loanLimitPerHectare != null &&
+            requestApplication &&
+            hectareBasis(
+              requestApplication.farmOwnership,
+              requestApplication.farmSize,
+            ) === null
+          ) {
+            throw new ApiError(
+              409,
+              `${request.supply.productName} is limited per hectare and this member has no farm size on file, so it is not available to them. Reject the request or have the member update their farm role.`,
+            );
+          }
+
           if (
             request.type === SupplyTransactionType.LOAN &&
             request.supply.loanLimitPerHectare != null
           ) {
             const application = await tx.application.findFirst({
               where: { userId: request.userId },
-              select: { farmSize: true },
+              select: { farmSize: true, farmOwnership: true },
             });
             if (!application) {
               throw new ApiError(
@@ -116,8 +139,20 @@ export async function PATCH(
                 "No application on file — cannot verify farm size for this loan",
               );
             }
+            // Without a farm size there is no per-hectare basis for the cap, so
+            // the cap cannot be checked. Refuse rather than approve blind.
+            const hectareFarmSize = hectareBasis(
+              application.farmOwnership,
+              application.farmSize,
+            );
+            if (hectareFarmSize === null) {
+              throw new ApiError(
+                409,
+                `Cannot verify a per-hectare loan limit for ${request.supply.productName}: this member has no farm size on file. A farm worker has no land of their own.`,
+              );
+            }
             const maxAllowed = Math.floor(
-              application.farmSize * request.supply.loanLimitPerHectare,
+              hectareFarmSize * request.supply.loanLimitPerHectare,
             );
             // Count the member's other open loans, excluding this request, so
             // approving it does not count its own quantity twice.
@@ -138,7 +173,7 @@ export async function PATCH(
             if (otherLoaned + request.quantity > maxAllowed) {
               throw new ApiError(
                 409,
-                `This request exceeds the member's current loan limit for ${request.supply.productName} (limit: ${request.supply.loanLimitPerHectare} per ha × ${application.farmSize} ha = ${maxAllowed} total, ${otherLoaned} already on open loan, ${request.quantity} requested). Reject the request or have the member reduce the quantity.`,
+                `This request exceeds the member's current loan limit for ${request.supply.productName} (limit: ${request.supply.loanLimitPerHectare} per ha × ${hectareFarmSize} ha = ${maxAllowed} total, ${otherLoaned} already on open loan, ${request.quantity} requested). Reject the request or have the member reduce the quantity.`,
               );
             }
           }

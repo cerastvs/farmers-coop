@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { parseFarmSize } from "@/lib/farm-access-core";
 import { toTitleCase } from "@/lib/format";
 
 const sanitizeSql = (val: string) => {
@@ -64,7 +65,14 @@ export const ApplicationSchema = z.object({
     .regex(/^[0-9]+$/, "Contact must be numbers only")
     .transform(sanitizeSql),
 
-  farmSize: z.coerce.number().positive("Farm size must be greater than 0"),
+  // Optional: only a farm owner has land, so a farm worker leaves this blank.
+  farmSize: z.preprocess(
+    (val) => parseFarmSize(val),
+    z
+      .number({ message: "Farm size must be a number" })
+      .positive("Farm size must be greater than 0")
+      .nullish(),
+  ),
 
   cropType: z.preprocess(
     (val) => parseStringArray(val),

@@ -61,6 +61,7 @@ export default function RentMachinePage() {
   const [farmSize, setFarmSize] = useState<number>(1);
   const [allowedDurationDays, setAllowedDurationDays] = useState<number>(1);
   const [seasonCapacity, setSeasonCapacity] = useState<SeasonCapacity | null>(null);
+  const [canBorrow, setCanBorrow] = useState(true);
 
   useEffect(() => {
     fetchMachines();
@@ -76,6 +77,7 @@ export default function RentMachinePage() {
         if (typeof data.allowedDurationDays === "number")
           setAllowedDurationDays(data.allowedDurationDays);
         setSeasonCapacity(data.seasonCapacity ?? null);
+        if (typeof data.canBorrow === "boolean") setCanBorrow(data.canBorrow);
       }
     } catch (error) {
       console.error("Failed to fetch machines:", error);
@@ -304,6 +306,22 @@ export default function RentMachinePage() {
           </p>
         </div>
 
+        {!canBorrow && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <p className="font-bold">Machine borrowing is not available to you</p>
+            <p className="mt-0.5 leading-relaxed">
+              A machine-day is drawn from the hectares of a farm you own, and a
+              farm worker does not have one of their own. You can still browse
+              the equipment below. If your farm role is out of date, you can
+              update it in{" "}
+              <Link href="/registration" className="font-bold underline">
+                Edit Profile
+              </Link>
+              .
+            </p>
+          </div>
+        )}
+
         {message && (
           <div
             className={`rounded-xl px-4 py-3 text-sm font-medium ${
@@ -460,7 +478,13 @@ export default function RentMachinePage() {
                         ) : (
                           <button
                             onClick={() => openBorrowForm(machine.id)}
-                            className="shrink-0 rounded-xl px-5 py-2.5 text-sm font-bold bg-[#174b36] text-white hover:bg-[#1a5c42] transition-colors"
+                            disabled={!canBorrow}
+                            title={
+                              canBorrow
+                                ? undefined
+                                : "Machines are borrowed against a farm of your own"
+                            }
+                            className="shrink-0 rounded-xl px-5 py-2.5 text-sm font-bold bg-[#174b36] text-white hover:bg-[#1a5c42] transition-colors disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500 disabled:hover:bg-gray-200"
                           >
                             Borrow
                           </button>

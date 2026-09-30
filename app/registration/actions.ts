@@ -110,7 +110,12 @@ export async function handleSubmit(
     await refreshSession();
 
     if (isUpdate) {
-      onResult?.({ kind: "success", message: "Profile updated!" });
+      onResult?.({
+        kind: "success",
+        message: data.farmSizePending
+          ? "Profile updated! Your requested farm size is now with an officer for review. Your current farm size still applies until then."
+          : "Profile updated!",
+      });
     } else {
       onResult?.({
         kind: "success",

@@ -103,6 +103,8 @@ enum NotificationType {
   MEMBERSHIP_REJECTED
   GUARANTOR_APPROVED
   GUARANTOR_REJECTED
+  FARM_SIZE_APPROVED
+  FARM_SIZE_REJECTED
   GENERAL
 }
 
@@ -113,6 +115,12 @@ enum SmsStatus {
 }
 
 enum GuarantorStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum FarmSizeStatus {
   PENDING
   APPROVED
   REJECTED
@@ -167,7 +175,8 @@ model User {
   verifiedPayments       Payment[] @relation("PaymentVerifier")
   declinedPayments       Payment[] @relation("PaymentDecliner")
   reviewedApplications   Application[] @relation("ApplicationReviewer")
-  reviewedGuarantors     Application[] @relation("GuarantorReviewer")
+  reviewedGuarantors    Application[] @relation("GuarantorReviewer")
+  reviewedFarmSizes     Application[] @relation("FarmSizeReviewer")
   sentSms                SmsMessage[] @relation("SmsSender")
   receivedSms            SmsMessage[] @relation("SmsReceiver")
 }
@@ -247,10 +256,24 @@ model Application {
   address       String
   contact       String
 
-  farmSize             Float
+  /// Hectares of land the member farms. Optional: only a farm owner has one,
+  /// since it is the basis for per-hectare caps (1 hectare = 1 machine-day)
+  /// and for the per-hectare supply loan limit. A farm worker leaves it null.
+  farmSize             Float?
   yearsFarming         Int
   farmOwnership        FarmOwnership @default(FARM_OWNER)
   farmOwnershipDetails String?
+
+  /// A member cannot change their own farm size outright. One hectare is one
+  /// machine-day, so raising it would hand out machine time. The requested
+  /// value is held here and reviewed by an officer; `farmSize` keeps granting
+  /// the old allowance until then.
+  pendingFarmSize     Float?
+  farmSizeStatus      FarmSizeStatus?
+  farmSizeReviewedBy  String?
+  farmSizeReviewedByUser User?    @relation("FarmSizeReviewer", fields: [farmSizeReviewedBy], references: [id], onDelete: SetNull)
+  farmSizeReviewedAt  DateTime?
+  farmSizeRejectionReason String?
 
   guarantor      Json?
   guarantorStatus GuarantorStatus?

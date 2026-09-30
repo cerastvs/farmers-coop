@@ -1,5 +1,6 @@
 import {
   ApplicationStatus,
+  FarmSizeStatus,
   GuarantorStatus,
   NotificationType,
   Prisma,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/activity";
 import { apiErrorResponse, ApiError, requireUser } from "@/lib/api";
 import prisma from "@/lib/client";
+import { needsFarmSizeReview } from "@/lib/farm-access-core";
 import { ApplicationSchema } from "@/lib/validators/registration";
 
 function composeFullName(
@@ -296,6 +298,17 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
+    // Farm size cannot be changed outright by a member: one hectare is one
+    // machine-day and a supply may cap loans per hectare, so raising it hands
+    // out allowances. The requested value is parked for an officer to review
+    // and the current value keeps applying until they do. Officers editing a
+    // record through the admin path set farmSize directly, since that is
+    // already the review.
+    const farmSizeChangeRequested = needsFarmSizeReview(
+      existingApplication.farmSize,
+      farmSize,
+    );
+
     await prisma.$transaction(async (tx) => {
       const currentGuarantor = existingApplication.guarantor;
       const nextGuarantor =
@@ -305,6 +318,13 @@ export async function PATCH(req: NextRequest) {
       const guarantorChanged =
         JSON.stringify(currentGuarantor ?? null) !==
         JSON.stringify(nextGuarantor ?? null);
+
+      // Farm size cannot be changed outright by a member: one hectare is one
+      // machine-day and a supply may cap loans per hectare, so raising it hands
+      // out allowances. The requested value is parked for an officer to review
+      // and the current value keeps applying until they do. Officers editing a
+      // record through the admin path set farmSize directly, since that is
+      // already the review.
 
       await tx.application.update({
         where: { id: existingApplication.id },
@@ -318,7 +338,12 @@ export async function PATCH(req: NextRequest) {
           address,
           birthDate: new Date(birthDate as string),
           gender,
-          farmSize,
+          // A member can only ever clear the field back to nothing; setting or
+          // raising it has to go through review.
+          farmSize:
+            farmSizeChangeRequested || farmSize !== null
+              ? existingApplication.farmSize
+              : null,
           yearsFarming,
           farmOwnership,
           farmOwnershipDetails: farmOwnershipDetails || null,
@@ -339,6 +364,24 @@ export async function PATCH(req: NextRequest) {
                 guarantorRejectionReason: null,
               }
             : {}),
+          ...(farmSizeChangeRequested
+            ? {
+                pendingFarmSize: farmSize,
+                farmSizeStatus: FarmSizeStatus.PENDING,
+                farmSizeReviewedBy: null,
+                farmSizeReviewedAt: null,
+                farmSizeRejectionReason: null,
+              }
+            : {
+                // Submitting the size already on file withdraws a request that
+                // is still waiting, rather than leaving a stale one in the
+                // officer queue.
+                pendingFarmSize: null,
+                farmSizeStatus: null,
+                farmSizeReviewedBy: null,
+                farmSizeReviewedAt: null,
+                farmSizeRejectionReason: null,
+              }),
           proofOfFarmUrl: farmImgUrl,
           validIdUrl: validIdImgUrl,
         },
@@ -359,11 +402,13 @@ export async function PATCH(req: NextRequest) {
         type: NotificationType.SYSTEM,
         link: "/registration",
         title: "Membership profile updated",
-        message: "Your membership profile changes were saved.",
+        message: farmSizeChangeRequested
+          ? "Your membership profile changes were saved. Your requested farm size is with an officer for review, and your current farm size still applies until then."
+          : "Your membership profile changes were saved.",
       });
     });
 
-    return Response.json({ success: true });
+    return Response.json({ success: true, farmSizePending: farmSizeChangeRequested });
   } catch (error) {
     return apiErrorResponse(error, "Failed to update membership profile");
   }

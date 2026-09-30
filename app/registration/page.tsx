@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback } from "react";
 import Link from "next/link";
 import { logout } from "../login/actions";
 import { useEffect, useState } from "react";
@@ -111,6 +112,14 @@ export default function Registration() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isApplicant, setIsApplicant] = useState(false);
   const [farmOwnership, setFarmOwnership] = useState("");
+  // The role the member had when they started editing. A change away from this
+  // is the one that needs confirming, so that re-selecting the same value (or
+  // changing back and forth) does not nag.
+  const [savedFarmOwnership, setSavedFarmOwnership] = useState("");
+  const [ownershipConfirm, setOwnershipConfirm] = useState<{
+    from: string;
+    to: string;
+  } | null>(null);
 
   const resubmitGuarantor = async () => {
     setResubmitting(true);
@@ -151,6 +160,7 @@ export default function Registration() {
         if (data) {
           setApplication(data);
           setFarmOwnership(data.farmOwnership || "");
+          setSavedFarmOwnership(data.farmOwnership || "");
         }
       })
       .catch((err) => {
@@ -182,6 +192,33 @@ export default function Registration() {
 
   const isUpdate = !!application;
 
+  // The pending farm size review lives on the application record, so it is only
+  // known after a refetch. Without this the page would keep showing the state
+  // from when it first loaded and the "waiting for review" text would never
+  // appear after a save.
+  const refreshApplication = useCallback(async () => {
+    try {
+      const fresh = await fetch("/api/registration").then((r) =>
+        r.ok ? r.json() : null,
+      );
+      if (!fresh) return;
+      setApplication(fresh);
+      setFarmOwnership(fresh.farmOwnership || "");
+      setSavedFarmOwnership(fresh.farmOwnership || "");
+    } catch {
+      // A failed refetch must not turn a successful save into an error.
+    }
+  }, []);
+
+  const onSubmit = async (
+    e: React.FormEvent<HTMLFormElement>,
+  ): Promise<void> => {
+    await handleSubmit(e, setLoading, setErrors, isUpdate, async (result) => {
+      if (result.kind === "success") await refreshApplication();
+      setNoticeModal(result);
+    });
+  };
+
   const guarantorStatus = application?.guarantorStatus ?? null;
   const guarantorRejected = guarantorStatus === "REJECTED";
   const guarantorPending =
@@ -189,6 +226,33 @@ export default function Registration() {
   const guarantorNeedsReview = guarantorPending || guarantorRejected;
   const guarantorRejectionReason =
     application?.guarantorRejectionReason ?? null;
+
+  const isFarmWorker = farmOwnership === "FARM_WORKER";
+  const farmSizeStatus = application?.farmSizeStatus ?? null;
+  const farmSizePending = farmSizeStatus === "PENDING";
+  const farmSizeRejected = farmSizeStatus === "REJECTED";
+
+  // A farm size is the basis for machine-days and for per-hectare supply loan
+  // caps, so it is only meaningful for a member who farms their own land. It is
+  // still filled in when one is already on file, since clearing it is the
+  // member's own call and only ever reduces what they are entitled to.
+  const farmSizeNote = isFarmWorker
+    ? "Only applicable to farm owners. Leave this blank if you are a farm worker — a farm size is not required for you."
+    : "One hectare is one machine-day, so this decides how many machine-days you may book. Changes are reviewed by an officer.";
+
+  const OWNERSHIP_LABELS: Record<string, string> = {
+    FARM_OWNER: "Farm owner",
+    FARM_WORKER: "Farm worker / tenant",
+    OTHERS: "Others",
+  };
+
+  const requestFarmOwnershipChange = (next: string) => {
+    if (next === savedFarmOwnership) {
+      setFarmOwnership(next);
+      return;
+    }
+    setOwnershipConfirm({ from: savedFarmOwnership, to: next });
+  };
 
   return (
     <div className="relative min-h-screen bg-[#edf5df] flex flex-col items-center px-4 py-10 md:px-8 md:py-12">
@@ -245,7 +309,7 @@ export default function Registration() {
           <form
             key={application?.id || "new"}
             className="flex flex-col px-7 pb-7 pt-5 md:px-10"
-            onSubmit={(e) => handleSubmit(e, setLoading, setErrors, isUpdate, setNoticeModal)}
+            onSubmit={onSubmit}
           >
             <input type="hidden" name="userId" value="" />
 
@@ -375,18 +439,35 @@ export default function Registration() {
               <div className="grid grid-cols-2 gap-3 md:col-span-2">
                 <div>
                   <InputLabel>Farm size</InputLabel>
+                  <p className="mb-1.5 text-xs leading-relaxed text-[#5c6f63]">
+                    {farmSizeNote}
+                  </p>
                   <div className="relative">
                     <TextInput
                       name="farmSize"
                       type="number"
                       step="0.01"
-                      placeholder="2.5"
+                      placeholder={isFarmWorker ? "Not required" : "2.5"}
                       defaultValue={application?.farmSize ?? ""}
                       error={errors.farmSize}
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#9aa89e] pointer-events-none">hectares</span>
                   </div>
                   <FieldError error={errors.farmSize} />
+                  {farmSizePending && (
+                    <p className="mt-1.5 text-xs font-semibold text-amber-700">
+                      Requested {application?.pendingFarmSize ?? "—"} ha is with an
+                      officer for review. Your current farm size still applies.
+                    </p>
+                  )}
+                  {farmSizeRejected && (
+                    <p className="mt-1.5 text-xs font-semibold text-red-600">
+                      Your last farm size request was not approved
+                      {application?.farmSizeRejectionReason
+                        ? `: ${application.farmSizeRejectionReason}`
+                        : "."}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <InputLabel>Years farming</InputLabel>
@@ -415,7 +496,7 @@ export default function Registration() {
                 <select
                   name="farmOwnership"
                   value={farmOwnership}
-                  onChange={(e) => setFarmOwnership(e.target.value)}
+                  onChange={(e) => requestFarmOwnershipChange(e.target.value)}
                   className={`w-full rounded-xl border bg-[#fafcf8] px-3 py-2.5 text-sm text-[#173a2b] outline-none transition placeholder:text-[#9aa89e] focus:border-[#4f7e38] focus:ring-4 focus:ring-[#b9db9e]/35 ${
                     errors.farmOwnership ? "border-red-400" : "border-[#dbe5d7]"
                   }`}
@@ -803,6 +884,59 @@ export default function Registration() {
             >
               OK
             </button>
+          </div>
+        </div>
+      )}
+      {ownershipConfirm && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-amber-50">
+              <span className="text-xl text-amber-600">!</span>
+            </div>
+            <h3 className="text-base font-bold text-[#173a2b]">
+              Change your farm role?
+            </h3>
+            <p className="mt-1.5 text-sm leading-relaxed text-[#5b6e62]">
+              You are changing your farm role from{" "}
+              <strong>{OWNERSHIP_LABELS[ownershipConfirm.from] ?? "not set"}</strong>{" "}
+              to{" "}
+              <strong>{OWNERSHIP_LABELS[ownershipConfirm.to] ?? "not set"}</strong>.
+              {ownershipConfirm.to === "FARM_WORKER" ? (
+                <>
+                  {" "}As a farm worker you do not have a farm of your own, so a farm
+                  size no longer applies to you and you will not be able to borrow
+                  machines. Supplies that are limited per hectare will not be
+                  available either.
+                </>
+              ) : (
+                <>
+                  {" "}This decides whether a farm size applies to you, whether you can
+                  borrow machines, and which supplies are available to you.
+                </>
+              )}
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setFarmOwnership(ownershipConfirm.from);
+                  setOwnershipConfirm(null);
+                }}
+                className="w-full rounded-xl border border-[#dbe5d7] py-3 font-bold text-[#5b6e62] transition hover:bg-[#f6faf1]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFarmOwnership(ownershipConfirm.to);
+                  setOwnershipConfirm(null);
+                }}
+                className="w-full rounded-xl bg-[#174b36] py-3 font-bold text-white transition hover:bg-[#0e3b2a]"
+              >
+                Continue
+              </button>
+            </div>
           </div>
         </div>
       )}

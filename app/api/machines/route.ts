@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/client";
+import { canBorrowMachines } from "@/lib/farm-access-core";
 import { apiErrorResponse, requireUser } from "@/lib/api";
 import { MEMBER_ROLES } from "@/lib/permissions";
 import { Role, MachineStatus } from "@/app/generated/prisma";
@@ -35,13 +36,16 @@ export async function GET() {
     const { userId } = await requireUser(MEMBER_ROLES);
     const application = await prisma.application.findFirst({
       where: { userId },
-      select: { farmSize: true },
+      select: { farmSize: true, farmOwnership: true },
     });
     const farmSize = application?.farmSize ?? 1;
     const allowedDurationDays = Math.max(
       1,
       Math.ceil(Number.isFinite(farmSize) ? farmSize : 1),
     );
+    // Machines are borrowed against the member's own hectares, so the page can
+    // explain why borrowing is closed rather than only failing on submit.
+    const canBorrow = canBorrowMachines(application?.farmOwnership);
 
     const machines = await prisma.machine.findMany({
       orderBy: { name: "asc" },
@@ -104,6 +108,7 @@ export async function GET() {
       farmSize,
       allowedDurationDays,
       seasonCapacity: await getMemberCurrentSeasonCapacity(userId),
+      canBorrow,
     });
   } catch (error) {
     return apiErrorResponse(error, "Failed to fetch machines");

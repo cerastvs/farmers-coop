@@ -37,11 +37,11 @@ import {
   applyLoanInterest,
   getLoanInterestRate,
 } from "@/lib/services/loan-interest";
-import { requiredDurationDays } from "@/lib/services/overdue";
 import {
   bookedInInstance,
   computeCapacityUsage,
   seasonContainingBooking,
+  seasonCapacityLimit,
   type SeasonInstance,
   type SeasonLike,
 } from "@/lib/services/seasons";
@@ -272,25 +272,30 @@ export async function assertSeasonCapacity({
   season,
   requestedDays,
   farmSize,
+  excludeRequestId,
 }: {
   tx: Prisma.TransactionClient;
   memberId: string;
   season: SeasonInstance;
   requestedDays: number;
   farmSize: number;
+  /** The request being adjudicated, so it is not counted against itself. */
+  excludeRequestId?: string;
 }) {
   const usage = await computeCapacityUsage(
     await listSeasons(tx),
     season.start,
     tx,
+    excludeRequestId,
   );
   const alreadyBooked = bookedInInstance(usage, season.season.id, memberId);
   const total = alreadyBooked + requestedDays;
+  const limit = seasonCapacityLimit(farmSize);
 
-  if (total > farmSize) {
+  if (total > limit) {
     throw new ApiError(
       409,
-      `Approving this request would bring the member to ${total} machine-day(s) in the ${season.season.name}, above their ${farmSize} hectare-day limit for that season (${alreadyBooked} already booked).`,
+      `Approving this request would bring the member to ${total} machine-day(s) in the ${season.season.name}, above their ${limit} hectare-day limit for that season (${alreadyBooked} already booked).`,
     );
   }
 }
@@ -336,7 +341,9 @@ export async function submitMachineRequest({
         select: { farmSize: true },
       });
       const farmSize = application?.farmSize ?? 1;
-      const requiredDays = requiredDurationDays(farmSize);
+      // Same rounding rule the season cap uses, so a booking is never accepted
+      // here at a length that approval would then refuse.
+      const requiredDays = seasonCapacityLimit(farmSize);
 
       const machine = await tx.machine.findUnique({
         where: { id: machineId },

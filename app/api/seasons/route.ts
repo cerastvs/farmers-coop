@@ -10,6 +10,7 @@ import {
   getCapacityMembers,
   getSeasonOverview,
   isValidMonthDay,
+  seasonCapacityLimit,
 } from "@/lib/services/seasons";
 
 const CreateSeasonSchema = z.object({
@@ -74,7 +75,10 @@ export async function GET() {
     const capacity: CapacityRow[] = [];
     for (const season of overview.seasons) {
       for (const member of members) {
-        const limit = member.farmHectares > 0 ? member.farmHectares : null;
+        // A member with no recorded farm area has an unknown budget, not an
+        // empty one: null keeps the UI from claiming they are at 100%.
+        const limit =
+          member.farmHectares > 0 ? seasonCapacityLimit(member.farmHectares) : null;
         const b = booked.get(`${season.id}:${member.id}`) ?? 0;
         capacity.push({
           seasonId: season.id,

@@ -10,8 +10,10 @@ import {
   isValidMonthDay,
   nextInstance,
   bookedInInstance,
+  computeCapacityUsage,
   periodFor,
   seasonContainingBooking,
+  seasonCapacityLimit,
   sortSeasons,
 } from "../lib/services/seasons";
 
@@ -141,6 +143,34 @@ test("machine-days consumed = the days booked, rounded up (1 day = 1 ha of farm 
   assert.equal(hectareDayContribution(2.1, null), 3);
   assert.equal(hectareDayContribution(2, null), 2);
 });
+
+test("season budget = farm area rounded UP, so an excess hectare is a whole day", () => {
+  // The reported bug: 5.1 ha must buy 6 days, not 5.
+  assert.equal(seasonCapacityLimit(5.1), 6);
+  assert.equal(seasonCapacityLimit(5), 5);
+  assert.equal(seasonCapacityLimit(2.1), 3);
+  assert.equal(seasonCapacityLimit(0.4), 1);
+  assert.equal(seasonCapacityLimit(1), 1);
+  // A missing or zero area floors to one day rather than locking the member
+  // out entirely, keeping the request-time cap and the approval-time cap in
+  // agreement.
+  assert.equal(seasonCapacityLimit(0), 1);
+  assert.equal(seasonCapacityLimit(null), 1);
+  assert.equal(seasonCapacityLimit(undefined), 1);
+  assert.equal(seasonCapacityLimit(-3), 1);
+});
+
+test("a booking that exactly fills the rounded budget is allowed", () => {
+  // 5.1 ha -> 6 day budget: 4 booked plus a 2-day request fits exactly, 3 does not.
+  const limit = seasonCapacityLimit(5.1);
+  assert.equal(4 + 2 > limit, false);
+  assert.equal(4 + 3 > limit, true);
+  // The regression from the report: a 2 ha member with 1 day already in use
+  // has 1 day left, so a 1-day request must be approvable.
+  assert.equal(1 + 1 > seasonCapacityLimit(2), false);
+  // A 3rd day against that same 2-day budget is still correctly refused.
+  assert.equal(2 + 1 > seasonCapacityLimit(2), true);
+});
 /**
  * A booking must sit inside a single season.
  *
@@ -218,4 +248,27 @@ test("committed machine-days are read per member and per season", () => {
   assert.equal(bookedInInstance(usage, "dry", "m1"), 7);
   // A member with nothing booked in a season is zero, not an error.
   assert.equal(bookedInInstance(usage, "wet", "m3"), 0);
+});
+
+test("the request under approval is excluded from its own season total", async () => {
+  // Regression: a QUEUED request is already inside the season total, so
+  // re-adding its days at approval charged the member twice for one booking
+  // and refused a 1-day request that fit.
+  const seen: Record<string, unknown>[] = [];
+  const db = {
+    machineRequest: {
+      findMany: async (args: Record<string, unknown>) => {
+        seen.push(args.where as Record<string, unknown>);
+        return [];
+      },
+    },
+  };
+
+  await computeCapacityUsage(seasons, new Date(2026, 5, 15), db as never, "req-1");
+  assert.deepEqual(seen[0].id, { not: "req-1" });
+
+  // With nothing to exclude, the filter is absent rather than matching nothing,
+  // so ordinary callers keep counting every request.
+  await computeCapacityUsage(seasons, new Date(2026, 5, 15), db as never);
+  assert.equal("id" in seen[1], false);
 });

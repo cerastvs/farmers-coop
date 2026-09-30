@@ -183,6 +183,28 @@ export function hectareDayContribution(
   return Math.ceil(span);
 }
 
+/**
+ * A member's per-season allowance in machine-days: their farm area rounded UP,
+ * because 1 hectare buys 1 day and any excess hectare is still a full day.
+ * 5.1 ha therefore allows 6 days, not 5.
+ *
+ * The counterpart to hectareDayContribution: that rounds a booking's cost up,
+ * this rounds the member's budget up. Both sides of the comparison must use
+ * this function, or a fractional farm is judged against a budget it never had.
+ *
+ * A non-positive area floors to 1 rather than 0, so a member with a missing or
+ * zero farm size can still borrow one day and correct their record. The floor
+ * is part of the rule, not an escape hatch: it keeps the request-time cap and
+ * the approval-time cap in agreement, so a booking cannot be accepted by one
+ * and refused forever by the other.
+ */
+export function seasonCapacityLimit(
+  farmSize: number | null | undefined,
+) {
+  if (!farmSize || farmSize <= 0) return 1;
+  return Math.ceil(farmSize);
+}
+
 export const CAPACITY_COUNTING_STATUSES = [
   MachineStatus.QUEUED,
   MachineStatus.APPROVED,
@@ -246,6 +268,13 @@ export async function computeCapacityUsage(
   seasons: SeasonLike[],
   now: Date = new Date(),
   db: Prisma.TransactionClient | PrismaClientUnion = client,
+  /**
+   * A request to leave out of the totals. A QUEUED request counts toward
+   * capacity so a member cannot queue up more days than they own — but the
+   * request currently being approved is already in that total, and adding its
+   * days again would charge the member twice for one booking.
+   */
+  excludeRequestId?: string,
 ): Promise<SeasonCapacityUsage[]> {
   const sorted = sortSeasons(seasons);
   if (sorted.length === 0) return [];
@@ -268,6 +297,7 @@ export async function computeCapacityUsage(
   const requests = await db.machineRequest.findMany({
     where: {
       status: { in: CAPACITY_COUNTING_STATUSES },
+      ...(excludeRequestId ? { id: { not: excludeRequestId } } : {}),
       OR: [
         { startDate: { gte: earliest, lt: latest } },
         { startedAt: { gte: earliest, lt: latest } },

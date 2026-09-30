@@ -220,6 +220,10 @@ export async function PATCH(
                 request.endDate,
               ),
               farmSize,
+              // This request is still QUEUED, so it is already inside the
+              // season total. Exclude it, or the member is charged for the
+              // very booking being approved.
+              excludeRequestId: request.id,
             });
           }
         }

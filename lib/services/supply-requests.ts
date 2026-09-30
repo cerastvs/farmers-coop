@@ -25,6 +25,33 @@ type SupplyRequestToComplete = SupplyTransaction & {
 type Actor = { userId: string; userRole: Role };
 
 /**
+ * Short gap enforced between a member's requests for the same item.
+ *
+ * Not a business cooldown. Members may hold any number of open requests, for
+ * the same item or different ones; this only exists so that a double-clicked
+ * submit button or a retried request cannot quietly become two identical
+ * requests a second apart. It is deliberately short enough that nobody waits
+ * on it in normal use.
+ */
+export const SUPPLY_REQUEST_INTERVAL_MS = 5_000;
+
+/**
+ * True when `lastRequestAt` is recent enough that another request for the same
+ * item would be treated as an accidental repeat rather than a fresh one.
+ *
+ * `null` means the member has never requested this item, which is never too
+ * soon. Exported so the rule can be tested without a database.
+ */
+export function tooSoonAfterRequest(
+  lastRequestAt: Date | null | undefined,
+  nowMs: number = Date.now(),
+): boolean {
+  if (!lastRequestAt) return false;
+  const age = nowMs - lastRequestAt.getTime();
+  return age < SUPPLY_REQUEST_INTERVAL_MS;
+}
+
+/**
  * Decrement on-hand stock, failing if the requested quantity is not available.
  * Uses a conditional UPDATE so two concurrent completions cannot both observe
  * the same stock level and drive it negative.

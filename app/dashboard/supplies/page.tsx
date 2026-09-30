@@ -7,6 +7,7 @@ import { IconChevronLeft } from "@/components/icons";
 import { Money } from "@/components/Money";
 import { useMarkAlertSeen } from "../hooks/useAlertSeen";
 import { fetchWithTimeout } from "../hooks/fetchWithTimeout";
+import { supplyStatusClass, supplyStatusLabel } from "./status";
 
 interface Supply {
   id: string;
@@ -226,14 +227,14 @@ export default function SuppliesPage() {
                         {cancellingId === request.id ? "Cancelling…" : "Cancel"}
                       </button>
                     )}
-                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-700">{request.status}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${supplyStatusClass(request.status)}`}>{supplyStatusLabel(request.status)}</span>
                   </div>
                 </div>
                 {request.status === "APPROVED" && (
                   <p className="mt-1 w-full text-xs font-semibold text-green-700">
                     {request.type === "LOAN"
-                      ? "Approved — your request is ready for pickup at the cooperative office."
-                      : "Approved — your purchase is ready for pickup at the cooperative office."}
+                      ? "Ready for pickup — collect your loan supplies at the cooperative office."
+                      : "Ready for pickup — collect your purchase at the cooperative office."}
                   </p>
                 )}
               </div>

@@ -23,6 +23,7 @@ import {
   OPEN_SUPPLY_STATUSES,
 } from "@/lib/lifecycles";
 import { MAX_LOAN_PRINCIPAL } from "@/lib/payment-proof";
+import { tooSoonAfterRequest } from "@/lib/services/supply-requests";
 import {
   auditMetadata,
   ManualContext,
@@ -559,18 +560,22 @@ export async function submitSupplyTransaction({
         }
       }
 
-      const duplicate = await tx.supplyTransaction.findFirst({
-        where: {
-          userId: memberId,
-          supplyId: supply.id,
-          status: { in: OPEN_SUPPLY_STATUSES },
-        },
-        select: { id: true },
+      // A member may hold any number of open supply requests, including
+      // several for the same item. This used to reject a second open request
+      // for an item outright, which meant waiting on a pickup before asking
+      // for the same thing again. What remains is a short interval scoped to
+      // the same item, purely so a double-clicked or retried submit does not
+      // become two identical requests seconds apart. Requests for a different
+      // item are never affected.
+      const justRequested = await tx.supplyTransaction.findFirst({
+        where: { userId: memberId, supplyId: supply.id },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true },
       });
-      if (duplicate) {
+      if (tooSoonAfterRequest(justRequested?.createdAt)) {
         throw new ApiError(
           409,
-          "Member already has an open request for this item",
+          "Please wait a few seconds before submitting another request for this item",
         );
       }
 

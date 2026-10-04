@@ -1,12 +1,12 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { ImageModal } from "@/components/ImageModal";
 import { DashboardHeader } from "../components/DashboardHeader";
+import { MemberPageHeader } from "../components/MemberPageHeader";
+import memberStyles from "../components/member.module.css";
 import { LoanCard } from "./components/LoanCard";
 import { PaymentHistoryTable } from "./components/PaymentHistoryTable";
-import { IconChevronLeft } from "@/components/icons";
 import { Money } from "@/components/Money";
 import { fetchWithTimeout } from "../hooks/fetchWithTimeout";
 
@@ -17,6 +17,10 @@ interface LoanData {
   amount: number;
   remainingBalance: number;
   due: string;
+  createdAt: string;
+  termMonths: number;
+  purpose: string | null;
+  rejectionReason: string | null;
 }
 
 interface PaymentRecord {
@@ -32,9 +36,14 @@ interface PaymentSubmission {
   amount: number;
   receiptUrl: string | null;
   referenceNo: string | null;
+  receiptNo?: string | null;
   status: "PENDING" | "VERIFIED" | "REJECTED";
   rejectionReason?: string | null;
   createdAt: string;
+  paymentMethod?: string | null;
+  paidAt?: string | null;
+  verifiedAt?: string | null;
+  remarks?: string | null;
   loan?: { name: string } | null;
 }
 
@@ -58,27 +67,29 @@ export default function ViewLoanPage() {
   const [paymentHistory, setPaymentHistory] = useState<PaymentRecord[]>([]);
   const [submissions, setSubmissions] = useState<PaymentSubmission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   const [proofModalUrl, setProofModalUrl] = useState<string | null>(null);
+  const [failedProofs, setFailedProofs] = useState<string[]>([]);
   const [selectedLoanId, setSelectedLoanId] = useState("");
   const [amount, setAmount] = useState("");
 
   const fetchData = useCallback(async () => {
+    setLoadError(null);
     try {
       const [loanResponse, paymentResponse] = await Promise.all([
         fetchWithTimeout("/api/loans"),
         fetchWithTimeout("/api/payments"),
       ]);
-      if (loanResponse.ok) {
-        const data = await loanResponse.json();
-        setLoans(data.loans);
-        setPaymentHistory(data.paymentHistory);
-      }
-      if (paymentResponse.ok) setSubmissions(await paymentResponse.json());
+      if (!loanResponse.ok || !paymentResponse.ok) throw new Error("Loan records are unavailable right now.");
+      const data = await loanResponse.json();
+      setLoans(data.loans);
+      setPaymentHistory(data.paymentHistory);
+      setSubmissions(await paymentResponse.json());
     } catch (error) {
-      console.error("Failed to fetch loan data:", error);
+      setLoadError(error instanceof Error ? error.message : "Loan records are unavailable right now.");
     } finally {
       setLoading(false);
     }
@@ -209,23 +220,12 @@ export default function ViewLoanPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className={memberStyles.surface}>
       <DashboardHeader />
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6 space-y-6">
-        <div>
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-1 text-sm text-[#2d6a2d] font-medium mb-3 hover:underline"
-          >
-            <IconChevronLeft className="w-4 h-4" />
-            Back to Dashboard
-          </Link>
-          <h1 className="text-2xl font-bold text-gray-900">Loan Management</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Track and manage your loan accounts
-          </p>
-        </div>
+        <MemberPageHeader title="Your loans" description="See balances, payment submissions, and the complete loan record." />
+        {loadError && <div role="alert" className={memberStyles.error}>{loadError}<button onClick={() => void fetchData()}>Try again</button></div>}
 
         <div className="space-y-4">
           {loans.length > 0 ? (
@@ -240,11 +240,11 @@ export default function ViewLoanPage() {
                 }} 
               />
             ))
-          ) : (
+          ) : !loadError ? (
             <div className="bg-white p-8 rounded-xl border border-gray-100 text-center text-gray-500">
               No loan records found.
             </div>
-          )}
+          ) : null}
         </div>
 
         {payableLoans.length > 0 && (
@@ -320,7 +320,7 @@ export default function ViewLoanPage() {
         <section>
           <h2 className="mb-3 text-base font-bold text-gray-800">Payment Submissions</h2>
           <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-            {submissions.length === 0 ? (
+            {submissions.length === 0 && !loadError ? (
               <p className="p-6 text-center text-sm text-gray-400">No payment submissions yet.</p>
             ) : submissions.map((payment) => {
               const proofUrl = getSecureProofUrl(payment.receiptUrl);
@@ -330,7 +330,7 @@ export default function ViewLoanPage() {
                   <div>
                     <p className="text-sm font-semibold text-gray-800">{payment.loan?.name ?? "Loan payment"} · <Money value={payment.amount} /></p>
                     <p className="text-xs text-gray-500">{new Date(payment.createdAt).toLocaleDateString()}</p>
-                    {proofUrl ? (
+                    {proofUrl && !failedProofs.includes(payment.id) ? (
                       <button
                         onClick={() => setProofModalUrl(proofUrl)}
                         className="group mt-1 inline-block overflow-hidden rounded-xl border border-gray-200"
@@ -339,14 +339,20 @@ export default function ViewLoanPage() {
                         <img
                           src={proofUrl}
                           alt="Proof of payment"
+                          onError={() => setFailedProofs((ids) => ids.includes(payment.id) ? ids : [...ids, payment.id])}
                           className="h-24 w-24 rounded-xl object-cover transition group-hover:opacity-80"
                         />
                       </button>
-                    ) : legacyReference ? (
-                      <p className="mt-1 text-xs text-gray-500">Legacy reference: {legacyReference}</p>
                     ) : (
-                      <p className="mt-1 text-xs font-semibold text-amber-700">Missing payment evidence</p>
+                      <p className="mt-1 text-xs font-semibold text-amber-700">Proof image unavailable</p>
                     )}
+                    {legacyReference && <p className="mt-1 text-xs text-gray-600">Reference: {legacyReference}</p>}
+                    {payment.receiptNo && <p className="mt-1 text-xs text-gray-600">Receipt: {payment.receiptNo}</p>}
+                    {payment.paymentMethod && <p className="mt-1 text-xs text-gray-600">Method: {payment.paymentMethod.replaceAll("_", " ")}</p>}
+                    {payment.paidAt && <p className="mt-1 text-xs text-gray-600">Paid: {new Date(payment.paidAt).toLocaleDateString("en-PH")}</p>}
+                    {payment.verifiedAt && <p className="mt-1 text-xs text-gray-600">Verified: {new Date(payment.verifiedAt).toLocaleDateString("en-PH")}</p>}
+                    {payment.remarks && <p className="mt-1 text-xs text-gray-600">Note: {payment.remarks}</p>}
+                    {!proofUrl && !legacyReference && <p className="mt-1 text-xs font-semibold text-amber-700">No payment reference on file</p>}
                     {payment.rejectionReason && <p className="mt-1 text-xs text-red-600">{payment.rejectionReason}</p>}
                   </div>
                   <div className="flex items-center gap-2">

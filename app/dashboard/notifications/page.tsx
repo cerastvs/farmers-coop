@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { DashboardHeader } from "../components/DashboardHeader";
+import { MemberPageHeader } from "../components/MemberPageHeader";
+import memberStyles from "../components/member.module.css";
 import { fetchWithTimeout } from "../hooks/fetchWithTimeout";
-import { Bell, CheckCheck, Trash2, ArrowLeft } from "lucide-react";
-import Link from "next/link";
+import { Bell, CheckCheck, Trash2 } from "lucide-react";
 
 interface Notification {
   id: string;
@@ -17,143 +18,87 @@ interface Notification {
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   async function fetchNotifications() {
+    setLoading(true);
+    setError(null);
     try {
       const res = await fetchWithTimeout("/api/notifications");
-      if (res.ok) {
-        const data = await res.json();
-        setNotifications(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch notifications:", error);
+      if (!res.ok) throw new Error("Unable to load notifications.");
+      const data = await res.json();
+      if (!Array.isArray(data)) throw new Error("Unable to load notifications.");
+      setNotifications(data);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to load notifications.");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    fetchNotifications();
+    void fetchNotifications();
   }, []);
 
   async function markAsRead(ids?: string[]) {
     try {
-      await fetch("/api/notifications", {
+      const res = await fetch("/api/notifications", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids }),
       });
-      fetchNotifications();
-    } catch (error) {
-      console.error("Failed to mark as read:", error);
+      if (!res.ok) throw new Error("Unable to mark notifications as read.");
+      await fetchNotifications();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to mark notifications as read.");
     }
   }
 
   async function deleteNotification(id: string) {
     try {
-      await fetch(`/api/notifications/${id}`, { method: "DELETE" });
-      fetchNotifications();
-    } catch (error) {
-      console.error("Failed to delete notification:", error);
+      const res = await fetch(`/api/notifications/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Unable to delete notification.");
+      await fetchNotifications();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to delete notification.");
     }
   }
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
-    <div className="min-h-screen bg-[#edf5df]">
+    <div className={memberStyles.surface}>
       <DashboardHeader />
-      <main className="mx-auto max-w-2xl px-4 py-6">
-        {/* Back link */}
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1 text-sm font-semibold text-[#718176] hover:text-[#39733e] mb-4"
-        >
-          <ArrowLeft size={15} /> Back to Dashboard
-        </Link>
-
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#174b36] text-white">
-              <Bell size={18} />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-[#173a2b]">Notifications</h1>
-              <p className="text-xs text-[#718176]">
-                {unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}
-              </p>
-            </div>
+      <main className="mx-auto w-full px-4 py-8">
+        <MemberPageHeader title="Notifications" description="Updates about your requests, payments, and cooperative account." />
+        <div className="mx-auto max-w-4xl">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-[#ccd4c8] pb-4">
+            <p className="text-sm font-semibold text-[#536b5f]">{unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}</p>
+            {unreadCount > 0 && <button onClick={() => markAsRead()} className="inline-flex items-center gap-2 bg-[#173b31] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#2d6848]"><CheckCheck size={16} /> Mark all read</button>}
           </div>
-          {unreadCount > 0 && (
-            <button
-              onClick={() => markAsRead()}
-              className="flex items-center gap-1.5 rounded-lg bg-[#174b36] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#0e3b2a]"
-            >
-              <CheckCheck size={14} />
-              Mark all read
-            </button>
+          {error && <div role="alert" className={memberStyles.error}>{error}<button onClick={() => fetchNotifications()}>Try again</button></div>}
+          {loading ? (
+            <p className="py-12 text-center text-sm text-[#536b5f]">Loading notifications…</p>
+          ) : notifications.length === 0 && !error ? (
+            <div className="border border-dashed border-[#ccd4c8] bg-white px-6 py-14 text-center"><Bell size={27} className="mx-auto mb-3 text-[#416747]" /><p className="text-sm text-[#536b5f]">No notifications yet.</p></div>
+          ) : (
+            <div className="border-t border-[#173b31]">
+              {notifications.map((n) => (
+                <article key={n.id} className={`grid gap-4 border-b border-[#ccd4c8] px-3 py-5 sm:grid-cols-[1fr_auto] ${n.read ? "bg-transparent" : "bg-[#e7efdf]"}`}>
+                  <div>
+                    <div className="flex items-center gap-2"><h2 className="text-base font-bold text-[#173b31]">{n.title}</h2>{!n.read && <span className="h-2 w-2 rounded-full bg-[#416747]" aria-label="Unread" />}</div>
+                    <p className="mt-1 text-sm leading-6 text-[#536b5f]">{n.message}</p>
+                    <time className="mt-3 block text-xs text-[#6b8074]" dateTime={n.createdAt}>{new Date(n.createdAt).toLocaleString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}</time>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    {!n.read && <button onClick={() => markAsRead([n.id])} className="border border-[#b9c8b9] px-3 py-1.5 text-xs font-bold text-[#173b31] hover:bg-white">Mark read</button>}
+                    <button onClick={() => deleteNotification(n.id)} className="border border-[#b9c8b9] p-1.5 text-[#536b5f] hover:bg-red-50 hover:text-red-700" aria-label={`Delete ${n.title}`}><Trash2 size={16} /></button>
+                  </div>
+                </article>
+              ))}
+            </div>
           )}
         </div>
-
-        {/* Notifications list */}
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#174b36] border-t-transparent" />
-          </div>
-        ) : notifications.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[#d5ddd0] bg-white/60 p-12 text-center">
-            <Bell size={32} className="mx-auto text-gray-300 mb-3" />
-            <p className="text-sm text-[#718176]">No notifications yet</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {notifications.map((n) => (
-              <div
-                key={n.id}
-                onClick={() => {
-                  if (!n.read) markAsRead([n.id]);
-                }}
-                className={`relative rounded-2xl border p-4 transition cursor-pointer ${
-                  n.read
-                    ? "border-[#eef2e8] bg-white"
-                    : "border-blue-200 bg-blue-50/50"
-                }`}
-              >
-                {!n.read && (
-                  <span className="absolute top-4 right-4 h-2.5 w-2.5 rounded-full bg-blue-500" />
-                )}
-                <p className={`text-sm font-bold ${n.read ? "text-[#173a2b]" : "text-[#0e3b2a]"}`}>
-                  {n.title}
-                </p>
-                <p className="mt-1 text-sm text-[#718176] leading-relaxed">
-                  {n.message}
-                </p>
-                <div className="mt-2 flex items-center justify-between">
-                  <p className="text-[11px] text-gray-400">
-                    {new Date(n.createdAt).toLocaleDateString("en-PH", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteNotification(n.id);
-                    }}
-                    className="rounded-lg p-1.5 text-gray-400 transition hover:bg-red-50 hover:text-red-500"
-                    aria-label="Delete notification"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </main>
     </div>
   );

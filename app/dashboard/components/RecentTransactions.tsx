@@ -1,5 +1,4 @@
 import React from "react";
-import { IconChevronRight } from "../../../components/icons";
 
 interface Transaction {
   type: string;
@@ -18,7 +17,7 @@ export function RecentTransactions({ transactions }: RecentTransactionsProps) {
       <h2 className="text-base font-bold text-gray-800 mb-3">
         Recent Transactions
       </h2>
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="overflow-hidden border-t border-[#173b31] bg-white">
         <div className="grid grid-cols-3 px-4 py-2 bg-gray-50 border-b border-gray-100">
           <span className="text-xs font-semibold text-gray-500">Type</span>
           <span className="text-xs font-semibold text-gray-500">Date</span>
@@ -41,10 +40,10 @@ export function RecentTransactions({ transactions }: RecentTransactionsProps) {
                 {tx.debit ? "-" : "+"}
                 {tx.amount}
               </span>
-              <IconChevronRight />
             </div>
           </div>
         ))}
+        {transactions.length === 0 && <p className="px-4 py-8 text-center text-sm text-[#587063]">No recent transactions.</p>}
       </div>
     </section>
   );

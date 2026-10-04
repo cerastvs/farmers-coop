@@ -20,13 +20,13 @@ export function QuickActionButton({
   return (
     <a
       href={href}
-      className="group relative flex flex-col items-center justify-center gap-2 rounded-2xl border border-[#e2e7dc] bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#bdd9a7] hover:shadow-md active:scale-95"
+      className="group relative flex min-h-28 flex-col items-start justify-between gap-3 border border-[#ccd4c8] bg-white p-4 transition hover:border-[#416747] hover:bg-[#e7efdf]"
     >
       {dot && (
         <span className="absolute top-3 right-3 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-red-100" />
       )}
-      <div className={`${iconBg} ${iconColor} p-3 rounded-xl`}>{icon}</div>
-      <span className="text-center text-xs font-bold leading-tight text-[#315646]">
+      <div className={`${iconBg} ${iconColor} p-2`}>{icon}</div>
+      <span className="text-left text-sm font-bold leading-tight text-[#173b31]">
         {label}
       </span>
     </a>

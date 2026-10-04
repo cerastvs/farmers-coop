@@ -1,6 +1,9 @@
 "use client";
 import { RegistrationSchema } from "@/lib/validators/signup";
+import Image from "next/image";
 import Link from "next/link";
+import { ArrowLeft, ArrowUpRight } from "lucide-react";
+import styles from "../auth.module.css";
 import { useState } from "react";
 import { login } from "../login/actions";
 
@@ -77,126 +80,53 @@ export default function SignUp() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f0f9f4] relative overflow-hidden px-4">
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-green-200/50 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-200/50 rounded-full blur-[120px] pointer-events-none" />
-
-      {showSuccess && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
-          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full text-center space-y-4 animate-in fade-in zoom-in-95">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mx-auto">
-              <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
+    <main className={styles.scene}>
+      <div className={styles.visual}>
+        <Image src="/farm.webp" alt="Rice field on a working farm" fill priority sizes="(max-width: 800px) 100vw, 52vw" className={styles.photo} />
+        <div className={styles.visualContent}>
+          <Link href="/home" className={styles.brand}><span className={styles.brandMark}>FC</span>FarmCoop</Link>
+          <div className={styles.visualMessage}><span>Farmers&apos; cooperative</span><p>There is room to grow here.</p></div>
+        </div>
+      </div>
+      <div className={styles.formSide}>
+        <Link href="/home" className={styles.topLink}><ArrowLeft size={16} /> Back to home</Link>
+        <div className={styles.formContent}>
+          <p className={styles.eyebrow}>New member</p>
+          <h1 className={styles.title}>Join FarmCoop.</h1>
+          <p className={styles.subtitle}>Create an account to begin your membership application.</p>
+          <form className={styles.form} onSubmit={handleSubmit}>
+            <div className={styles.field}>
+              <label htmlFor="signup-username" className={styles.label}>Username</label>
+              <input id="signup-username" name="username" autoComplete="username" placeholder="Choose a username" className={`${styles.input} ${errors.username ? styles.inputError : ""}`} />
+              {errors.username && <p className={styles.error}>{errors.username}</p>}
             </div>
-            <h2 className="text-2xl font-extrabold text-green-900">Account Created!</h2>
-            <p className="text-sm text-gray-500">
-              Welcome to FarmCoop. Click below to complete your membership application.
-            </p>
-            <button
-              onClick={handleContinue}
-              disabled={pending}
-              className="w-full bg-green-600 text-white py-3.5 rounded-2xl hover:bg-green-700 active:scale-[0.98] transition-all font-bold shadow-lg shadow-green-200 disabled:opacity-50"
-            >
-              {pending ? "Logging in…" : "Continue to Registration"}
+            <div className={styles.field}>
+              <label htmlFor="signup-password" className={styles.label}>Password</label>
+              <input id="signup-password" name="password" type="password" autoComplete="new-password" placeholder="Create a password" className={`${styles.input} ${errors.password ? styles.inputError : ""}`} />
+              {errors.password && <p className={styles.error}>{errors.password}</p>}
+            </div>
+            <div className={styles.field}>
+              <label htmlFor="signup-confirm" className={styles.label}>Confirm password</label>
+              <input id="signup-confirm" name="confirmPassword" type="password" autoComplete="new-password" placeholder="Enter your password again" className={`${styles.input} ${errors.confirmPassword ? styles.inputError : ""}`} />
+              {errors.confirmPassword && <p className={styles.error}>{errors.confirmPassword}</p>}
+            </div>
+            <button type="submit" className={styles.submit}>Create account <ArrowUpRight size={18} /></button>
+          </form>
+          <p className={styles.switch}>Already a member? <Link href="/login" className={styles.switchLink}>Sign in</Link></p>
+        </div>
+      </div>
+      {showSuccess && (
+        <div className={styles.overlay}>
+          <div className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="signup-success-title">
+            <span className={styles.dialogMark}>FC</span>
+            <h2 id="signup-success-title">Account created.</h2>
+            <p>Your account is ready. Continue to your membership application.</p>
+            <button onClick={handleContinue} disabled={pending} className={styles.submit}>
+              {pending ? "Logging in…" : "Continue to registration"}<ArrowUpRight size={18} />
             </button>
           </div>
         </div>
       )}
-
-      <div className="w-full max-w-md bg-white/70 backdrop-blur-xl p-8 sm:p-10 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-white/20 relative z-10 transition-all duration-300 font-sans">
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4">
-            <span className="text-3xl">🌱</span>
-          </div>
-          <h1 className="text-3xl font-extrabold text-green-900 tracking-tight">
-            FarmCoop
-          </h1>
-          <p className="text-green-700/60 font-medium mt-2">
-            Join our growing community
-          </p>
-        </div>
-
-        <form className="space-y-5" onSubmit={handleSubmit}>
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-green-800/70 ml-1 uppercase tracking-wider">
-              Username
-            </label>
-            <input
-              name="username"
-              placeholder="e.g. janesmith"
-              className={`w-full px-5 py-3.5 bg-white/50 border border-green-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-green-500/10 focus:border-green-500 transition-all placeholder:text-gray-400 ${errors.username
-                  ? "border-red-300 bg-red-50/50 ring-4 ring-red-500/10"
-                  : ""
-                }`}
-            />
-            {errors.username && (
-              <p className="text-red-500 text-xs font-medium mt-1 ml-1">
-                {errors.username}
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-green-800/70 ml-1 uppercase tracking-wider">
-              Password
-            </label>
-            <input
-              name="password"
-              type="password"
-              placeholder="••••••••"
-              className={`w-full px-5 py-3.5 bg-white/50 border border-green-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-green-500/10 focus:border-green-500 transition-all placeholder:text-gray-400 ${errors.password
-                  ? "border-red-300 bg-red-50/50 ring-4 ring-red-500/10"
-                  : ""
-                }`}
-            />
-            {errors.password && (
-              <p className="text-red-500 text-xs font-medium mt-1 ml-1">
-                {errors.password}
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-green-800/70 ml-1 uppercase tracking-wider">
-              Confirm Password
-            </label>
-            <input
-              name="confirmPassword"
-              type="password"
-              placeholder="••••••••"
-              className={`w-full px-5 py-3.5 bg-white/50 border border-green-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-green-500/10 focus:border-green-500 transition-all placeholder:text-gray-400 ${errors.confirmPassword
-                  ? "border-red-300 bg-red-50/50 ring-4 ring-red-500/10"
-                  : ""
-                }`}
-            />
-            {errors.confirmPassword && (
-              <p className="text-red-500 text-xs font-medium mt-1 ml-1">
-                {errors.confirmPassword}
-              </p>
-            )}
-          </div>
-
-          <button
-            type="submit"
-            className="w-full bg-green-600 text-white py-4 rounded-2xl hover:bg-green-700 active:scale-[0.98] transition-all font-bold shadow-lg shadow-green-200 mt-2"
-          >
-            Create Account
-          </button>
-        </form>
-
-        <div className="mt-8 pt-6 border-t border-green-100/50 flex flex-col gap-4 text-center">
-          <p className="text-sm text-gray-500">
-            Already have an account?{" "}
-            <Link
-              href="/login"
-              className="text-green-600 font-bold hover:text-green-700 transition-colors"
-            >
-              Log in here
-            </Link>
-          </p>
-        </div>
-      </div>
-    </div>
+    </main>
   );
 }

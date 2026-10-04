@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { ImageModal } from "@/components/ImageModal";
 import { APPLICATION_DENIAL_REASONS } from "@/lib/application-fee-constants";
 import { Money } from "@/components/Money";
+import adminStyles from "../../admin.module.css";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -251,14 +252,14 @@ export default function ApplicationReviewPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f7f2]">
-      <header className="border-b border-white/10 bg-[#174b36] text-white shadow-lg shadow-[#173a2b]/10">
+    <div className={adminStyles.workspace}>
+      <header className={adminStyles.topbar}>
         <div className="mx-auto flex min-h-16 max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-[.14em] text-[#cfe6a5]">
               president workspace
             </p>
-            <h1 className="text-lg font-black">Membership Application Review</h1>
+            <p className={adminStyles.brand}>FC / FarmCoop</p>
           </div>
           <Link
             href="/admin"
@@ -270,6 +271,11 @@ export default function ApplicationReviewPage() {
       </header>
 
       <main className="mx-auto max-w-4xl px-4 py-6">
+        <div className={adminStyles.intro}>
+          <p className={adminStyles.eyebrow}>President records</p>
+          <h1 className={adminStyles.title}>Application Review</h1>
+          <p className={adminStyles.description}>Membership details and decision history.</p>
+        </div>
         {notice && (
           <p
             aria-live="polite"

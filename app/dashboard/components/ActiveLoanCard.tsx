@@ -23,7 +23,7 @@ export function ActiveLoanCard({
 
   return (
     <div
-      className={`rounded-2xl border bg-white p-5 shadow-sm shadow-[#173a2b]/[.03] ${
+      className={`border bg-white p-5 ${
         isOverdue ? "border-red-300" : "border-[#e2e7dc]"
       }`}
     >
@@ -44,7 +44,7 @@ export function ActiveLoanCard({
           </span>
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-2 text-sm">
+      <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
         <div>
           <p className="text-xs font-medium text-[#718176]">Loan Amount</p>
           <p className="font-bold text-[#315646]">{loanAmount}</p>

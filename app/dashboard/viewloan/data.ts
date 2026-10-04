@@ -7,6 +7,10 @@ export interface Loan {
   amount: React.ReactNode;
   remainingBalance: React.ReactNode;
   due: string; // next payment date
+  createdAt?: string;
+  termMonths?: number;
+  purpose?: string | null;
+  rejectionReason?: string | null;
 }
 
 export interface PaymentRecord {

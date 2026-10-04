@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DashboardHeader } from "./DashboardHeader";
+import memberStyles from "./member.module.css";
 import { SummaryCard } from "./SummaryCard";
 import { QuickActionButton } from "./QuickActionButton";
 import { ActiveLoanCard } from "./ActiveLoanCard";
@@ -128,7 +129,7 @@ export function DashboardClient({
   ];
 
   return (
-    <div className="min-h-screen bg-[#f7f7f2] flex flex-col">
+    <div className={memberStyles.surface}>
       <DashboardHeader />
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-8 space-y-7">
@@ -136,7 +137,7 @@ export function DashboardClient({
           <p className="text-xs font-bold uppercase tracking-[.14em] text-[#4f7e38]">
             Member portal
           </p>
-          <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-[#173a2b]">
+          <h1 className={memberStyles.dashboardTitle}>
             Welcome back, {user.name?.split(" ")[0] || "Farmer"}!
           </h1>
           <p className="mt-1 text-sm text-[#718176]">
@@ -144,7 +145,7 @@ export function DashboardClient({
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
           {summaryCards.map((card) => (
             <SummaryCard key={card.label} {...card} />
           ))}
@@ -353,7 +354,7 @@ function ApplicantPendingScreen({
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f7f2] flex flex-col">
+    <div className={memberStyles.surface}>
       <DashboardHeader />
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-12">
         <div className="rounded-[2.5rem] border border-[#dce8d2] bg-white p-10 text-center shadow-xl shadow-[#173a2b]/[.06]">
@@ -362,7 +363,7 @@ function ApplicantPendingScreen({
           >
             {icon}
           </div>
-          <h1 className="text-3xl font-black text-[#2d6a2d] mb-4">{title}</h1>
+          <h1 className={memberStyles.dashboardTitle}>{title}</h1>
           <p className="text-gray-600 text-lg mb-8 max-w-md mx-auto">{body}</p>
 
           {rejected && (

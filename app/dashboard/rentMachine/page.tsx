@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DashboardHeader } from "../components/DashboardHeader";
+import { MemberPageHeader } from "../components/MemberPageHeader";
+import memberStyles from "../components/member.module.css";
 import {
   BookedDate,
   BookingCalendar,
@@ -10,7 +12,6 @@ import {
   MyRequest,
   todayISO,
 } from "../components/BookingCalendar";
-import { IconChevronLeft } from "@/components/icons";
 import { ImageModal } from "@/components/ImageModal";
 import { Tractor, X, CalendarDays, FileCheck } from "lucide-react";
 import { useMarkAlertSeen } from "../hooks/useAlertSeen";
@@ -44,6 +45,7 @@ export default function RentMachinePage() {
   useMarkAlertSeen("machineAlerts");
   const [machines, setMachines] = useState<Machine[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [borrowing, setBorrowing] = useState<string | null>(null);
   const [message, setMessage] = useState<{
     type: "success" | "error";
@@ -68,19 +70,19 @@ export default function RentMachinePage() {
   }, []);
 
   async function fetchMachines() {
+    setLoadError(null);
     try {
       const res = await fetchWithTimeout("/api/machines");
-      if (res.ok) {
-        const data = await res.json();
-        setMachines(data.machines);
-        if (typeof data.farmSize === "number") setFarmSize(data.farmSize);
-        if (typeof data.allowedDurationDays === "number")
-          setAllowedDurationDays(data.allowedDurationDays);
-        setSeasonCapacity(data.seasonCapacity ?? null);
-        if (typeof data.canBorrow === "boolean") setCanBorrow(data.canBorrow);
-      }
+      if (!res.ok) throw new Error("Machinery details are unavailable right now.");
+      const data = await res.json();
+      setMachines(data.machines);
+      if (typeof data.farmSize === "number") setFarmSize(data.farmSize);
+      if (typeof data.allowedDurationDays === "number")
+        setAllowedDurationDays(data.allowedDurationDays);
+      setSeasonCapacity(data.seasonCapacity ?? null);
+      if (typeof data.canBorrow === "boolean") setCanBorrow(data.canBorrow);
     } catch (error) {
-      console.error("Failed to fetch machines:", error);
+      setLoadError(error instanceof Error ? error.message : "Machinery details are unavailable right now.");
     } finally {
       setLoading(false);
     }
@@ -288,23 +290,12 @@ export default function RentMachinePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f7f2] flex flex-col">
+    <div className={memberStyles.surface}>
       <DashboardHeader />
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6 space-y-6">
-        <div>
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-1 text-sm text-[#2d6a2d] font-medium mb-3 hover:underline"
-          >
-            <IconChevronLeft className="w-4 h-4" />
-            Back to Dashboard
-          </Link>
-          <h1 className="text-2xl font-bold text-gray-900">Rent Machine</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Browse equipment and submit a borrow request
-          </p>
-        </div>
+        <MemberPageHeader title="Shared machinery" description="Browse equipment, choose dates, and follow your requests." />
+        {loadError && <div role="alert" className={memberStyles.error}>{loadError}<button onClick={() => void fetchMachines()}>Try again</button></div>}
 
         {!canBorrow && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -659,6 +650,7 @@ export default function RentMachinePage() {
                                       {formatShortDate(req.startDate)} – {formatShortDate(req.endDate)}
                                     </span>
                                   )}
+                                  {(!req.startDate || !req.endDate) && <span className="text-xs text-amber-700">Dates not recorded</span>}
                                 </div>
                               </div>
                               {req.status === "QUEUED" && (
@@ -744,11 +736,11 @@ export default function RentMachinePage() {
                   </div>
                 );
               })
-            ) : (
+            ) : !loadError ? (
               <div className="rounded-2xl border border-dashed border-[#ccd9c8] bg-white p-5 text-center text-sm text-[#718176]">
                 No machines available at the moment
               </div>
-            )}
+            ) : null}
           </div>
         </section>
 

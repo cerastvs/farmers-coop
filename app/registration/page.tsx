@@ -7,7 +7,8 @@ import { useEffect, useState } from "react";
 import { Application } from "../generated/prisma/client";
 import { handleSubmit, type SubmitResult } from "./actions";
 import { MembershipProgressSteps } from "@/components/MembershipProgressSteps";
-import { ArrowLeft, FileImage, Sprout } from "lucide-react";
+import { ArrowLeft, FileImage } from "lucide-react";
+import memberStyles from "../dashboard/components/member.module.css";
 
 type ApplicationWithLists = Application & {
   crops: { name: string }[];
@@ -109,6 +110,8 @@ export default function Registration() {
   } | null>(null);
   const [noticeModal, setNoticeModal] = useState<SubmitResult | null>(null);
   const [application, setApplication] = useState<ApplicationWithLists | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileLoadError, setProfileLoadError] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isApplicant, setIsApplicant] = useState(false);
   const [farmOwnership, setFarmOwnership] = useState("");
@@ -147,26 +150,30 @@ export default function Registration() {
     }
   };
 
-  useEffect(() => {
-    fetch("/api/registration")
-      .then(async (res) => {
-        if (res.status === 401) {
-          console.error("Not logged in");
-          return null;
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (data) {
-          setApplication(data);
-          setFarmOwnership(data.farmOwnership || "");
-          setSavedFarmOwnership(data.farmOwnership || "");
-        }
-      })
-      .catch((err) => {
-        console.error("Fetch failed:", err);
-      });
+  const loadApplication = useCallback(async () => {
+    setProfileLoading(true);
+    setProfileLoadError(false);
+    try {
+      const res = await fetch("/api/registration");
+      if (res.status === 404) {
+        setApplication(null);
+        return;
+      }
+      if (!res.ok) throw new Error("Profile request failed");
+      const data = await res.json();
+      setApplication(data);
+      setFarmOwnership(data.farmOwnership || "");
+      setSavedFarmOwnership(data.farmOwnership || "");
+    } catch {
+      setProfileLoadError(true);
+    } finally {
+      setProfileLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadApplication();
+  }, [loadApplication]);
 
   useEffect(() => {
     if (!application) return;
@@ -255,24 +262,21 @@ export default function Registration() {
   };
 
   return (
-    <div className="relative min-h-screen bg-[#edf5df] flex flex-col items-center px-4 py-10 md:px-8 md:py-12">
-      <div className="absolute left-[-10rem] top-[-8rem] h-80 w-80 rounded-full bg-[#badb94]/50 blur-3xl" />
-      <div className="absolute bottom-[-12rem] right-[-8rem] h-96 w-96 rounded-full bg-[#86b87b]/35 blur-3xl" />
+    <div className={`${memberStyles.surface} flex flex-col items-center px-4 py-8 md:px-8 md:py-12`}>
 
       <div className="relative flex w-full max-w-6xl flex-col">
-        {/* Header */}
         <div className="mx-auto w-full max-w-lg md:max-w-none">
           <div className="flex items-center justify-between mb-6 md:mb-8 md:pb-6 md:border-b md:border-[#d8e5d1]">
             <Link
               href="/dashboard"
-              className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#4f7e38] transition hover:text-[#2d6a2d] md:text-base"
+              className={memberStyles.back}
             >
               <ArrowLeft size={16} />
               Back
             </Link>
             <div className="flex items-center gap-2 md:gap-3">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#174b36] text-[#d6ed9f] md:h-10 md:w-10 md:rounded-xl">
-                <Sprout size={16} className="md:h-5 md:w-5" />
+              <span className="grid h-9 w-9 place-items-center bg-[#174b36] text-[#d6ed9f] font-black">
+                FC
               </span>
               <span className="text-sm font-bold text-[#174b36] tracking-tight md:text-lg">FarmCoop</span>
             </div>
@@ -294,11 +298,11 @@ export default function Registration() {
           />
         )}
 
-        {/* Card */}
         <div className="mx-auto w-full max-w-lg md:max-w-none">
-        <div className="bg-white rounded-3xl border border-white/80 shadow-2xl shadow-[#173a2b]/15 backdrop-blur-md overflow-hidden">
-          <div className="px-7 pt-7 pb-1 md:px-10">
-            <h1 className="text-2xl font-extrabold tracking-tight text-[#173a2b]">
+        <div className="border border-[#ccd4c8] bg-white overflow-hidden">
+          <div className="px-7 pt-6 pb-1 md:px-10">
+            <p className={memberStyles.eyebrow}>Member records</p>
+            <h1 className={memberStyles.dashboardTitle}>
               {isUpdate ? "Edit profile" : "Membership application"}
             </h1>
             <p className="mt-1 text-sm text-[#718176]">
@@ -306,15 +310,24 @@ export default function Registration() {
             </p>
           </div>
 
-          <form
+          {profileLoading ? (
+            <p className="px-7 py-8 text-sm text-[#536b5f] md:px-10" role="status">Loading your information…</p>
+          ) : profileLoadError ? (
+            <div className="px-7 py-8 md:px-10">
+              <div className={memberStyles.error} role="alert">
+                Your information could not be loaded.
+                <button type="button" onClick={() => void loadApplication()}>Try again</button>
+              </div>
+            </div>
+          ) : <form
             key={application?.id || "new"}
-            className="flex flex-col px-7 pb-7 pt-5 md:px-10"
+            className="flex flex-col px-7 pb-7 pt-3 md:px-10"
             onSubmit={onSubmit}
           >
             <input type="hidden" name="userId" value="" />
 
             {/* Personal Information */}
-            <SectionHeader label="Personal information" />
+            <SectionHeader label="Personal information" compact />
 
             <div className="space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-x-8 md:gap-y-5">
               {/* Name row 1: First name + Middle name */}
@@ -783,7 +796,7 @@ export default function Registration() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full rounded-xl bg-[#174b36] py-3.5 font-bold text-white shadow-lg shadow-[#174b36]/15 transition hover:bg-[#0e3b2a] disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full bg-[#174b36] py-3.5 font-bold text-white transition hover:bg-[#0e3b2a] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading
                   ? "Processing..."
@@ -792,7 +805,7 @@ export default function Registration() {
                     : "Submit application"}
               </button>
             </div>
-          </form>
+          </form>}
 
           {/* Logout */}
           <div className="border-t border-[#eef3ec] px-7 py-3 text-center">
@@ -944,10 +957,10 @@ export default function Registration() {
   );
 }
 
-function SectionHeader({ label, id }: { label: React.ReactNode; id?: string }) {
+function SectionHeader({ label, id, compact = false }: { label: React.ReactNode; id?: string; compact?: boolean }) {
   return (
     <div
-      className="flex items-center gap-2.5 mb-4 mt-8 first:mt-0 scroll-mt-28"
+      className={`flex items-center gap-2.5 mb-4 scroll-mt-28 ${compact ? "mt-3" : "mt-7"}`}
       id={id}
     >
       <span className="h-2 w-2 rounded-sm bg-[#4f7e38]" />
@@ -1011,6 +1024,8 @@ function FileUpload({
 }) {
   const [preview, setPreview] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>("");
+  const [failedImage, setFailedImage] = useState<string | null>(null);
+  const imageUrl = preview ?? currentUrl;
 
   return (
     <div>
@@ -1034,6 +1049,7 @@ function FileUpload({
             if (file) {
               setFileName(file.name);
               setPreview(URL.createObjectURL(file));
+              setFailedImage(null);
             }
           }}
         />
@@ -1047,14 +1063,18 @@ function FileUpload({
         <span className="ml-auto text-xs text-[#b5c4b9]">Image</span>
       </div>
       <FieldError error={error} />
-      {(preview || currentUrl) && (
+      {imageUrl && (
         <div className="mt-2 overflow-hidden rounded-xl border border-[#dbe5d7] bg-white p-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={preview ?? currentUrl}
-            alt={`${label} preview`}
-            className="max-h-40 w-full rounded-lg object-contain"
-          />
+          {failedImage === imageUrl ? (
+            <p className="py-3 text-xs text-[#782d20]" role="status">Stored image could not be loaded.</p>
+          ) : (
+            <img
+              src={imageUrl}
+              alt={`${label} preview`}
+              className="max-h-40 w-full object-contain"
+              onError={() => setFailedImage(imageUrl)}
+            />
+          )}
           <p className="mt-1 truncate text-[11px] text-[#5b6e62]">
             {preview ? fileName : "Uploaded — click «Change file» to replace"}
           </p>

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DashboardHeader } from "../components/DashboardHeader";
+import { MemberPageHeader } from "../components/MemberPageHeader";
+import memberStyles from "../components/member.module.css";
 import { ApplyLoanCard } from "./components/ApplyLoanCard";
 import {
   LoanRequestsCard,
@@ -22,12 +24,15 @@ export default function ApplyLoanPage() {
   const [guarantorStatus, setGuarantorStatus] = useState<string | null>(null);
   const [loans, setLoans] = useState<LoanRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [loansError, setLoansError] = useState<string | null>(null);
 
   const fetchStats = async () => {
+    setStatsError(null);
     try {
       const res = await fetchWithTimeout("/api/dashboard/stats");
-      if (res.ok) {
-        const data = await res.json();
+      if (!res.ok) throw new Error("Loan eligibility details are unavailable.");
+      const data = await res.json();
         // This page applies for a cash loan, so only the cash balance can
         // block it. The stats endpoint already reports cash and supply debt
         // separately; this used to gate on the combined total, so a member
@@ -45,23 +50,22 @@ export default function ApplyLoanPage() {
             ? data.guarantorStatus
             : null,
         );
-      }
     } catch (error) {
-      console.error("Failed to fetch balance:", error);
+      setStatsError(error instanceof Error ? error.message : "Loan eligibility details are unavailable.");
     } finally {
       setLoading(false);
     }
   };
 
   const fetchLoans = async () => {
+    setLoansError(null);
     try {
       const res = await fetchWithTimeout("/api/loans");
-      if (res.ok) {
-        const data = await res.json();
+      if (!res.ok) throw new Error("Your loan requests are unavailable.");
+      const data = await res.json();
         setLoans(data.loans ?? []);
-      }
     } catch (error) {
-      console.error("Failed to fetch loans:", error);
+      setLoansError(error instanceof Error ? error.message : "Your loan requests are unavailable.");
     }
   };
 
@@ -80,28 +84,13 @@ export default function ApplyLoanPage() {
   const hasPendingRequest = hasOpenCashLoan(loans);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className={memberStyles.surface}>
       <DashboardHeader />
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6 space-y-6">
-        <div>
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-1 text-sm text-[#2d6a2d] font-medium mb-3 hover:underline"
-          >
-            <IconChevronLeft className="w-4 h-4" />
-            Back to Dashboard
-          </Link>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Apply for a Loan{" "}
-            {guarantorStatus === "REJECTED" && (
-              <span className="ml-1 inline-block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-red-200" />
-            )}
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Select the loan type that best fits your farming needs
-          </p>
-        </div>
+        <MemberPageHeader title="Apply for a loan" description="Request a cash loan and review your existing requests." indicator={guarantorStatus === "REJECTED" ? <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-red-200" /> : undefined} />
+        {statsError && <div role="alert" className={memberStyles.error}>{statsError}<button onClick={() => void fetchStats()}>Try again</button></div>}
+        {loansError && <div role="alert" className={memberStyles.error}>{loansError}<button onClick={() => void fetchLoans()}>Try again</button></div>}
 
         {hasGuarantor === false && guarantorStatus === "REJECTED" && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex gap-3 items-start animate-in fade-in slide-in-from-top-2">

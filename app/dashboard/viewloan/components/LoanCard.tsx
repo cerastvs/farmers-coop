@@ -28,11 +28,18 @@ export function LoanCard({ loan }: { loan: Loan }) {
         </div>
       </div>
 
+      <div className="grid grid-cols-2 gap-3 border-t border-[#ccd4c8] pt-4 text-sm sm:grid-cols-3">
+        {loan.createdAt && <div><p className="text-xs text-[#587063]">Submitted</p><p className="font-semibold text-[#173b31]">{new Date(loan.createdAt).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}</p></div>}
+        {loan.termMonths != null && <div><p className="text-xs text-[#587063]">Term</p><p className="font-semibold text-[#173b31]">{loan.termMonths} months</p></div>}
+        {loan.purpose && <div className="col-span-2 sm:col-span-1"><p className="text-xs text-[#587063]">Purpose</p><p className="font-semibold text-[#173b31]">{loan.purpose}</p></div>}
+        {loan.rejectionReason && <div className="col-span-2 sm:col-span-3"><p className="text-xs text-red-700">Reason for rejection</p><p className="font-semibold text-red-800">{loan.rejectionReason}</p></div>}
+      </div>
+
       <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 flex items-center gap-3">
         <IconBell />
         <div>
           <p className="text-xs text-yellow-600 font-medium">
-            Next Payment Due
+            Loan payoff due
           </p>
           <p className="text-sm font-bold text-yellow-700">
             {loan.due}

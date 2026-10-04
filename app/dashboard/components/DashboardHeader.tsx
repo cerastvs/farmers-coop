@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { logout } from "../../login/actions";
-import { IconMenu, IconLeaf } from "@/components/icons";
+import { IconMenu } from "@/components/icons";
 import { Bell } from "lucide-react";
 import { useUser } from "../../hooks/useUser";
 
@@ -12,8 +13,16 @@ export function DashboardHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [guarantorRejected, setGuarantorRejected] = useState(false);
+  const pathname = usePathname();
 
   const userRole = user?.role ?? null;
+  const memberLinks = [
+    { href: "/dashboard", label: "Overview" },
+    { href: "/dashboard/applyLoan", label: "Apply for a loan" },
+    { href: "/dashboard/viewloan", label: "Your loans" },
+    { href: "/dashboard/supplies", label: "Supplies" },
+    { href: "/dashboard/rentMachine", label: "Machinery" },
+  ];
 
   useEffect(() => {
     fetch("/api/notifications")
@@ -38,12 +47,19 @@ export function DashboardHeader() {
   }, [userRole]);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-white/10 bg-[#174b36] text-white shadow-lg shadow-[#173a2b]/10">
-      <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
-        <div className="flex items-center gap-2.5">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#d6ed9f] text-[#174b36]"><IconLeaf className="h-4 w-4" /></span>
+    <header className="sticky top-0 z-30 border-b border-white/10 bg-[#173b31] text-white">
+      <div className="mx-auto flex h-17 max-w-[1180px] items-center justify-between gap-4 px-4">
+        <Link href="/dashboard" className="flex shrink-0 items-center gap-2.5">
+          <span className="grid h-9 w-9 place-items-center bg-[#d9e3cb] font-['Barlow_Condensed'] text-lg font-bold text-[#173b31]">FC</span>
           <span className="font-extrabold tracking-tight">FarmCoop</span>
-        </div>
+        </Link>
+        {userRole === "MEMBER" && (
+          <nav aria-label="Member navigation" className="hidden items-center gap-1 lg:flex">
+            {memberLinks.map((link) => (
+              <Link key={link.href} href={link.href} aria-current={pathname === link.href ? "page" : undefined} className={`px-3 py-2 text-xs font-bold transition hover:bg-white/10 ${pathname === link.href ? "bg-white/15 text-[#d9e3cb]" : "text-white/80"}`}>{link.label}</Link>
+            ))}
+          </nav>
+        )}
         <div className="flex items-center gap-1">
           <Link
             href="/dashboard/notifications"
@@ -68,7 +84,10 @@ export function DashboardHeader() {
       </div>
 
       {menuOpen && (
-        <div className="absolute right-4 top-[4.25rem] z-50 w-52 rounded-2xl border border-[#dfe7dc] bg-white py-2 shadow-2xl shadow-[#173a2b]/15">
+        <div className="absolute right-4 top-[4.25rem] z-50 w-56 border border-[#dfe7dc] bg-white py-2 shadow-2xl shadow-[#173a2b]/15">
+          {userRole === "MEMBER" && memberLinks.map((link) => (
+            <Link key={link.href} href={link.href} onClick={() => setMenuOpen(false)} className="block px-4 py-2.5 text-sm font-semibold text-[#315646] hover:bg-[#f0f7eb] lg:hidden">{link.label}</Link>
+          ))}
           <Link
             href="/registration"
             onClick={() => setMenuOpen(false)}

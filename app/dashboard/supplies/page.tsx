@@ -3,7 +3,8 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { DashboardHeader } from "../components/DashboardHeader";
-import { IconChevronLeft } from "@/components/icons";
+import { MemberPageHeader } from "../components/MemberPageHeader";
+import memberStyles from "../components/member.module.css";
 import { Money } from "@/components/Money";
 import { useMarkAlertSeen } from "../hooks/useAlertSeen";
 import { fetchWithTimeout } from "../hooks/fetchWithTimeout";
@@ -15,6 +16,7 @@ interface Supply {
   price: number;
   quantity: number;
   loanLimitPerHectare: number | null;
+  imageUrl?: string | null;
 }
 
 interface SupplyRequest {
@@ -25,6 +27,8 @@ interface SupplyRequest {
   status: string;
   rejectionReason?: string | null;
   createdAt: string;
+  reviewedAt?: string | null;
+  remarks?: string | null;
   supply: Supply;
 }
 
@@ -36,24 +40,30 @@ export default function SuppliesPage() {
   const [guarantorStatus, setGuarantorStatus] = useState<string | null>(null);
   const [hasHectares, setHasHectares] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [farmSize, setFarmSize] = useState<number | null>(null);
+  const [farmOwnership, setFarmOwnership] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
   const loadSupplies = useCallback(async () => {
+    setLoadError(null);
     try {
       const response = await fetchWithTimeout("/api/supplies");
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Unable to load supplies");
       setSupplies(data.supplies);
       setRequests(data.requests);
+      setFarmSize(typeof data.farmSize === "number" ? data.farmSize : null);
+      setFarmOwnership(typeof data.farmOwnership === "string" ? data.farmOwnership : null);
       setHasGuarantor(data.hasGuarantor);
       if (typeof data.hasHectares === "boolean") setHasHectares(data.hasHectares);
       setGuarantorStatus(
         typeof data.guarantorStatus === "string" ? data.guarantorStatus : null,
       );
     } catch (error) {
-      setMessage({ kind: "error", text: error instanceof Error ? error.message : "Unable to load supplies" });
+      setLoadError(error instanceof Error ? error.message : "Unable to load supplies");
     } finally {
       setLoading(false);
     }
@@ -108,21 +118,12 @@ export default function SuppliesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={memberStyles.surface}>
       <DashboardHeader />
       <main className="mx-auto w-full max-w-5xl space-y-7 px-4 py-6">
-        <div>
-          <Link href="/dashboard" className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-green-800 hover:underline">
-            <IconChevronLeft className="h-4 w-4" /> Back to Dashboard
-          </Link>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Farm Supplies{" "}
-            {guarantorStatus === "REJECTED" && (
-              <span className="ml-1 inline-block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-red-200" />
-            )}
-          </h1>
-          <p className="mt-1 text-sm text-gray-500">Request supplies for purchase or as a cooperative loan.</p>
-        </div>
+        <MemberPageHeader title="Farm supplies" description="Request supplies for purchase or as a cooperative loan." indicator={guarantorStatus === "REJECTED" ? <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-red-200" /> : undefined} />
+        {loadError && <div role="alert" className={memberStyles.error}>{loadError}<button onClick={() => void loadSupplies()}>Try again</button></div>}
+        {(farmSize !== null || farmOwnership) && <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-[#ccd4c8] pb-4 text-sm text-[#536b5f]"><span>Farm size on file: <strong className="text-[#173b31]">{farmSize !== null ? `${farmSize} ha` : "Not set"}</strong></span><span>Farm role: <strong className="text-[#173b31]">{farmOwnership ? farmOwnership.replaceAll("_", " ").toLowerCase() : "Not set"}</strong></span><Link href="/registration" className="font-bold text-[#416747] underline underline-offset-4">Update profile</Link></div>}
 
         {hasGuarantor === false && guarantorStatus === "REJECTED" && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
@@ -178,7 +179,7 @@ export default function SuppliesPage() {
           )}
           {loading ? (
             <p className="rounded-2xl bg-white p-8 text-center text-sm text-gray-500">Loading supplies…</p>
-          ) : supplies.length === 0 ? (
+          ) : supplies.length === 0 && !loadError ? (
             <p className="rounded-2xl bg-white p-8 text-center text-sm text-gray-500">No supplies are currently available.</p>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
@@ -194,6 +195,7 @@ export default function SuppliesPage() {
                       {supply.loanLimitPerHectare != null && (
                         <p className="text-xs text-orange-600 font-medium">Loan limit: {supply.loanLimitPerHectare} per hectare</p>
                       )}
+                      {supply.imageUrl && <a href={supply.imageUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs font-bold text-[#416747] underline underline-offset-2">View supply image</a>}
                     </div>
                     <p className="font-bold text-green-700"><Money value={supply.price} /></p>
                   </div>
@@ -225,6 +227,8 @@ export default function SuppliesPage() {
                     <p className="text-sm font-bold text-gray-800">{request.supply.productName} × {request.quantity}</p>
                     <p className="text-xs text-gray-500">{request.type} · <Money value={request.totalPrice} /> · {new Date(request.createdAt).toLocaleDateString()}</p>
                     {request.rejectionReason && <p className="mt-1 text-xs text-red-600">{request.rejectionReason}</p>}
+                    {request.reviewedAt && <p className="mt-1 text-xs text-gray-500">Reviewed {new Date(request.reviewedAt).toLocaleDateString("en-PH")}</p>}
+                    {request.remarks && <p className="mt-1 text-xs text-gray-600">Note: {request.remarks}</p>}
                   </div>
                   <div className="flex items-center gap-2">
                     {request.status === "PENDING" && (

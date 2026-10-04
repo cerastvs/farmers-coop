@@ -8,6 +8,7 @@ import { ReportModal } from "@/components/ReportModal";
 import { ReactivateMemberModal } from "@/components/ReactivateMemberModal";
 import { runAdminMutation } from "@/lib/admin-mutation";
 import { Money } from "@/components/Money";
+import adminStyles from "./admin.module.css";
 
 type Role = "APPLICANT" | "MEMBER" | "TREASURER" | "PRESIDENT" | "SECRETARY";
 type Tab =
@@ -526,12 +527,12 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f7f2]">
-      <header className="border-b border-white/10 bg-[#174b36] text-white shadow-lg shadow-[#173a2b]/10">
+    <div className={adminStyles.workspace}>
+      <header className={adminStyles.topbar}>
         <div className="mx-auto flex min-h-16 max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-[.14em] text-[#cfe6a5]">{user.role.toLowerCase()} workspace</p>
-            <h1 className="text-lg font-black">Cooperative Administration</h1>
+            <p className={adminStyles.brand}>FC / FarmCoop</p>
           </div>
           <nav className="flex items-center gap-2 text-sm font-bold">
             {user.role === "SECRETARY" && <Link href="/dashboard/secretary" className="rounded-lg px-3 py-2 hover:bg-white/10">Applications</Link>}
@@ -541,7 +542,12 @@ export default function AdminPage() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-6">
-        <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
+        <div className={adminStyles.intro}>
+          <p className={adminStyles.eyebrow}>{user.role.toLowerCase()} records</p>
+          <h1 className={adminStyles.title}>Cooperative Administration</h1>
+          <p className={adminStyles.description}>Review records and manage cooperative work.</p>
+        </div>
+        <div className={`${adminStyles.tabs} mb-5 flex overflow-x-auto pb-1`}>
           {tabs.map((item) => (
             <button
               key={item}
@@ -550,7 +556,7 @@ export default function AdminPage() {
                 setNotice(null);
                 void loadTab(item);
               }}
-              className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold ${tab === item ? "bg-[#26633f] text-white" : "border border-[#dce5d9] bg-white text-[#496558]"}`}
+              className={`${adminStyles.tab} ${tab === item ? adminStyles.activeTab : ""} whitespace-nowrap px-4 py-2.5 text-sm font-bold`}
             >
               {tabLabel(item)}
               {item === "members" && reactivationRequests.length > 0 && (

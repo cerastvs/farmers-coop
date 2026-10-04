@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { IconLeaf, IconLoan, IconMachine } from "@/components/icons";
 import { ImageModal } from "@/components/ImageModal";
 import { GuarantorApprovalsCard } from "@/components/GuarantorApprovalsCard";
 import { FarmSizeApprovalsCard } from "@/components/FarmSizeApprovalsCard";
@@ -21,6 +20,7 @@ import { machineActiveOverdueDays, isMachineRequestOverdue, worstOverdueRequest,
 import { DEFAULT_RETURN_CONDITION_NOTE } from "@/lib/machine-return";
 import AdminActionsPanel, { ProfileModal, type MemberSummary } from "../secretary/AdminActionsPanel";
 import { HarvestSeasonPanel } from "@/app/dashboard/components/HarvestSeasonPanel";
+import officerStyles from "./officer.module.css";
 import type { HarvestSeasonsData } from "@/app/dashboard/components/HarvestSeasonPanel";
 import { Money } from "@/components/Money";
 import {
@@ -3680,7 +3680,7 @@ function StatCard({
 }) {
   return (
     <div
-      className="animate-slideUp relative overflow-hidden rounded-xl border border-[#e2ebe6] bg-white p-4 shadow-sm"
+      className={`${officerStyles.statCard} animate-slideUp relative overflow-hidden rounded-xl border p-4`}
       style={{ animationDelay: `${delay ?? 0}ms` }}
     >
       <div className={`absolute left-0 top-0 h-full w-[3px] ${accent}`} />
@@ -3690,8 +3690,7 @@ function StatCard({
             {label}
           </p>
           <p
-            className="mt-1 font-mono text-2xl font-bold tracking-tight text-[#0f2318]"
-            style={{ fontFamily: "var(--font-mono)" }}
+            className={`mt-1 ${officerStyles.statValue}`}
           >
             {value}
           </p>
@@ -4399,13 +4398,13 @@ export default function OfficerDashboard({
   ];
 
   return (
-    <div className="min-h-screen bg-[#f8faf9]">
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#1b5e3b] text-white shadow-lg shadow-[#0f2318]/10">
+    <div className={officerStyles.workspace}>
+      <header className={`${officerStyles.topbar} sticky top-0 z-40`}>
         <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-6">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-2.5">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#d6ed9f] text-[#1b5e3b]"><IconLeaf className="h-4 w-4" /></span>
-              <span className="text-sm font-bold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>FarmCoop</span>
+              <span className={officerStyles.mark}>FC</span>
+              <span className={officerStyles.brand}>FarmCoop</span>
             </span>
             <div className="hidden h-5 w-px bg-white/20 sm:block" />
             <p className="hidden text-xs font-medium text-white/70 sm:block">{workspaceLabel}</p>
@@ -4440,9 +4439,13 @@ export default function OfficerDashboard({
       </header>
 
       <main className="mx-auto max-w-[1400px] px-6 py-6">
-        <div className="mb-6 animate-fadeIn">
-          <h1 className="text-xl font-bold text-[#0f2318]" style={{ fontFamily: "var(--font-display)" }}>{dashboardTitle}</h1>
-          <p className="mt-0.5 text-sm text-[#5a7267]">{meta.subtitle}</p>
+        <div className={`${officerStyles.intro} animate-fadeIn`}>
+          <div>
+            <p className={officerStyles.eyebrow}>{workspaceLabel}</p>
+            <h1 className={officerStyles.title}>{dashboardTitle}</h1>
+            <p className={officerStyles.subtitle}>{meta.subtitle}</p>
+          </div>
+          <p className={officerStyles.date}>{formattedDate}</p>
         </div>
 
         {notice && (
@@ -4475,7 +4478,7 @@ export default function OfficerDashboard({
           </div>
         )}
 
-        <div className="mb-5 flex gap-1 overflow-x-auto scrollbar-hide">
+        <div className={`${officerStyles.tabs} mb-5 flex overflow-x-auto scrollbar-hide`}>
           {ALL_TABS.map((t) => {
             const Icon = t.icon;
             const isSection = (SECTIONS as readonly string[]).includes(t.key);
@@ -4488,7 +4491,7 @@ export default function OfficerDashboard({
               <button
                 key={t.key}
                 onClick={() => (isSection ? openSection(t.key as Section) : setActiveTab(t.key))}
-                className={`relative flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-2 text-xs font-semibold transition-all ${activeTab === t.key ? "bg-[#1b5e3b] text-white shadow-md shadow-[#1b5e3b]/20" : "bg-white text-[#5a7267] hover:bg-[#f0f7eb] hover:text-[#1b5e3b] border border-[#e2ebe6]"}`}
+                className={`${officerStyles.tab} ${activeTab === t.key ? officerStyles.activeTab : ""} relative flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2 text-xs font-semibold transition-all`}
               >
                 <Icon size={14} />
                 <span className="relative">

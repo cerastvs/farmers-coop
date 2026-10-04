@@ -1,0 +1,19 @@
+@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&display=swap");
+
+.workspace { min-height:100vh; background:#f5f4ec; color:#173b31; }
+.topbar { border-bottom:1px solid #12382d; background:#173b31; color:#f5f4ec; }
+.brand { font-family:"Barlow Condensed",Impact,sans-serif; font-size:1.45rem; font-weight:700; line-height:1; text-transform:uppercase; }
+.intro { margin-bottom:1.5rem; padding:1rem 0 1.5rem; border-bottom:1px solid #cbd3c5; }
+.eyebrow { margin-bottom:.5rem; color:#527156; font-size:.7rem; font-weight:800; letter-spacing:.15em; text-transform:uppercase; }
+.title { color:#173b31; font-family:"Barlow Condensed",Impact,sans-serif; font-size:clamp(3.3rem,6vw,5.5rem); font-weight:700; line-height:.9; text-transform:uppercase; }
+.description { margin-top:.6rem; color:#536b5f; font-size:.9rem; }
+.tabs { gap:.3rem; border-bottom:1px solid #cbd3c5; }
+.tab { border:1px solid transparent; border-radius:2px; background:transparent; color:#476252; }
+.tab:hover { border-color:#cbd3c5; background:#e9eddf; color:#173b31; }
+.activeTab { border-color:#173b31; background:#173b31; color:#fffefa; }
+.activeTab:hover { background:#234b3c; color:#fffefa; }
+.workspace :global(.rounded-xl),.workspace :global(.rounded-2xl),.workspace :global(.rounded-3xl),.workspace :global(.rounded-lg) { border-radius:3px; }
+.workspace :global(.shadow-sm),.workspace :global(.shadow-lg),.workspace :global(.shadow-2xl) { box-shadow:none; }
+.workspace :global(.bg-white) { border-color:#cbd3c5; }
+.workspace :global(button):focus-visible,.workspace :global(a):focus-visible,.workspace :global(input):focus-visible,.workspace :global(select):focus-visible,.workspace :global(textarea):focus-visible { outline:3px solid #c0934d; outline-offset:2px; }
+@media (max-width:640px) { .intro { padding-top:.5rem; } .title { font-size:clamp(3rem,13vw,4.2rem); } }

@@ -27,6 +27,7 @@ function readConfig(data: ReportData | null): ReportConfig | null {
 }
 
 function sortRows(rows: Row[], sort: SortConfig | null, columns: ColumnDef[]): Row[] {
+  if (!Array.isArray(rows)) return [];
   if (!sort) return rows;
   const col = columns.find((c) => c.id === sort.field);
   if (!col) return rows;
@@ -42,6 +43,8 @@ function sortRows(rows: Row[], sort: SortConfig | null, columns: ColumnDef[]): R
 }
 
 function numericValue(v: unknown): number {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (typeof v !== "string" || v.trim() === "") return 0;
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
@@ -61,12 +64,14 @@ function DataTable({
   sort: SortConfig | null;
   totalColumns?: string[];
 }) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+
   const groups = useMemo<[string, Row[]][] | null>(() => {
     if (!groupBy) return null;
     const gf = groupFields.find((g) => g.key === groupBy);
     if (!gf) return null;
     const map = new Map<string, Row[]>();
-    for (const row of rows) {
+    for (const row of safeRows) {
       const key = String(gf.get(row) ?? "Unspecified");
       const list = map.get(key);
       if (list) list.push(row);
@@ -75,9 +80,9 @@ function DataTable({
     return [...map.entries()].sort((a, b) =>
       a[0].localeCompare(b[0], undefined, { numeric: true }),
     );
-  }, [rows, groupBy, groupFields]);
+  }, [safeRows, groupBy, groupFields]);
 
-  const sorted = useMemo(() => sortRows(rows, sort, columns), [rows, sort, columns]);
+  const sorted = useMemo(() => sortRows(safeRows, sort, columns), [safeRows, sort, columns]);
 
   const totalRow = useMemo<ReactNode | null>(() => {
     if (!totalColumns || totalColumns.length === 0 || sorted.length === 0) return null;
@@ -85,7 +90,8 @@ function DataTable({
     for (const id of totalColumns) {
       const col = columns.find((c) => c.id === id);
       if (!col) continue;
-      sums.set(id, sorted.reduce((acc, row) => acc + numericValue(col.get(row)), 0));
+      const total = sorted.reduce((acc, row) => acc + numericValue(col.get(row)), 0);
+      sums.set(id, Number.isFinite(total) ? total : 0);
     }
     return (
       <tfoot>
@@ -95,9 +101,12 @@ function DataTable({
               {i === 0
                 ? "Total"
                 : sums.has(col.id)
-                  ? col.money
-                    ? `₱${sums.get(col.id)!.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                    : sums.get(col.id)!.toLocaleString("en-PH")
+                  ? (() => {
+                      const total = sums.get(col.id) ?? 0;
+                      return col.money
+                        ? `₱${total.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : total.toLocaleString("en-PH");
+                    })()
                   : ""}
             </td>
           ))}
@@ -364,10 +373,11 @@ export function ReportDocument({
     let total = 0;
     for (const section of sections) {
       if (section.kind === "table" && section.table) {
-        total += section.table.rows(data).length;
+        const rows = section.table.rows(data);
+        total += Array.isArray(rows) ? rows.length : 0;
       } else if (section.kind === "machineList") {
         total += (section.machines?.(data) ?? []).reduce(
-          (sum, block) => sum + block.requests.length,
+          (sum, block) => sum + (Array.isArray(block.requests) ? block.requests.length : 0),
           0,
         );
       }
@@ -413,7 +423,7 @@ export function ReportDocument({
               <th>Period</th>
               <td>{period}</td>
               <th>Records</th>
-              <td>{recordCount}</td>
+              <td>{Number.isFinite(recordCount) ? recordCount : 0}</td>
             </tr>
             <tr>
               <th>Generated</th>

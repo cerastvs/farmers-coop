@@ -365,7 +365,11 @@ export function ReportBuilder({
                       <input
                         type="date"
                         value={from}
-                        onChange={(e) => setFrom(e.target.value)}
+                        onChange={(e) => {
+                          const nextFrom = e.target.value;
+                          setFrom(nextFrom);
+                          if (to === from) setTo(nextFrom);
+                        }}
                         className="rounded-lg border border-[#dce5d9] bg-white px-2 py-1.5 text-xs outline-none"
                       />
                     </div>

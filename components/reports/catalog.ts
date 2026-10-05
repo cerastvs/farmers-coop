@@ -818,110 +818,6 @@ const SUMMARY: ReportTypeCatalog = {
       ],
     },
     {
-      id: "membersTable",
-      label: "Member Records",
-      kind: "table",
-      table: {
-        rows: (d) => ((d.members?.list as unknown[]) ?? []) as Record<string, any>[],
-        columns: [
-          { id: "name", label: "Name", get: (r) => r.name ?? "", render: (r) => r.name ?? "—" },
-          { id: "username", label: "Username", get: (r) => r.username ?? "", render: (r) => r.username ?? "—" },
-          { id: "role", label: "Role", get: (r) => r.role ?? "", render: (r) => humanize(r.role) },
-          { id: "active", label: "Active", get: (r) => (r.active ? 1 : 0), render: (r) => (r.active ? "Yes" : "No") },
-          { id: "joined", label: "Joined", get: (r) => dateValue(r.createdAt), render: (r) => renderDate(r.createdAt) },
-        ],
-        groupFields: [
-          { key: "role", label: "Role", get: (r) => r.role ?? null },
-          { key: "active", label: "Active status", get: (r) => (r.active ? "Active" : "Inactive") },
-        ],
-      },
-    },
-    {
-      id: "applicationsTable",
-      label: "Membership Applications",
-      kind: "table",
-      table: {
-        rows: (d) => ((d.members?.applications as unknown[]) ?? []) as Record<string, any>[],
-        columns: [
-          { id: "applicant", label: "Applicant", get: (r) => r.applicant ?? "", render: (r) => r.applicant ?? "—" },
-          { id: "appStatus", label: "Application Status", get: (r) => r.applicationStatus ?? "", render: (r) => humanize(r.applicationStatus) },
-          { id: "payment", label: "Payment", get: (r) => r.paymentStatus ?? "", render: (r) => humanize(r.paymentStatus) },
-          { id: "decision", label: "Decision", get: (r) => r.decision ?? "", render: (r) => humanize(r.decision) },
-        ],
-        groupFields: [
-          { key: "appStatus", label: "Application status", get: (r) => r.applicationStatus ?? null },
-          { key: "decision", label: "Decision", get: (r) => r.decision ?? null },
-        ],
-      },
-    },
-    {
-      id: "machineRequestsTable",
-      label: "Machine Requests",
-      kind: "table",
-      table: {
-        rows: (d) => ((d.machines?.requestsList as unknown[]) ?? []) as Record<string, any>[],
-        columns: [
-          { id: "machine", label: "Machine", get: (r) => r.machine?.name ?? "", render: (r) => r.machine?.name ?? "—" },
-          { id: "member", label: "Member", get: (r) => r.user?.name ?? "", render: (r) => r.user?.name ?? "—" },
-          { id: "status", label: "Status", get: (r) => r.status ?? "", render: (r) => humanize(r.status) },
-          { id: "requested", label: "Requested", get: (r) => dateValue(r.requestDate), render: (r) => renderDate(r.requestDate) },
-          { id: "start", label: "Start", get: (r) => dateValue(r.startDate), render: (r) => renderDate(r.startDate) },
-          { id: "end", label: "End", get: (r) => dateValue(r.endDate), render: (r) => renderDate(r.endDate) },
-          { id: "returned", label: "Returned", get: (r) => dateValue(r.returnedAt), render: (r) => renderDate(r.returnedAt) },
-          { id: "condition", label: "Condition on Return", get: (r) => r.returnNote ?? "", render: (r) => returnConditionText(r) },
-        ],
-        groupFields: [
-          { key: "status", label: "Status", get: (r) => r.status ?? null },
-          { key: "machine", label: "Machine", get: (r) => r.machine?.name ?? null },
-        ],
-      },
-    },
-    {
-      id: "machineOverdueTable",
-      label: "Overdue Machines",
-      kind: "table",
-      hideWhenEmpty: (d) => ((d.machines?.overdueRequests as unknown[]) ?? []).length === 0,
-      table: {
-        rows: (d) => ((d.machines?.overdueRequests as unknown[]) ?? []) as Record<string, any>[],
-        columns: [
-          { id: "member", label: "Member", get: (r) => r.member?.name ?? "", render: (r) => r.member?.name ?? "—" },
-          { id: "machine", label: "Machine", get: (r) => r.machine ?? "", render: (r) => r.machine ?? "—" },
-          { id: "status", label: "Status", get: (r) => r.status ?? "", render: (r) => humanize(r.status) },
-          { id: "endDate", label: "End Date", get: (r) => dateValue(r.endDate), render: (r) => renderDate(r.endDate) },
-          { id: "days", label: "Days Overdue", get: (r) => Number(r.daysOverdue ?? 0), render: (r) => String(r.daysOverdue ?? 0) },
-        ],
-        groupFields: [],
-      },
-    },
-    {
-      id: "machineReturnsTable",
-      label: "Returned With Issue",
-      kind: "table",
-      hideWhenEmpty: (d) => ((d.machines?.returnsWithIssues as unknown[]) ?? []).length === 0,
-      table: {
-        rows: (d) => ((d.machines?.returnsWithIssues as unknown[]) ?? []) as Record<string, any>[],
-        columns: [
-          { id: "member", label: "Member", get: (r) => r.member?.name ?? "", render: (r) => r.member?.name ?? "—" },
-          { id: "machine", label: "Machine", get: (r) => r.machine ?? "", render: (r) => r.machine ?? "—" },
-          { id: "condition", label: "Condition Noted", get: (r) => r.condition ?? "", render: (r) => r.condition ?? DEFAULT_RETURN_CONDITION_NOTE },
-          { id: "returned", label: "Returned", get: (r) => dateValue(r.returnedAt), render: (r) => renderDate(r.returnedAt) },
-        ],
-        groupFields: [],
-      },
-    },
-    {
-      id: "machineListTable",
-      label: "Machines",
-      kind: "machineList",
-      machines: (d) =>
-        (((d.machines?.list as unknown[]) ?? []) as Record<string, any>[]).map((machine) => ({
-          id: String(machine.id ?? machine.name),
-          name: String(machine.name ?? "—"),
-          description: (machine.description as string | null) ?? null,
-          requests: ((machine.requests as unknown[]) ?? []) as Record<string, any>[],
-        })),
-    },
-    {
       id: "units",
       label: "Supply Movement",
       kind: "units",
@@ -997,8 +893,7 @@ const SUMMARY: ReportTypeCatalog = {
             (loan) => loan.status !== "REJECTED",
           ),
         columns: [
-          { id: "name", label: "Member", get: (r) => (r.borrower as Record<string, any>)?.name ?? "", render: (r) => (r.borrower as Record<string, any>)?.name ?? "—" },
-          { id: "loan", label: "Loan", get: (r) => r.name ?? "", render: (r) => r.name ?? "—" },
+          { id: "name", label: "Member", get: (r) => (r.user as Record<string, any>)?.name ?? "", render: (r) => (r.user as Record<string, any>)?.name ?? "—" },
           { id: "principal", label: "Principal", get: (r) => moneyValue(r.principal), render: (r) => money(r.principal), money: true },
           { id: "payable", label: "Payable", get: (r) => moneyValue(r.payable), render: (r) => money(r.payable), money: true },
           { id: "paid", label: "Paid", get: (r) => moneyValue(r.amountPaid), render: (r) => money(r.amountPaid), money: true },
@@ -1015,43 +910,17 @@ const SUMMARY: ReportTypeCatalog = {
       },
     },
     {
-      id: "rejectedLoansTable",
-      label: "Rejected Payment Submissions",
-      kind: "table",
-      hideWhenEmpty: (d) => !(((d.loans?.list as unknown[]) ?? []) as Record<string, any>[]).some((l) => ((l.rejectedPayments as unknown[]) ?? []).length > 0),
-      table: {
-        rows: (d) => {
-          const out: Record<string, any>[] = [];
-          for (const loan of (((d.loans?.list as unknown[]) ?? []) as Record<string, any>[])) {
-            for (const payment of ((loan.rejectedPayments as unknown[]) ?? []) as Record<string, any>[]) {
-              out.push({ borrower: loan.borrower?.name, loan: loan.name, ...payment });
-            }
-          }
-          return out;
-        },
-        columns: [
-          { id: "borrower", label: "Borrower", get: (r) => r.borrower ?? "", render: (r) => r.borrower ?? "—" },
-          { id: "loan", label: "Loan", get: (r) => r.loan ?? "", render: (r) => r.loan ?? "—" },
-          { id: "amount", label: "Amount", get: (r) => moneyValue(r.amount), render: (r) => money(r.amount), money: true },
-          { id: "date", label: "Date", get: (r) => dateValue(r.createdAt), render: (r) => renderDate(r.createdAt) },
-          { id: "reason", label: "Reason", get: (r) => r.rejectionReason ?? "", render: (r) => r.rejectionReason || "—" },
-        ],
-        groupFields: [],
-        totalColumns: ["amount"],
-      },
-    },
-    {
       id: "paymentsTable",
       label: "Payment Records",
       kind: "table",
       hideWhenEmpty: (d) =>
         (((d.payments?.list as unknown[]) ?? []) as Record<string, any>[]).every(
-          (payment) => payment.status !== "VERIFIED",
+          (payment) => payment.status === "REJECTED",
         ),
       table: {
         rows: (d) =>
           (((d.payments?.list as unknown[]) ?? []) as Record<string, any>[]).filter(
-            (payment) => payment.status === "VERIFIED",
+            (payment) => payment.status !== "REJECTED",
           ),
         columns: [
           { id: "name", label: "Member", get: (r) => nameOf(r) ?? "", render: (r) => nameOf(r) },
@@ -1070,106 +939,6 @@ const SUMMARY: ReportTypeCatalog = {
         totalColumns: ["amount"],
       },
     },
-    {
-      id: "rejectedPaymentsTable",
-      label: "Rejected Payments",
-      kind: "table",
-      hideWhenEmpty: (d) => ((d.payments?.rejectedPayments as unknown[]) ?? []).length === 0,
-      table: {
-        rows: (d) => ((d.payments?.rejectedPayments as unknown[]) ?? []) as Record<string, any>[],
-        columns: [
-          { id: "name", label: "Member", get: (r) => nameOf(r) ?? "", render: (r) => nameOf(r) },
-          { id: "type", label: "Type", get: (r) => r.type ?? "", render: (r) => paymentTypeLabel(r) },
-          { id: "method", label: "Method", get: (r) => r.paymentMethod ?? "", render: (r) => humanize(r.paymentMethod) },
-          { id: "amount", label: "Amount", get: (r) => moneyValue(r.amount), render: (r) => money(r.amount), money: true },
-          { id: "reference", label: "Reference", get: (r) => r.referenceNo ?? "", render: (r) => r.referenceNo || "—" },
-          { id: "date", label: "Date", get: (r) => dateValue(r.declinedAt ?? r.createdAt), render: (r) => renderDate(r.declinedAt ?? r.createdAt) },
-          { id: "reason", label: "Reason", get: (r) => r.rejectionReason ?? "", render: (r) => r.rejectionReason || "—" },
-        ],
-        groupFields: [],
-        totalColumns: ["amount"],
-      },
-    },
-    {
-      id: "suppliesTable",
-      label: "Supply Records",
-      kind: "table",
-      table: {
-        rows: (d) => ((d.supplies?.list as unknown[]) ?? []) as Record<string, any>[],
-        columns: [
-          { id: "product", label: "Product", get: (r) => r.productName ?? "", render: (r) => r.productName ?? "—" },
-          { id: "price", label: "Price", get: (r) => moneyValue(r.price), render: (r) => money(r.price), money: true },
-          { id: "qty", label: "Qty", get: (r) => moneyValue(r.quantity), render: (r) => String(r.quantity ?? 0) },
-          { id: "sold", label: "Sold", get: (r) => moneyValue(r.soldUnits), render: (r) => String(r.soldUnits ?? 0) },
-          { id: "borrowed", label: "Borrowed", get: (r) => moneyValue(r.borrowedUnits), render: (r) => String(r.borrowedUnits ?? 0) },
-          { id: "value", label: "Inventory Value", get: (r) => moneyValue(r.inventoryValue), render: (r) => money(r.inventoryValue), money: true },
-        ],
-        groupFields: [],
-        totalColumns: ["qty", "sold", "borrowed", "value"],
-      },
-    },
-    {
-      id: "supplyTransactionsTable",
-      label: "Supply Transactions",
-      kind: "table",
-      hideWhenEmpty: (d) =>
-        (((d.supplies?.list as unknown[]) ?? []) as Record<string, any>[]).every(
-          (supply) => ((supply.transactions as unknown[]) ?? []).length === 0,
-        ),
-      table: {
-        rows: (d) => {
-          const out: Record<string, any>[] = [];
-          for (const supply of (((d.supplies?.list as unknown[]) ?? []) as Record<string, any>[])) {
-            for (const transaction of ((supply.transactions as unknown[]) ?? []) as Record<string, any>[]) {
-              out.push({
-                supply: supply.productName,
-                member: transaction.user?.name ?? "—",
-                type: transaction.type,
-                qty: moneyValue(transaction.quantity),
-                total: moneyValue(transaction.totalPrice),
-                status: transaction.status,
-                date: transaction.createdAt,
-              });
-            }
-          }
-          return out;
-        },
-        columns: [
-          { id: "supply", label: "Supply", get: (r) => r.supply ?? "", render: (r) => r.supply ?? "—" },
-          { id: "member", label: "Member", get: (r) => r.member ?? "", render: (r) => r.member ?? "—" },
-          { id: "type", label: "Type", get: (r) => r.type ?? "", render: (r) => humanize(r.type) },
-          { id: "qty", label: "Qty", get: (r) => r.qty, render: (r) => String(r.qty ?? 0) },
-          { id: "total", label: "Total", get: (r) => r.total, render: (r) => money(r.total), money: true },
-          { id: "status", label: "Status", get: (r) => r.status ?? "", render: (r) => humanize(r.status) },
-          { id: "date", label: "Date", get: (r) => dateValue(r.date), render: (r) => renderDate(r.date) },
-        ],
-        groupFields: [
-          { key: "status", label: "Status", get: (r) => r.status ?? null },
-          { key: "type", label: "Type", get: (r) => r.type ?? null },
-        ],
-        totalColumns: ["qty", "total"],
-      },
-    },
-    {
-      id: "rejectedSupplyPaymentsTable",
-      label: "Rejected Supply Loan Payments",
-      kind: "table",
-      hideWhenEmpty: (d) => ((d.supplies?.rejectedPayments as unknown[]) ?? []).length === 0,
-      table: {
-        rows: (d) => ((d.supplies?.rejectedPayments as unknown[]) ?? []) as Record<string, any>[],
-        columns: [
-          { id: "name", label: "Member", get: (r) => nameOf(r) ?? "", render: (r) => nameOf(r) },
-          { id: "loan", label: "Supply Loan", get: (r) => r.loan?.name ?? "", render: (r) => r.loan?.name || "—" },
-          { id: "method", label: "Method", get: (r) => r.paymentMethod ?? "", render: (r) => humanize(r.paymentMethod) },
-          { id: "amount", label: "Amount", get: (r) => moneyValue(r.amount), render: (r) => money(r.amount), money: true },
-          { id: "reference", label: "Reference", get: (r) => r.referenceNo ?? "", render: (r) => r.referenceNo || "—" },
-          { id: "date", label: "Date", get: (r) => dateValue(r.declinedAt ?? r.createdAt), render: (r) => renderDate(r.declinedAt ?? r.createdAt) },
-          { id: "reason", label: "Reason", get: (r) => r.rejectionReason ?? "", render: (r) => r.rejectionReason || "—" },
-        ],
-        groupFields: [],
-        totalColumns: ["amount"],
-      },
-    },
   ],
   defaultSections: [
     "members",
@@ -1180,36 +949,24 @@ const SUMMARY: ReportTypeCatalog = {
     "audit",
     "stats",
     "units",
-    "membersTable",
-    "applicationsTable",
-    "loansTable",
-    "rejectedLoansTable",
-    "paymentsTable",
     "pendingTable",
-    "rejectedPaymentsTable",
-    "suppliesTable",
-    "supplyTransactionsTable",
-    "rejectedSupplyPaymentsTable",
-    "machineOverdueTable",
-    "machineRequestsTable",
-    "machineReturnsTable",
-    "machineListTable",
+    "transactions",
   ],
   presets: {
     summary: {
       id: "summary",
       label: "Summary",
-      sections: ["members", "loans", "payments", "supplies", "machines", "audit", "stats", "units", "membersTable", "applicationsTable", "loansTable", "rejectedLoansTable", "paymentsTable", "pendingTable", "rejectedPaymentsTable", "suppliesTable", "supplyTransactionsTable", "rejectedSupplyPaymentsTable", "machineOverdueTable", "machineRequestsTable", "machineReturnsTable", "machineListTable"],
+      sections: ["members", "loans", "payments", "supplies", "machines", "audit", "stats", "units", "pendingTable"],
     },
     detailed: {
       id: "detailed",
       label: "Detailed",
-      sections: ["members", "loans", "payments", "supplies", "machines", "audit", "stats", "units", "membersTable", "applicationsTable", "loansTable", "rejectedLoansTable", "paymentsTable", "pendingTable", "rejectedPaymentsTable", "suppliesTable", "supplyTransactionsTable", "rejectedSupplyPaymentsTable", "machineOverdueTable", "machineRequestsTable", "machineReturnsTable", "machineListTable"],
+      sections: ["members", "loans", "payments", "supplies", "machines", "audit", "stats", "units", "transactions", "pendingTable"],
     },
     full: {
       id: "full",
       label: "Full Details",
-      sections: ["members", "loans", "payments", "supplies", "machines", "audit", "stats", "units", "membersTable", "applicationsTable", "loansTable", "rejectedLoansTable", "paymentsTable", "pendingTable", "rejectedPaymentsTable", "suppliesTable", "supplyTransactionsTable", "rejectedSupplyPaymentsTable", "machineOverdueTable", "machineRequestsTable", "machineReturnsTable", "machineListTable"],
+      sections: ["members", "loans", "payments", "supplies", "machines", "audit", "stats", "units", "transactions", "pendingTable", "loansTable", "paymentsTable"],
     },
   },
 };

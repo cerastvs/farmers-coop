@@ -1105,11 +1105,6 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
 
   const machineRequests = machinesReport.machines.flatMap((machine) =>
     machine.requests.map((request) => ({
-      requestDate: request.requestDate,
-      startDate: request.startDate,
-      endDate: request.endDate,
-      returnedAt: request.returnedAt,
-      returnNote: request.returnNote,
       id: request.id,
       machine: { id: machine.id, name: machine.name },
       user: request.user,
@@ -1123,7 +1118,6 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
     members: {
       users: membersReport.totals.users,
       list: membersReport.members,
-      applications: membersReport.applications,
     },
     loans: {
       count: loansReport.totals.loans,
@@ -1134,7 +1128,17 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
       outstandingBalance: loansReport.totals.outstandingBalance,
       rejectedRequests: loansReport.totals.requestsRejected,
       byStatus: loansReport.totals.byStatus,
-      list: loansReport.loans,
+      list: loansReport.loans.map((loan) => ({
+        id: loan.id,
+        user: loan.borrower,
+        principal: loan.principal,
+        payable: loan.payable,
+        amountPaid: loan.amountPaid,
+        paidInPeriod: loan.paidInPeriod,
+        outstandingBalance: loan.outstandingBalance,
+        status: loan.status,
+        due: loan.due,
+      })),
     },
     payments: {
       count: paymentsReport.totals.payments,
@@ -1144,13 +1148,17 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
       byStatus: paymentsReport.totals.byStatus,
       byMethod: paymentsReport.totals.byMethod,
       list: paymentsReport.payments,
-      rejectedPayments: paymentsReport.rejectedPayments,
     },
     transactions: paymentsReport.payments,
     supplies: {
       ...suppliesReport.totals,
-      list: suppliesReport.supplies,
-      rejectedPayments: suppliesReport.rejectedPayments,
+      list: suppliesReport.supplies.map((supply) => ({
+        id: supply.id,
+        productName: supply.productName,
+        price: supply.price,
+        quantity: supply.quantity,
+        inventoryValue: supply.inventoryValue,
+      })),
     },
     machines: {
       count: machinesReport.totals.machines,
@@ -1158,8 +1166,6 @@ async function generateSummaryReport(filters: ReportFilters = {}) {
       requestsByStatus: machinesReport.totals.requestsByStatus,
       list: machinesReport.machines,
       requestsList: machineRequests,
-      overdueRequests: machinesReport.overdueRequests,
-      returnsWithIssues: machinesReport.returnsWithIssues,
     },
     audit: {
       entries: auditReport.totals.entries,

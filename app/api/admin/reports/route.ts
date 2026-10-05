@@ -3,7 +3,6 @@ import {
   LoanStatus,
   LoanType,
   MachineStatus,
-  PaymentMethod,
   PaymentStatus,
   PaymentType,
   Prisma,
@@ -31,7 +30,6 @@ import {
   asOfPrisma,
   dateRangePrisma,
   isInReportDateRange,
-  liveAsOfStatusFilter,
   reportDateBoundary,
 } from "@/lib/report-date-range";
 import { NextRequest, NextResponse } from "next/server";
@@ -96,14 +94,20 @@ const VISIBLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
 const isRejectedPayment = (payment: { status: PaymentStatus }) =>
   payment.status === PaymentStatus.REJECTED;
 
+function roundMoney(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
 function sumPaymentAmounts(
   payments: readonly { status: PaymentStatus; amount: Prisma.Decimal }[],
   statuses: readonly PaymentStatus[],
 ) {
-  return payments.reduce(
-    (sum, payment) =>
-      sum + (statuses.includes(payment.status) ? Number(payment.amount) : 0),
-    0,
+  return roundMoney(
+    payments.reduce(
+      (sum, payment) =>
+        sum + (statuses.includes(payment.status) ? Number(payment.amount) : 0),
+      0,
+    ),
   );
 }
 
@@ -117,9 +121,8 @@ function overdueMachineRequestsAsOfPrisma(filters: ReportFilters) {
   const asOf = reportDateBoundary(filters.to ?? filters.from, "start");
   return asOf
     ? {
-        status: { in: [...MACHINE_HELD_STATUSES] },
         endDate: { lt: asOf },
-        returnedAt: null,
+        OR: [{ returnedAt: null }, { returnedAt: { gt: asOf } }],
       }
     : {};
 }
@@ -164,6 +167,92 @@ function loanPrincipalAmount(loan: {
 }): number {
   if (loan.principalAmount != null) return Number(loan.principalAmount);
   return principalFromAmount(loan.amount, Number(loan.interestRate));
+}
+
+const DISBURSED_LOAN_STATUSES: readonly LoanStatus[] = [
+  LoanStatus.ACTIVE,
+  LoanStatus.OVERDUE,
+  LoanStatus.PAID,
+];
+
+function reportAsOf(filters: ReportFilters): Date {
+  return (
+    reportDateBoundary(filters.to ?? filters.from, "end") ?? currentDayEnd()
+  );
+}
+
+function loanStatusAsOf(
+  loan: { status: LoanStatus; createdAt: Date },
+  history: readonly { status: LoanStatus; changedAt: Date }[],
+  asOf: Date,
+): LoanStatus {
+  const entry = history
+    .filter((item) => item.changedAt <= asOf)
+    .sort((a, b) => b.changedAt.getTime() - a.changedAt.getTime())[0];
+  return entry?.status ?? (loan.createdAt <= asOf ? LoanStatus.PENDING : loan.status);
+}
+
+function loanStatusesInPeriod(
+  history: readonly { status: LoanStatus; changedAt: Date }[],
+  filters: ReportFilters,
+  asOf: Date,
+) {
+  return history.filter(
+    (item) =>
+      item.changedAt <= asOf && isInReportDateRange(item.changedAt, filters),
+  );
+}
+
+function paymentStatusAsOf(
+  payment: {
+    status: PaymentStatus;
+    createdAt: Date;
+    verifiedAt?: Date | null;
+    declinedAt?: Date | null;
+  },
+  asOf: Date,
+): PaymentStatus {
+  if (payment.status === PaymentStatus.VERIFIED) {
+    return payment.verifiedAt && payment.verifiedAt > asOf
+      ? PaymentStatus.PENDING
+      : PaymentStatus.VERIFIED;
+  }
+  if (payment.status === PaymentStatus.REJECTED) {
+    return payment.declinedAt && payment.declinedAt > asOf
+      ? PaymentStatus.PENDING
+      : PaymentStatus.REJECTED;
+  }
+  return PaymentStatus.PENDING;
+}
+
+function machineRequestStatusAsOf(
+  request: {
+    status: MachineStatus;
+    startDate?: Date | null;
+    startedAt?: Date | null;
+    endDate?: Date | null;
+    returnedAt?: Date | null;
+  },
+  asOf: Date,
+): MachineStatus {
+  if (request.returnedAt && request.returnedAt <= asOf) {
+    return MachineStatus.RETURNED;
+  }
+  if (
+    request.status === MachineStatus.QUEUED ||
+    request.status === MachineStatus.REJECTED
+  ) {
+    return request.status;
+  }
+  const startsAt = request.startedAt ?? request.startDate;
+  if (!startsAt || startsAt > asOf) return MachineStatus.APPROVED;
+  if (isMachineRequestOverdueAsOf(request.endDate, request.returnedAt, asOf)) {
+    return MachineStatus.OVERDUE;
+  }
+  if (request.status === MachineStatus.RETURN_PENDING) {
+    return MachineStatus.RETURN_PENDING;
+  }
+  return MachineStatus.IN_USE;
 }
 
 const DEFAULT_TITLES: Record<ReportType, string> = {
@@ -319,30 +408,12 @@ async function generateMembersReport(filters: ReportFilters = {}) {
 
 async function generateLoansReport(filters: ReportFilters = {}) {
   const statusFilter = validateStatuses(ReportType.LOANS, filters.statuses);
-  const hasRange = Boolean(filters.from || filters.to);
+  const asOf = reportAsOf(filters);
   const loans = await prisma.loan.findMany({
     where: {
       AND: [
         ...(filters.memberId ? [{ userId: filters.memberId }] : []),
-        {
-          ...(hasRange
-            ? {
-                OR: [
-                  { createdAt: dateRangePrisma(filters) },
-                  { payments: { some: { paidAt: dateRangePrisma(filters) } } },
-                  { statusHistory: { some: { changedAt: dateRangePrisma(filters) } } },
-                  liveAsOfStatusFilter(filters, [
-                    LoanStatus.PENDING,
-                    LoanStatus.ACTIVE,
-                    LoanStatus.OVERDUE,
-                  ]),
-                ],
-              }
-            : {}),
-        },
-        ...(statusFilter
-          ? [{ status: { in: statusFilter as LoanStatus[] } }]
-          : []),
+        { createdAt: { lte: asOf } },
       ],
     },
     orderBy: { createdAt: "desc" },
@@ -365,127 +436,136 @@ async function generateLoansReport(filters: ReportFilters = {}) {
       },
       statusHistory: {
         select: { status: true, changedAt: true },
-        orderBy: { changedAt: "desc" },
+        orderBy: { changedAt: "asc" },
       },
     },
   });
 
-  const records = loans.map((loan) => {
-    const totalPaid = loan.payments.reduce(
+  const records = loans
+    .map((loan) => {
+      const status = loanStatusAsOf(loan, loan.statusHistory, asOf);
+      const totalPaid = loan.payments
+        .filter((payment) => payment.paidAt <= asOf)
+        .reduce(
       (sum, payment) => sum + Number(payment.amount),
       0,
     );
-    const inRangePayments = hasRange
-      ? loan.payments.filter((payment) =>
-          isInReportDateRange(payment.paidAt, filters),
-        )
-      : loan.payments;
-    const paidInRange = inRangePayments.reduce(
-      (sum, payment) => sum + Number(payment.amount),
-      0,
-    );
-    const rejectedPayments = loan.paymentSubmissions
-      .filter(
-        (payment) =>
-          !hasRange || isInReportDateRange(payment.createdAt, filters),
-      )
-      .map((payment) => ({
-        id: payment.id,
-        amount: Number(payment.amount),
-        status: payment.status,
-        rejectionReason: payment.rejectionReason,
-        paymentMethod: payment.paymentMethod,
-        referenceNo: payment.referenceNo,
-        createdAt: payment.createdAt.toISOString(),
-      }));
-
-    const approvedEntry = loan.statusHistory.find(
-      (h) => h.status === LoanStatus.ACTIVE,
-    );
-    const rejectedEntry = loan.statusHistory.find(
-      (h) => h.status === LoanStatus.REJECTED,
-    );
-    const decision =
-      approvedEntry
+      const periodPayments = loan.payments.filter((payment) =>
+        payment.paidAt <= asOf && isInReportDateRange(payment.paidAt, filters),
+      );
+      const periodHistory = loanStatusesInPeriod(
+        loan.statusHistory,
+        filters,
+        asOf,
+      );
+      const approvedEntry = periodHistory.find(
+        (entry) => entry.status === LoanStatus.ACTIVE,
+      );
+      const rejectedEntry = periodHistory.find(
+        (entry) => entry.status === LoanStatus.REJECTED,
+      );
+      const decision = approvedEntry
         ? "Approved"
         : rejectedEntry
           ? "Rejected"
           : null;
-    const decisionAt =
-      approvedEntry?.changedAt?.toISOString() ??
-      rejectedEntry?.changedAt?.toISOString() ??
-      null;
+      const decisionAt =
+        approvedEntry?.changedAt.toISOString() ??
+        rejectedEntry?.changedAt.toISOString() ??
+        null;
+      const rejectedPayments = loan.paymentSubmissions
+        .filter(
+          (payment) =>
+            payment.createdAt <= asOf &&
+            isInReportDateRange(payment.createdAt, filters),
+        )
+        .map((payment) => ({
+          id: payment.id,
+          amount: Number(payment.amount),
+          status: payment.status,
+          rejectionReason: payment.rejectionReason,
+          paymentMethod: payment.paymentMethod,
+          referenceNo: payment.referenceNo,
+          createdAt: payment.createdAt.toISOString(),
+        }));
 
-    return {
-      id: loan.id,
-      borrower: loan.user,
-      name: loan.name,
-      principal: loanPrincipalAmount(loan),
-      payable: Number(loan.amount),
-      amountPaid: paidInRange,
-      outstandingBalance: Math.max(Number(loan.amount) - totalPaid, 0),
-      status: loan.status,
-      rejectionReason: loan.rejectionReason ?? null,
-      decision,
-      decisionAt,
-      due: loan.due.toISOString(),
-      createdAt: loan.createdAt.toISOString(),
-      payments: inRangePayments.map((payment) => ({
-        ...payment,
-        amount: Number(payment.amount),
-        paidAt: payment.paidAt.toISOString(),
-      })),
-      rejectedPayments,
-    };
-  });
+      return {
+        id: loan.id,
+        borrower: loan.user,
+        name: loan.name,
+        principal: loanPrincipalAmount(loan),
+        payable: Number(loan.amount),
+        // Portfolio figures are cumulative through the report's as-of date.
+        amountPaid: totalPaid,
+        paidInPeriod: periodPayments.reduce(
+          (sum, payment) => sum + Number(payment.amount),
+          0,
+        ),
+        outstandingBalance: Math.max(Number(loan.amount) - totalPaid, 0),
+        status,
+        rejectionReason: loan.rejectionReason ?? null,
+        decision,
+        decisionAt,
+        due: loan.due.toISOString(),
+        createdAt: loan.createdAt.toISOString(),
+        payments: periodPayments.map((payment) => ({
+          ...payment,
+          amount: Number(payment.amount),
+          paidAt: payment.paidAt.toISOString(),
+        })),
+        rejectedPayments,
+      };
+    })
+    .filter((loan) => !statusFilter || statusFilter.includes(loan.status));
+
+  const portfolioLoans = records.filter((loan) =>
+    DISBURSED_LOAN_STATUSES.includes(loan.status),
+  );
 
   return {
     generatedAt: new Date().toISOString(),
+    asOf: asOf.toISOString(),
     totals: {
       loans: records.length,
-      // Rejected loan requests are excluded from principal, payable, paid,
-      // and outstanding amounts; they are surfaced as their own totals.
-      principal: records
-        .filter((loan) => loan.status !== LoanStatus.REJECTED)
-        .reduce((sum, loan) => sum + loan.principal, 0),
-      payable: records
-        .filter((loan) => loan.status !== LoanStatus.REJECTED)
-        .reduce((sum, loan) => sum + loan.payable, 0),
-      amountPaid: records
-        .filter((loan) => loan.status !== LoanStatus.REJECTED)
-        .reduce((sum, loan) => sum + loan.amountPaid, 0),
-      outstandingBalance: records
-        .filter((loan) => loan.status !== LoanStatus.REJECTED)
-        .reduce(
-          (sum, loan) => sum + loan.outstandingBalance,
-          0,
-        ),
+      // Principal is the cooperative's cumulative disbursement through the
+      // report date, not only loans created inside the selected activity range.
+      principal: roundMoney(
+        portfolioLoans.reduce((sum, loan) => sum + loan.principal, 0),
+      ),
+      payable: roundMoney(
+        portfolioLoans.reduce((sum, loan) => sum + loan.payable, 0),
+      ),
+      amountPaid: roundMoney(
+        portfolioLoans.reduce((sum, loan) => sum + loan.amountPaid, 0),
+      ),
+      paidInPeriod: roundMoney(
+        portfolioLoans.reduce((sum, loan) => sum + loan.paidInPeriod, 0),
+      ),
+      outstandingBalance: roundMoney(
+        portfolioLoans.reduce((sum, loan) => sum + loan.outstandingBalance, 0),
+      ),
       requestsApproved: records.filter((l) => l.decision === "Approved").length,
       requestsRejected: records.filter((l) => l.decision === "Rejected").length,
       rejectedPayments: records.reduce(
         (sum, loan) => sum + loan.rejectedPayments.length,
         0,
       ),
-      rejectedAmount: records.reduce(
-        (sum, loan) =>
-          sum +
-          loan.rejectedPayments.reduce(
-            (s, payment) => s + payment.amount,
-            0,
-          ),
-        0,
+      rejectedAmount: roundMoney(
+        records.reduce(
+          (sum, loan) =>
+            sum +
+            loan.rejectedPayments.reduce(
+              (s, payment) => s + payment.amount,
+              0,
+            ),
+          0,
+        ),
       ),
       byStatus: (() => {
         const byStatus = countsBy(
           records.map((loan) => loan.status),
           Object.values(LoanStatus),
         );
-        byStatus[LoanStatus.REJECTED] = records.reduce(
-          (sum, loan) => sum + loan.rejectedPayments.length,
-          0,
-        );
-        // REJECTED status bucket reflects rejected loan-payment submissions so
-        // rejected activity is visible in the Loans by Status summary.
         return byStatus;
       })(),
     },
@@ -495,20 +575,23 @@ async function generateLoansReport(filters: ReportFilters = {}) {
 
 async function generatePaymentsReport(filters: ReportFilters = {}) {
   const statusFilter = validateStatuses(ReportType.PAYMENTS, filters.statuses);
+  const hasRange = Boolean(filters.from || filters.to);
+  const asOf = reportAsOf(filters);
   const payments = await prisma.payment.findMany({
     where: {
       ...(filters.memberId ? { userId: filters.memberId } : {}),
-      ...(statusFilter
-        ? { status: { in: statusFilter as PaymentStatus[] } }
-        : {}),
-      ...(filters.from || filters.to
-        ? {
-            OR: [
-              { createdAt: dateRangePrisma(filters) },
-              liveAsOfStatusFilter(filters, [PaymentStatus.PENDING]),
-            ],
-          }
-        : {}),
+      createdAt: { lte: asOf },
+      OR: hasRange
+        ? [
+            { createdAt: dateRangePrisma(filters) },
+            { verifiedAt: dateRangePrisma(filters) },
+            { declinedAt: dateRangePrisma(filters) },
+            {
+              status: PaymentStatus.PENDING,
+              createdAt: { lte: asOf },
+            },
+          ]
+        : [{ createdAt: { lte: asOf } }],
     },
     orderBy: { createdAt: "desc" },
     include: {
@@ -534,23 +617,30 @@ loan: { select: { id: true, name: true, type: true } },
       },
     },
   });
+  const snapshotPayments = payments
+    .map((payment) => ({
+      ...payment,
+      status: paymentStatusAsOf(payment, asOf),
+    }))
+    .filter((payment) => !statusFilter || statusFilter.includes(payment.status));
   return {
     generatedAt: new Date().toISOString(),
+    asOf: asOf.toISOString(),
     totals: {
-      payments: payments.length,
-      pendingAmount: sumPaymentAmounts(payments, [PaymentStatus.PENDING]),
-      verifiedAmount: sumPaymentAmounts(payments, [PaymentStatus.VERIFIED]),
-      rejectedAmount: sumPaymentAmounts(payments, [PaymentStatus.REJECTED]),
+      payments: snapshotPayments.length,
+      pendingAmount: sumPaymentAmounts(snapshotPayments, [PaymentStatus.PENDING]),
+      verifiedAmount: sumPaymentAmounts(snapshotPayments, [PaymentStatus.VERIFIED]),
+      rejectedAmount: sumPaymentAmounts(snapshotPayments, [PaymentStatus.REJECTED]),
       byStatus: countsBy(
-        payments.map((payment) => payment.status),
+        snapshotPayments.map((payment) => payment.status),
         VISIBLE_PAYMENT_STATUSES,
       ),
       byMethod: countsBy(
-        payments.map((payment) => payment.paymentMethod),
+        snapshotPayments.map((payment) => payment.paymentMethod),
         ["ONLINE", "ON_SITE"] as const,
       ),
     },
-    payments: payments
+    payments: snapshotPayments
       .filter((payment) => !isRejectedPayment(payment))
       .map((payment) => ({
         id: payment.id,
@@ -580,7 +670,7 @@ loan: { select: { id: true, name: true, type: true } },
         declinedAt: payment.declinedAt?.toISOString() ?? null,
         rejectionReason: payment.rejectionReason,
       })),
-    rejectedPayments: payments
+    rejectedPayments: snapshotPayments
       .filter((payment) => isRejectedPayment(payment))
       .map((payment) => ({
         id: payment.id,
@@ -609,14 +699,14 @@ loan: { select: { id: true, name: true, type: true } },
 
 async function generateSuppliesReport(filters: ReportFilters = {}) {
   const statusFilter = validateStatuses(ReportType.SUPPLIES, filters.statuses);
-  const [supplies, repayments, rejectedPayments, reservedTxns] =
+  const hasRange = Boolean(filters.from || filters.to);
+  const asOf = reportAsOf(filters);
+  const [supplies, repayments, rejectedPayments, reservedTxns, supplyAudits] =
     await Promise.all([
       prisma.supply.findMany({
         orderBy: { productName: "asc" },
         where: {
-          ...(filters.to
-            ? { createdAt: { lte: reportDateBoundary(filters.to, "end")! } }
-            : {}),
+          createdAt: { lte: asOf },
         },
         include: {
           transactions: {
@@ -626,9 +716,16 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
               ...(statusFilter
                 ? { status: { in: statusFilter as TransactionStatus[] } }
                 : {}),
-              ...(filters.from || filters.to
-                ? { createdAt: dateRangePrisma(filters) }
-                : {}),
+              OR: hasRange
+                ? [
+                    { createdAt: dateRangePrisma(filters) },
+                    { reviewedAt: dateRangePrisma(filters) },
+                    {
+                      status: TransactionStatus.PENDING,
+                      createdAt: { lte: asOf },
+                    },
+                  ]
+                : [{ createdAt: { lte: asOf } }],
             },
             include: {
               user: { select: { id: true, name: true, username: true } },
@@ -638,7 +735,9 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
       }),
       prisma.loanPayment.findMany({
         where: {
-          loan: { type: LoanType.SUPPLY },
+          loan: filters.memberId
+            ? { type: LoanType.SUPPLY, userId: filters.memberId }
+            : { type: LoanType.SUPPLY },
           ...(filters.from || filters.to
             ? { paidAt: dateRangePrisma(filters) }
             : {}),
@@ -648,11 +747,13 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
       prisma.payment.findMany({
         where: {
           status: PaymentStatus.REJECTED,
-          loan: { type: LoanType.SUPPLY },
+          loan: filters.memberId
+            ? { type: LoanType.SUPPLY, userId: filters.memberId }
+            : { type: LoanType.SUPPLY },
           ...(filters.memberId ? { userId: filters.memberId } : {}),
-          ...(filters.from || filters.to
+          ...(hasRange
             ? { createdAt: dateRangePrisma(filters) }
-            : {}),
+            : { createdAt: { lte: asOf } }),
         },
         orderBy: { createdAt: "desc" },
         include: {
@@ -664,23 +765,34 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
         },
       }),
       prisma.supplyTransaction.findMany({
-        // Stock is deducted once, when a request is APPROVED (reserved), and is
-        // not deducted again on completion. Reconstructing on-hand stock as of
-        // a past date therefore has to consider every transaction still holding
-        // a reservation, not only the completed ones — otherwise units approved
-        // after the report date read as still available when they were already
-        // committed to a member.
+        // Include released reservations as well as current reservations so an
+        // older inventory snapshot can reverse a rejection that happened later.
         where: {
           status: {
-            in: [TransactionStatus.APPROVED, TransactionStatus.COMPLETED],
+            in: [
+              TransactionStatus.APPROVED,
+              TransactionStatus.COMPLETED,
+              TransactionStatus.REJECTED,
+            ],
           },
         },
         select: {
+          id: true,
           supplyId: true,
           quantity: true,
+          status: true,
           reviewedAt: true,
           createdAt: true,
         },
+      }),
+      prisma.auditTrail.findMany({
+        where: {
+          entity: "SupplyTransaction",
+          action: {
+            in: ["SUPPLY_APPROVED", "SUPPLY_REJECTED", "SUPPLY_COMPLETED"],
+          },
+        },
+        select: { entityId: true, action: true, createdAt: true },
       }),
     ]);
   const transactions = supplies.flatMap((supply) => supply.transactions);
@@ -694,42 +806,68 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
     (transaction) => transaction.type === SupplyTransactionType.LOAN,
   );
 
-  // Stock is a rolling figure. `Supply.quantity` is decremented when a request
-  // is approved (units are reserved for that member) and is not decremented
-  // again on completion, so reconstructing on-hand stock as of a past report
-  // date means adding back every reservation taken *after* that date — whether
-  // the request has since been completed or is still awaiting dispatch.
-  //
-  // Rejected requests are excluded from the query above because rejecting an
-  // approved request releases the reservation; their units were correctly
-  // reserved on the report date, so they must not be added back.
-  const asOf = reportDateBoundary(filters.to, "end");
-  const reservedAfterAsOf = new Map<string, number>();
-  if (asOf) {
-    for (const t of reservedTxns) {
-      const reservedAt = t.reviewedAt ?? t.createdAt;
-      if (reservedAt.getTime() > asOf.getTime()) {
-        reservedAfterAsOf.set(
-          t.supplyId,
-          (reservedAfterAsOf.get(t.supplyId) ?? 0) + t.quantity,
-        );
-      }
+  // Stock is deducted at approval and restored if an approved request is later
+  // rejected. Reverse only those post-report stock events from today's stored
+  // quantity. The audit trail preserves the approval timestamp even after a
+  // request is completed, when `reviewedAt` has moved to pickup time.
+  const stockAdjustmentAfterAsOf = new Map<string, number>();
+  const auditsByTransaction = new Map<string, typeof supplyAudits>();
+  for (const audit of supplyAudits) {
+    if (!audit.entityId) continue;
+    const entries = auditsByTransaction.get(audit.entityId);
+    if (entries) entries.push(audit);
+    else auditsByTransaction.set(audit.entityId, [audit]);
+  }
+  for (const t of reservedTxns) {
+    const events = auditsByTransaction.get(t.id) ?? [];
+    const approval = events.find((event) => event.action === "SUPPLY_APPROVED");
+    const rejection = events.find((event) => event.action === "SUPPLY_REJECTED");
+    const approvedAt = approval?.createdAt ??
+      (t.status === TransactionStatus.APPROVED ? t.reviewedAt : null);
+    const rejectedAt = rejection?.createdAt ??
+      (t.status === TransactionStatus.REJECTED ? t.reviewedAt : null);
+    let adjustment = 0;
+    if (
+      (t.status === TransactionStatus.APPROVED ||
+        t.status === TransactionStatus.COMPLETED) &&
+      approvedAt &&
+      approvedAt > asOf
+    ) {
+      adjustment += t.quantity;
+    }
+    if (
+      t.status === TransactionStatus.REJECTED &&
+      approvedAt &&
+      approvedAt <= asOf &&
+      rejectedAt &&
+      rejectedAt > asOf
+    ) {
+      adjustment -= t.quantity;
+    }
+    if (adjustment !== 0) {
+      stockAdjustmentAfterAsOf.set(
+        t.supplyId,
+        (stockAdjustmentAfterAsOf.get(t.supplyId) ?? 0) + adjustment,
+      );
     }
   }
   const stockAsOf = (supply: { id: string; quantity: number }): number =>
-    supply.quantity + (reservedAfterAsOf.get(supply.id) ?? 0);
+    supply.quantity + (stockAdjustmentAfterAsOf.get(supply.id) ?? 0);
 
   return {
     generatedAt: new Date().toISOString(),
+    asOf: asOf.toISOString(),
     totals: {
       products: supplies.length,
       unitsInStock: supplies.reduce(
         (sum, supply) => sum + stockAsOf(supply),
         0,
       ),
-      inventoryValue: supplies.reduce(
-        (sum, supply) => sum + Number(supply.price) * stockAsOf(supply),
-        0,
+      inventoryValue: roundMoney(
+        supplies.reduce(
+          (sum, supply) => sum + Number(supply.price) * stockAsOf(supply),
+          0,
+        ),
       ),
       requests: transactions.length,
       requestsByStatus: countsBy(
@@ -738,21 +876,26 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
       ),
       sold: {
         units: sold.reduce((sum, t) => sum + t.quantity, 0),
-        amount: sold.reduce((sum, t) => sum + Number(t.totalPrice), 0),
+        amount: roundMoney(
+          sold.reduce((sum, t) => sum + Number(t.totalPrice), 0),
+        ),
       },
       borrowed: {
         units: borrowed.reduce((sum, t) => sum + t.quantity, 0),
-        amount: borrowed.reduce((sum, t) => sum + Number(t.totalPrice), 0),
+        amount: roundMoney(
+          borrowed.reduce((sum, t) => sum + Number(t.totalPrice), 0),
+        ),
       },
       paidBorrowed: {
         repayments: repayments.length,
-        amount: repayments.reduce((sum, p) => sum + Number(p.amount), 0),
+        amount: roundMoney(
+          repayments.reduce((sum, p) => sum + Number(p.amount), 0),
+        ),
       },
       rejectedPayments: {
         count: rejectedPayments.length,
-        amount: rejectedPayments.reduce(
-          (sum, p) => sum + Number(p.amount),
-          0,
+        amount: roundMoney(
+          rejectedPayments.reduce((sum, p) => sum + Number(p.amount), 0),
         ),
       },
     },
@@ -771,7 +914,7 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
         productName: supply.productName,
         price: Number(supply.price),
         quantity: stockAsOf(supply),
-        inventoryValue: Number(supply.price) * stockAsOf(supply),
+        inventoryValue: roundMoney(Number(supply.price) * stockAsOf(supply)),
         soldUnits,
         borrowedUnits,
         createdAt: supply.createdAt.toISOString(),
@@ -802,26 +945,25 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
 async function generateMachinesReport(filters: ReportFilters = {}) {
   const statusFilter = validateStatuses(ReportType.MACHINES, filters.statuses);
   const hasRange = Boolean(filters.from || filters.to);
-  const machineAsOf =
-    reportDateBoundary(filters.to ?? filters.from, "end") ?? currentDayEnd();
+  const machineAsOf = reportAsOf(filters);
   const machines = await prisma.machine.findMany({
+    where: { createdAt: { lte: machineAsOf } },
     orderBy: { name: "asc" },
     include: {
       requests: {
         orderBy: { requestDate: "desc" },
         where: {
           ...(filters.memberId ? { userId: filters.memberId } : {}),
-          ...(statusFilter
-            ? { status: { in: statusFilter as MachineStatus[] } }
-            : {}),
           ...(hasRange
             ? {
                 OR: [
                   { requestDate: dateRangePrisma(filters) },
+                  { startedAt: dateRangePrisma(filters) },
+                  { returnedAt: dateRangePrisma(filters) },
                   overdueMachineRequestsAsOfPrisma(filters),
                 ],
               }
-            : {}),
+            : { requestDate: { lte: machineAsOf } }),
         },
         include: {
           user: { select: { id: true, name: true, username: true } },
@@ -829,20 +971,29 @@ async function generateMachinesReport(filters: ReportFilters = {}) {
       },
     },
   });
-  const requests = machines.flatMap((machine) => machine.requests);
+  const requests = machines.flatMap((machine) =>
+    machine.requests
+      .map((request) => ({
+        ...request,
+        status: machineRequestStatusAsOf(request, machineAsOf),
+      }))
+      .filter((request) => !statusFilter || statusFilter.includes(request.status)),
+  );
+  const includedRequestIds = new Set(requests.map((request) => request.id));
   // Returns where the officer flagged a condition. Surfaced as its own total
   // and section because "which machines came back damaged" is the question a
   // utilization report exists to answer, and it is invisible if the note is
   // only buried in a per-request table.
   const returnsWithIssues = requests.filter(
-    (request) => request.returnedAt && request.returnHasIssue,
+    (request) =>
+      request.returnedAt &&
+      request.returnedAt <= machineAsOf &&
+      request.returnHasIssue,
   );
   const overdueRequests = requests
     .filter(
       (request) =>
-        MACHINE_HELD_STATUSES.includes(
-          request.status as (typeof MACHINE_HELD_STATUSES)[number],
-        ) &&
+        MACHINE_HELD_STATUSES.includes(request.status) &&
         isMachineRequestOverdueAsOf(
           request.endDate,
           request.returnedAt,
@@ -868,6 +1019,7 @@ async function generateMachinesReport(filters: ReportFilters = {}) {
 
   return {
     generatedAt: new Date().toISOString(),
+    asOf: machineAsOf.toISOString(),
     totals: {
       machines: machines.length,
       requests: requests.length,
@@ -893,13 +1045,16 @@ async function generateMachinesReport(filters: ReportFilters = {}) {
       name: machine.name,
       description: machine.description,
       createdAt: machine.createdAt.toISOString(),
-      requests: machine.requests.map((request) => ({
-        ...request,
-        requestDate: request.requestDate.toISOString(),
-        startDate: request.startDate?.toISOString() ?? null,
-        endDate: request.endDate?.toISOString() ?? null,
-        returnedAt: request.returnedAt?.toISOString() ?? null,
-      })),
+      requests: machine.requests
+        .filter((request) => includedRequestIds.has(request.id))
+        .map((request) => ({
+          ...request,
+          status: machineRequestStatusAsOf(request, machineAsOf),
+          requestDate: request.requestDate.toISOString(),
+          startDate: request.startDate?.toISOString() ?? null,
+          endDate: request.endDate?.toISOString() ?? null,
+          returnedAt: request.returnedAt?.toISOString() ?? null,
+        })),
     })),
   };
 }
@@ -938,330 +1093,86 @@ async function generateAuditReport(filters: ReportFilters = {}) {
 }
 
 async function generateSummaryReport(filters: ReportFilters = {}) {
-  const hasRange = Boolean(filters.from || filters.to);
-  const [users, loans, payments, supplies, machines, requests, audits, supplyRepayments, reservedTxns] =
+  const [membersReport, loansReport, paymentsReport, suppliesReport, machinesReport, auditReport] =
     await Promise.all([
-      prisma.user.findMany({
-        where:
-          filters.from || filters.to
-            ? { createdAt: asOfPrisma(filters) }
-            : {},
-        select: { id: true, name: true, username: true, role: true, active: true },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.loan.findMany({
-        where: hasRange
-          ? {
-              OR: [
-                { createdAt: dateRangePrisma(filters) },
-                { payments: { some: { paidAt: dateRangePrisma(filters) } } },
-                { statusHistory: { some: { changedAt: dateRangePrisma(filters) } } },
-                liveAsOfStatusFilter(filters, [
-                  LoanStatus.PENDING,
-                  LoanStatus.ACTIVE,
-                  LoanStatus.OVERDUE,
-                ]),
-              ],
-            }
-          : {},
-        select: {
-          id: true,
-          amount: true,
-          principalAmount: true,
-          interestRate: true,
-          status: true,
-          due: true,
-          user: { select: { id: true, name: true, username: true } },
-          payments: { select: { amount: true } },
-        },
-      }),
-      prisma.payment.findMany({
-        where:
-          filters.from || filters.to
-            ? {
-                OR: [
-                  { createdAt: dateRangePrisma(filters) },
-                  liveAsOfStatusFilter(filters, [PaymentStatus.PENDING]),
-                ],
-              }
-            : {},
-        orderBy: { createdAt: "desc" },
-        include: {
-          user: { select: { id: true, name: true, username: true } },
-          application: { select: { id: true, fullName: true, status: true } },
-          loan: { select: { id: true, name: true, type: true } },
-        },
-      }),
-      prisma.supply.findMany({
-        where: {
-          ...(filters.to
-            ? { createdAt: { lte: reportDateBoundary(filters.to, "end")! } }
-            : {}),
-        },
-        select: {
-          id: true,
-          productName: true,
-          price: true,
-          quantity: true,
-          createdAt: true,
-          transactions: {
-            where: {
-              // The Summary aggregates five unrelated status domains (loans,
-              // payments, supply transactions, machines, applications), so a
-              // single status filter has no coherent meaning here and is not
-              // offered in the UI. See SUMMARY in components/reports/catalog.ts.
-              ...(hasRange ? { createdAt: dateRangePrisma(filters) } : {}),
-            },
-            select: {
-              quantity: true,
-              type: true,
-              status: true,
-              totalPrice: true,
-            },
-          },
-        },
-      }),
-      prisma.machine.findMany({
-        select: { id: true, name: true },
-        orderBy: { name: "asc" },
-      }),
-      prisma.machineRequest.findMany({
-        where: hasRange
-          ? {
-              OR: [
-                { requestDate: dateRangePrisma(filters) },
-                overdueMachineRequestsAsOfPrisma(filters),
-              ],
-            }
-          : {},
-        include: {
-          user: { select: { id: true, name: true } },
-          machine: { select: { id: true, name: true } },
-        },
-      }),
-      prisma.auditTrail.findMany({
-        where: hasRange ? { createdAt: dateRangePrisma(filters) } : {},
-        orderBy: { createdAt: "desc" },
-        take: 200,
-        include: {
-          user: { select: { id: true, name: true, username: true, role: true } },
-        },
-      }),
-      prisma.loanPayment.findMany({
-        where: {
-          loan: { type: LoanType.SUPPLY },
-          ...(hasRange ? { paidAt: dateRangePrisma(filters) } : {}),
-        },
-        select: { amount: true },
-      }),
-      prisma.supplyTransaction.findMany({
-        // Stock is deducted once, when a request is APPROVED (reserved), and is
-        // not deducted again on completion. Reconstructing on-hand stock as of
-        // a past date therefore has to consider every transaction still holding
-        // a reservation, not only the completed ones — otherwise units approved
-        // after the report date read as still available when they were already
-        // committed to a member.
-        where: {
-          status: {
-            in: [TransactionStatus.APPROVED, TransactionStatus.COMPLETED],
-          },
-        },
-        select: {
-          supplyId: true,
-          quantity: true,
-          reviewedAt: true,
-          createdAt: true,
-        },
-      }),
+      generateMembersReport(filters),
+      generateLoansReport(filters),
+      generatePaymentsReport(filters),
+      generateSuppliesReport(filters),
+      generateMachinesReport(filters),
+      generateAuditReport(filters),
     ]);
-  const loanList = loans.map((loan) => {
-    const amountPaid = loan.payments.reduce(
-      (sum: number, p: { amount: Prisma.Decimal }) => sum + Number(p.amount),
-      0,
-    );
-    const payable = Number(loan.amount);
-    return {
-      id: loan.id,
-      user: loan.user,
-      principal: loanPrincipalAmount(loan),
-      payable,
-      amount: payable,
-      amountPaid,
-      // Clamped at zero: an over-collection must not read as a negative
-      // balance, which would silently understate portfolio exposure and imply
-      // the cooperative owes the member a refund.
-      outstandingBalance: Math.max(payable - amountPaid, 0),
-      overpaidAmount: Math.max(amountPaid - payable, 0),
-      status: loan.status,
-      due: loan.due?.toISOString() ?? null,
-    };
-  });
-  const supplyTransactions = supplies.flatMap((supply) => supply.transactions);
-  const completed = supplyTransactions.filter(
-    (t) => t.status === TransactionStatus.COMPLETED,
-  );
-  const sold = completed.filter(
-    (t) => t.type === SupplyTransactionType.PURCHASE,
-  );
-  const borrowed = completed.filter(
-    (t) => t.type === SupplyTransactionType.LOAN,
-  );
 
-  // Stock is a rolling figure. `Supply.quantity` is decremented when a request
-  // is approved (units are reserved for that member) and is not decremented
-  // again on completion, so reconstructing on-hand stock as of a past report
-  // date means adding back every reservation taken *after* that date — whether
-  // the request has since been completed or is still awaiting dispatch.
-  //
-  // Rejected requests are excluded from the query above because rejecting an
-  // approved request releases the reservation; their units were correctly
-  // reserved on the report date, so they must not be added back.
-  const asOf = reportDateBoundary(filters.to, "end");
-  const reservedAfterAsOf = new Map<string, number>();
-  if (asOf) {
-    for (const t of reservedTxns) {
-      const reservedAt = t.reviewedAt ?? t.createdAt;
-      if (reservedAt.getTime() > asOf.getTime()) {
-        reservedAfterAsOf.set(
-          t.supplyId,
-          (reservedAfterAsOf.get(t.supplyId) ?? 0) + t.quantity,
-        );
-      }
-    }
-  }
-  const stockAsOf = (supply: { id: string; quantity: number }): number =>
-    supply.quantity + (reservedAfterAsOf.get(supply.id) ?? 0);
-
-  const activeLoanList = loanList.filter(
-    (l) => l.status !== "REJECTED",
+  const machineRequests = machinesReport.machines.flatMap((machine) =>
+    machine.requests.map((request) => ({
+      id: request.id,
+      machine: { id: machine.id, name: machine.name },
+      user: request.user,
+      status: request.status,
+    })),
   );
-  const machineAsOf =
-    reportDateBoundary(filters.to ?? filters.from, "end") ?? currentDayEnd();
 
   return {
     generatedAt: new Date().toISOString(),
-    members: { users: users.length, list: users },
+    asOf: reportAsOf(filters).toISOString(),
+    members: {
+      users: membersReport.totals.users,
+      list: membersReport.members,
+    },
     loans: {
-      count: loanList.length,
-      // Rejected loan requests are excluded from principal, payable, paid,
-      // and outstanding amounts; the rejected request count is reported separately.
-      principal: activeLoanList.reduce((sum, l) => sum + l.principal, 0),
-      payable: activeLoanList.reduce((sum, l) => sum + l.payable, 0),
-      amountPaid: activeLoanList.reduce((sum, l) => sum + l.amountPaid, 0),
-      outstandingBalance: activeLoanList.reduce(
-        (sum, l) => sum + l.outstandingBalance,
-        0,
-      ),
-      rejectedRequests: loanList.filter((l) => l.status === "REJECTED").length,
-      byStatus: countsBy(
-        loanList.map((l) => l.status),
-        Object.values(LoanStatus),
-      ),
-      list: loanList,
+      count: loansReport.totals.loans,
+      principal: loansReport.totals.principal,
+      payable: loansReport.totals.payable,
+      amountPaid: loansReport.totals.amountPaid,
+      paidInPeriod: loansReport.totals.paidInPeriod,
+      outstandingBalance: loansReport.totals.outstandingBalance,
+      rejectedRequests: loansReport.totals.requestsRejected,
+      byStatus: loansReport.totals.byStatus,
+      list: loansReport.loans.map((loan) => ({
+        id: loan.id,
+        user: loan.borrower,
+        principal: loan.principal,
+        payable: loan.payable,
+        amountPaid: loan.amountPaid,
+        paidInPeriod: loan.paidInPeriod,
+        outstandingBalance: loan.outstandingBalance,
+        status: loan.status,
+        due: loan.due,
+      })),
     },
     payments: {
-      count: payments.length,
-      pendingAmount: sumPaymentAmounts(payments, [PaymentStatus.PENDING]),
-      verifiedAmount: sumPaymentAmounts(payments, [PaymentStatus.VERIFIED]),
-      rejectedAmount: sumPaymentAmounts(payments, [PaymentStatus.REJECTED]),
-      byStatus: countsBy(
-        payments.map((payment) => payment.status),
-        VISIBLE_PAYMENT_STATUSES,
-      ),
-      byMethod: countsBy(
-        payments.map((payment) => payment.paymentMethod),
-        Object.values(PaymentMethod),
-      ),
-      list: payments
-        .filter((payment) => !isRejectedPayment(payment))
-        .map((payment) => ({
-          id: payment.id,
-          user: payment.user,
-          applicant: payment.application
-            ? { fullName: payment.application.fullName }
-            : null,
-          loan: payment.loan,
-          type: payment.type,
-          paymentMethod: payment.paymentMethod,
-          amount: Number(payment.amount),
-          status: payment.status,
-          referenceNo: payment.referenceNo,
-          createdAt: payment.createdAt.toISOString(),
-        })),
+      count: paymentsReport.totals.payments,
+      pendingAmount: paymentsReport.totals.pendingAmount,
+      verifiedAmount: paymentsReport.totals.verifiedAmount,
+      rejectedAmount: paymentsReport.totals.rejectedAmount,
+      byStatus: paymentsReport.totals.byStatus,
+      byMethod: paymentsReport.totals.byMethod,
+      list: paymentsReport.payments,
     },
-    transactions: payments
-      .filter((payment) => !isRejectedPayment(payment))
-      .map((payment) => ({
-        id: payment.id,
-        applicant: payment.application
-          ? {
-              fullName: payment.application.fullName,
-              applicationStatus: payment.application.status,
-            }
-          : null,
-        user: payment.user,
-        loan: payment.loan,
-        type: payment.type,
-        amount: Number(payment.amount),
-        paymentMethod: payment.paymentMethod,
-        status: payment.status,
-        referenceNo: payment.referenceNo,
-        createdAt: payment.createdAt.toISOString(),
-      })),
+    transactions: paymentsReport.payments,
     supplies: {
-      products: supplies.length,
-      requests: supplyTransactions.length,
-      requestsByStatus: countsBy(
-        supplyTransactions.map((t) => t.status),
-        Object.values(TransactionStatus),
-      ),
-      unitsInStock: supplies.reduce(
-        (sum, supply) => sum + stockAsOf(supply),
-        0,
-      ),
-      inventoryValue: supplies.reduce(
-        (sum, supply) => sum + Number(supply.price) * stockAsOf(supply),
-        0,
-      ),
-      sold: {
-        units: sold.reduce((sum, t) => sum + t.quantity, 0),
-        amount: sold.reduce((sum, t) => sum + Number(t.totalPrice), 0),
-      },
-      borrowed: {
-        units: borrowed.reduce((sum, t) => sum + t.quantity, 0),
-        amount: borrowed.reduce((sum, t) => sum + Number(t.totalPrice), 0),
-      },
-      paidBorrowed: {
-        repayments: supplyRepayments.length,
-        amount: supplyRepayments.reduce((sum, p) => sum + Number(p.amount), 0),
-      },
-      list: supplies.map((s) => ({
-        id: s.id,
-        productName: s.productName,
-        price: Number(s.price),
-        quantity: stockAsOf(s),
-        inventoryValue: Number(s.price) * stockAsOf(s),
+      ...suppliesReport.totals,
+      list: suppliesReport.supplies.map((supply) => ({
+        id: supply.id,
+        productName: supply.productName,
+        price: supply.price,
+        quantity: supply.quantity,
+        inventoryValue: supply.inventoryValue,
       })),
     },
     machines: {
-      count: machines.length,
-      requests: requests.length,
-      requestsByStatus: machineRequestStatusCounts(requests, machineAsOf),
-      list: machines,
-      requestsList: requests.map((r) => ({
-        id: r.id,
-        machine: r.machine,
-        user: r.user,
-        status: r.status,
-      })),
+      count: machinesReport.totals.machines,
+      requests: machinesReport.totals.requests,
+      requestsByStatus: machinesReport.totals.requestsByStatus,
+      list: machinesReport.machines,
+      requestsList: machineRequests,
     },
     audit: {
-      entries: audits.length,
-      list: audits,
+      entries: auditReport.totals.entries,
+      list: auditReport.entries,
     },
   };
 }
-
 async function generateReportData(type: ReportType, filters: ReportFilters = {}) {
   switch (type) {
     case ReportType.MEMBERS:

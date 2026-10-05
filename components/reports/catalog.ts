@@ -63,7 +63,8 @@ const MEMBERS: ReportTypeCatalog = {
     "REJECTED",
   ],
   notes: [
-    "Member and application counts reflect records as of the report date range.",
+    "Users are included when registered by the report end date; the Active flag is the current recorded account state because account history is not stored.",
+    "Application counts and rows reflect applications submitted in the selected period.",
     "Only member roles applicable to cooperative officers are listed.",
   ],
   sections: [
@@ -158,9 +159,10 @@ const LOANS: ReportTypeCatalog = {
   memberFilter: true,
   statusOptions: ["PENDING", "ACTIVE", "OVERDUE", "PAID", "REJECTED"],
   notes: [
-    "Rejected loan requests are excluded from principal, payable, paid, and outstanding totals.",
+    "Principal and payable are cumulative through the report end date and include all disbursed loans opened on or before it.",
     "Principal reflects the initial loan amount before interest; Payable includes the computed interest.",
-    "Outstanding balances reflect total payments to date for loans in the selected period.",
+    "Paid and outstanding are cumulative through the report end date; Paid in Period isolates repayments in the selected period.",
+    "Pending and rejected requests are shown for workflow context but are excluded from disbursed financial totals.",
     "Rejected loan-payment submissions are reported separately and are not included in paid totals.",
   ],
   sections: [
@@ -173,6 +175,7 @@ const LOANS: ReportTypeCatalog = {
         { id: "principal", label: "Principal", value: (d) => money(d.totals?.principal) },
         { id: "payable", label: "Payable", value: (d) => money(d.totals?.payable) },
         { id: "paid", label: "Loan Paid", value: (d) => money(d.totals?.amountPaid) },
+        { id: "paidInPeriod", label: "Paid in Period", value: (d) => money(d.totals?.paidInPeriod) },
         { id: "outstanding", label: "Outstanding", value: (d) => money(d.totals?.outstandingBalance) },
         { id: "rejectedRequests", label: "Rejected Requests", value: (d) => (d.totals?.requestsRejected ?? 0) },
         { id: "rejectedPayments", label: "Rejected Payments", value: (d) => (d.totals?.rejectedPayments ?? 0) },
@@ -199,6 +202,7 @@ const LOANS: ReportTypeCatalog = {
           { id: "principal", label: "Principal", get: (r) => moneyValue(r.principal), render: (r) => money(r.principal), money: true },
           { id: "payable", label: "Payable", get: (r) => moneyValue(r.payable), render: (r) => money(r.payable), money: true },
           { id: "paid", label: "Paid", get: (r) => moneyValue(r.amountPaid), render: (r) => money(r.amountPaid), money: true },
+          { id: "paidPeriod", label: "Paid in Period", get: (r) => moneyValue(r.paidInPeriod), render: (r) => money(r.paidInPeriod), money: true },
           { id: "outstanding", label: "Outstanding", get: (r) => moneyValue(r.outstandingBalance), render: (r) => money(r.outstandingBalance), money: true },
           { id: "status", label: "Status", get: (r) => r.status ?? "", render: (r) => humanize(r.status) },
           { id: "due", label: "Due", get: (r) => dateValue(r.due), render: (r) => renderDate(r.due) },
@@ -208,7 +212,7 @@ const LOANS: ReportTypeCatalog = {
           { key: "member", label: "Borrower", get: (r) => borrower(r).name ?? null },
           { key: "decision", label: "Decision", get: (r) => r.decision ?? null },
         ],
-        totalColumns: ["principal", "payable", "paid", "outstanding"],
+        totalColumns: ["principal", "payable", "paid", "paidPeriod", "outstanding"],
       },
     },
     {
@@ -270,7 +274,7 @@ const PAYMENTS: ReportTypeCatalog = {
   statusOptions: ["PENDING", "VERIFIED", "REJECTED"],
   notes: [
     "Verified payments appear under Payment Records; pending and rejected payment proofs are listed in their own tables.",
-    "Only records created within the selected period are included.",
+    "Activity includes records created, verified, or rejected in the selected period; pending submissions already open at the report end remain visible.",
   ],
   sections: [
     {
@@ -397,7 +401,8 @@ const SUPPLIES: ReportTypeCatalog = {
   memberFilter: true,
   statusOptions: ["PENDING", "APPROVED", "REJECTED", "COMPLETED"],
   notes: [
-    "Sold and borrowed figures reflect completed transactions within the selected period.",
+    "Sold, borrowed, and repayment figures reflect activity within the selected period.",
+    "Units in stock and inventory value are a snapshot at the report end date.",
     "Paid borrowed repayments are supply-loan repayments recorded in the same period.",
     "Rejected payment proofs on supply loans are listed separately and excluded from paid amounts.",
   ],
@@ -555,7 +560,8 @@ const MACHINES: ReportTypeCatalog = {
   memberFilter: true,
   statusOptions: ["QUEUED", "APPROVED", "IN_USE", "RETURN_PENDING", "RETURNED", "OVERDUE", "REJECTED"],
   notes: [
-    "Requests are a snapshot of machine borrowing activity in the selected period.",
+    "Requests include activity in the selected period plus bookings still overdue at the report end date.",
+    "Machine counts and statuses are evaluated as of the report end date.",
   ],
   sections: [
     {
@@ -739,7 +745,7 @@ const SUMMARY: ReportTypeCatalog = {
     "This summary is cooperative-wide; it is not scoped to a single member.",
     "Use the Loan, Payment, Supply, Machine or Member Records report to filter by status.",
     "Rejected loan requests are excluded from financial totals.",
-    "Date filters limit visible records to activity in the selected period.",
+    "Date filters combine period activity with end-of-period balances and inventory snapshots.",
     "Rejected payment submissions are reported separately.",
   ],
   sections: [
@@ -758,6 +764,7 @@ const SUMMARY: ReportTypeCatalog = {
         { id: "principal", label: "Loan Principal", value: (d) => money(d.loans?.principal) },
         { id: "payable", label: "Loan Payable", value: (d) => money(d.loans?.payable) },
         { id: "paid", label: "Loan Paid", value: (d) => money(d.loans?.amountPaid) },
+        { id: "paidInPeriod", label: "Loan Paid in Period", value: (d) => money(d.loans?.paidInPeriod) },
         { id: "outstanding", label: "Outstanding", value: (d) => money(d.loans?.outstandingBalance) },
         { id: "rejected", label: "Rejected Requests", value: (d) => (d.loans?.rejectedRequests ?? 0) },
       ],
@@ -890,6 +897,7 @@ const SUMMARY: ReportTypeCatalog = {
           { id: "principal", label: "Principal", get: (r) => moneyValue(r.principal), render: (r) => money(r.principal), money: true },
           { id: "payable", label: "Payable", get: (r) => moneyValue(r.payable), render: (r) => money(r.payable), money: true },
           { id: "paid", label: "Paid", get: (r) => moneyValue(r.amountPaid), render: (r) => money(r.amountPaid), money: true },
+          { id: "paidPeriod", label: "Paid in Period", get: (r) => moneyValue(r.paidInPeriod), render: (r) => money(r.paidInPeriod), money: true },
           { id: "outstanding", label: "Outstanding", get: (r) => moneyValue(r.outstandingBalance), render: (r) => money(r.outstandingBalance), money: true },
           { id: "status", label: "Status", get: (r) => r.status ?? "", render: (r) => humanize(r.status) },
           { id: "due", label: "Due", get: (r) => dateValue(r.due), render: (r) => renderDate(r.due) },
@@ -898,7 +906,7 @@ const SUMMARY: ReportTypeCatalog = {
           { key: "status", label: "Loan status", get: (r) => r.status ?? null },
           { key: "member", label: "Member", get: (r) => (r.user as Record<string, any>)?.name ?? null },
         ],
-        totalColumns: ["principal", "payable", "paid", "outstanding"],
+        totalColumns: ["principal", "payable", "paid", "paidPeriod", "outstanding"],
       },
     },
     {

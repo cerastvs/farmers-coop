@@ -5,7 +5,10 @@ import { apiErrorResponse, requireUser } from "@/lib/api";
 import { MEMBER_ROLES } from "@/lib/permissions";
 import { Role, MachineStatus } from "@/app/generated/prisma";
 import { writeAudit } from "@/lib/activity";
-import { getMemberCurrentSeasonCapacity } from "@/lib/services/seasons";
+import {
+  getMemberCurrentSeasonCapacity,
+  seasonCapacityLimit,
+} from "@/lib/services/seasons";
 
 const ACTIVE_STATUSES = [
   MachineStatus.QUEUED,
@@ -39,10 +42,7 @@ export async function GET() {
       select: { farmSize: true, farmOwnership: true },
     });
     const farmSize = application?.farmSize ?? 1;
-    const allowedDurationDays = Math.max(
-      1,
-      Math.ceil(Number.isFinite(farmSize) ? farmSize : 1),
-    );
+    const allowedDurationDays = seasonCapacityLimit(farmSize);
     // Machines are borrowed against the member's own hectares, so the page can
     // explain why borrowing is closed rather than only failing on submit.
     const canBorrow = canBorrowMachines(application?.farmOwnership);

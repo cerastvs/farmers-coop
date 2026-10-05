@@ -99,11 +99,12 @@ export default function RentMachinePage() {
     selectedDurationDays() !== null && selectedDurationDays()! > allowedDurationDays;
 
   const bookedInSeason = seasonCapacity?.bookedHectareDays ?? 0;
-  const remainingInSeason = Math.max(0, farmSize - bookedInSeason);
+  const seasonLimit = allowedDurationDays;
+  const remainingInSeason = Math.max(0, seasonLimit - bookedInSeason);
   const prospectiveDays = (selectedDurationDays() ?? 0) + bookedInSeason;
   const capacityActive = seasonCapacity !== null;
   const exceedsSeasonCapacity =
-    capacityActive && farmSize > 0 && prospectiveDays > farmSize;
+    capacityActive && prospectiveDays > seasonLimit;
 
   function openBorrowForm(machineId: string) {
     setFormMachineId(machineId);
@@ -133,7 +134,7 @@ export default function RentMachinePage() {
       return `Your ${farmSize} ha farm allows at most ${allowedDurationDays} day(s) of machine use (1 day per hectare).`;
     }
     if (exceedsSeasonCapacity) {
-      return `This would bring you to ${prospectiveDays} of your ${farmSize} machine-day season limit. Cancel one of your current requests first, then resubmit within your limit.`;
+      return `This would bring you to ${prospectiveDays} of your ${seasonLimit} machine-day season limit. Cancel one of your current requests first, then resubmit within your limit.`;
     }
     return null;
   }
@@ -327,12 +328,12 @@ export default function RentMachinePage() {
 
         {seasonCapacity && (
           (() => {
-            const atLimit = bookedInSeason >= farmSize;
+            const atLimit = bookedInSeason >= seasonLimit;
             const low = !atLimit && remainingInSeason <= 1;
             const state = atLimit ? "limit" : low ? "low" : "ok";
             const fmt = (n: number) =>
               n.toLocaleString("en-US", { maximumFractionDigits: 1 });
-            const pct = farmSize > 0 ? Math.max(2, Math.min(100, Math.round((bookedInSeason / farmSize) * 100))) : 0;
+            const pct = seasonLimit > 0 ? Math.max(2, Math.min(100, Math.round((bookedInSeason / seasonLimit) * 100))) : 0;
             const accent =
               state === "limit"
                 ? { text: "text-[#a8431f]", icon: "bg-red-50 text-red-700", fill: "bg-[#c4522a]", chip: "bg-red-50 text-red-700 border-red-100", bar: "bg-red-50" }
@@ -358,7 +359,7 @@ export default function RentMachinePage() {
                         {seasonCapacity.seasonName} · season capacity
                       </p>
                       <p className="truncate text-xs font-semibold text-[#173a2b]">
-                        {fmt(bookedInSeason)} of {fmt(farmSize)} machine-day{fmt(farmSize) === "1" ? "" : "s"} booked
+                        {fmt(bookedInSeason)} of {fmt(seasonLimit)} machine-day{seasonLimit === 1 ? "" : "s"} booked
                       </p>
                     </div>
                   </div>
@@ -564,7 +565,7 @@ export default function RentMachinePage() {
                               <>
                                 This request would bring you to{" "}
                                 <span className="font-bold">{prospectiveDays}</span> of your{" "}
-                                <span className="font-bold">{farmSize}</span> machine-day limit for {seasonCapacity!.seasonName}{" "}
+                                <span className="font-bold">{seasonLimit}</span> machine-day limit for {seasonCapacity!.seasonName}{" "}
                                 (you already have {bookedInSeason} booked) — it would exceed your limit. Cancel one of your
                                 current requests below, then resubmit within your limit.
                               </>
@@ -572,7 +573,7 @@ export default function RentMachinePage() {
                               <>
                                 With this request you&apos;ll have{" "}
                                 <span className="font-bold">{prospectiveDays}</span> of your{" "}
-                                <span className="font-bold">{farmSize}</span> machine-day limit booked for{" "}
+                                <span className="font-bold">{seasonLimit}</span> machine-day limit booked for{" "}
                                 {seasonCapacity!.seasonName} (you already have {bookedInSeason} booked).
                               </>
                             )}

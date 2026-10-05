@@ -6,6 +6,7 @@ export interface SeasonLike {
   name: string;
   startMonth: number;
   startDay: number;
+  color?: string | null;
 }
 
 export interface SeasonInstance {
@@ -31,6 +32,21 @@ export function isValidMonthDay(month: number, day: number) {
   if (day < 1) return false;
   const maxDays = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
   return day <= maxDays;
+}
+
+export function nextCalendarMonth(month: number) {
+  return month === 12 ? 1 : month + 1;
+}
+
+export function monthFallsWithinRange(
+  month: number,
+  startMonth: number,
+  endMonth: number,
+) {
+  if (startMonth <= endMonth) {
+    return month >= startMonth && month <= endMonth;
+  }
+  return month >= startMonth || month <= endMonth;
 }
 
 export function seasonStartForYear(season: SeasonLike, year: number) {
@@ -357,11 +373,12 @@ export async function getMemberCurrentSeasonCapacity(
     orderBy: [{ startMonth: "asc" }, { startDay: "asc" }],
   });
   if (rows.length === 0) return null;
-  const seasons: SeasonLike[] = rows.map(({ id, name, startMonth, startDay }) => ({
+  const seasons: SeasonLike[] = rows.map(({ id, name, startMonth, startDay, color }) => ({
     id,
     name,
     startMonth,
     startDay,
+    color,
   }));
 
   const current = currentInstance(seasons, now);
@@ -422,11 +439,12 @@ export async function getSeasonOverview(
   const rows = await tx.season.findMany({
     orderBy: [{ startMonth: "asc" }, { startDay: "asc" }],
   });
-  const seasons: SeasonLike[] = rows.map(({ id, name, startMonth, startDay }) => ({
+  const seasons: SeasonLike[] = rows.map(({ id, name, startMonth, startDay, color }) => ({
     id,
     name,
     startMonth,
     startDay,
+    color,
   }));
 
   return {

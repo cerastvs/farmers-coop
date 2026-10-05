@@ -3,664 +3,740 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  CalendarDays,
   Check,
   Loader2,
   Pencil,
   Plus,
+  Search,
   Trash2,
   Wheat,
   X,
 } from "lucide-react";
 
-export interface HarvestSeasonsData {
-  seasons: {
+type Season = {
+  id: string;
+  name: string;
+  startMonth: number;
+  startDay: number;
+  color: string | null;
+};
+
+type CapacityRow = {
+  seasonId: string;
+  userId: string;
+  name: string;
+  limitHectareDays: number | null;
+  bookedHectareDays: number;
+  remaining: number | null;
+  utilizationPercent: number | null;
+};
+
+export type HarvestSeasonsData = {
+  seasons: Season[];
+  current: null | {
     id: string;
     name: string;
-    startMonth: number;
-    startDay: number;
-  }[];
-  current: { id: string; name: string; start: string; end: string } | null;
-  next: { id: string; name: string; start: string; end: string } | null;
-  members: { id: string; name: string; farmHectares: number }[];
-  capacity: {
-    seasonId: string;
-    userId: string;
+    start: string;
+    end: string;
+  };
+  next: null | {
+    id: string;
     name: string;
-    limitHectareDays: number | null;
-    bookedHectareDays: number;
-    remaining: number | null;
-    utilizationPercent: number | null;
-  }[];
+    start: string;
+    end: string;
+  };
+  members: Array<{
+    id: string;
+    name: string;
+    farmHectares: number;
+  }>;
+  capacity: CapacityRow[];
   empty: boolean;
-}
+};
 
-type Notice = { kind: "success" | "error"; text: string } | null;
+type Props = {
+  data: HarvestSeasonsData | null;
+  onReload: () => void;
+};
 
-const SEASON_BAR_COLORS = [
-  "bg-lime-400",
-  "bg-sky-400",
-  "bg-amber-400",
-  "bg-violet-400",
-  "bg-rose-400",
-];
+type EditorState = {
+  mode: "create" | "edit";
+  id?: string;
+  name: string;
+  startMonth: number;
+  endMonth?: number;
+  color: string;
+};
 
-const SEASON_DOT_COLORS = [
-  "bg-lime-500",
-  "bg-sky-500",
-  "bg-amber-500",
-  "bg-violet-500",
-  "bg-rose-500",
-];
+type Notice = { type: "success" | "error"; text: string } | null;
 
-const MONTH_LABELS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
   "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
-function isValidMonthDay(month: number, day: number) {
-  if (!Number.isInteger(month) || !Number.isInteger(day)) return false;
-  if (month < 1 || month > 12 || day < 1) return false;
-  const max = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
-  return day <= max;
+const MONTH_SHORT = MONTHS.map((month) => month.slice(0, 3));
+
+const SEASON_COLORS = [
+  "#356859",
+  "#c0934d",
+  "#6f8e9c",
+  "#9a6b58",
+  "#6f7e4e",
+  "#7d7084",
+];
+
+function seasonColor(season: Season, index: number) {
+  return season.color && /^#[0-9a-fA-F]{6}$/.test(season.color)
+    ? season.color
+    : SEASON_COLORS[index % SEASON_COLORS.length];
 }
 
-function activeSeasonForMonth(
-  seasons: HarvestSeasonsData["seasons"],
-  year: number,
-  month: number,
-) {
-  const probe = new Date(year, month, 15, 0, 0, 0, 0);
-  let best: { season: HarvestSeasonsData["seasons"][number]; start: Date } | null = null;
-  for (const season of seasons) {
-    for (const y of [year, year - 1]) {
-      const start = new Date(y, season.startMonth - 1, season.startDay);
-      if (start.getTime() <= probe.getTime() && (!best || start.getTime() > best.start.getTime())) {
-        best = { season, start };
-      }
-    }
-  }
-  return best?.season ?? null;
+function colorText(hex: string) {
+  const red = Number.parseInt(hex.slice(1, 3), 16);
+  const green = Number.parseInt(hex.slice(3, 5), 16);
+  const blue = Number.parseInt(hex.slice(5, 7), 16);
+  const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
+  return luminance > 0.66 ? "#173b31" : "#ffffff";
 }
 
-function seasonLabel(data: HarvestSeasonsData | null, seasonId: string) {
-  return data?.seasons.find((s) => s.id === seasonId);
-}
-
-function formatShort(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("en-PH", {
+function formatIsoDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
-  });
+  }).format(new Date(value));
 }
 
-function daysInPeriod(start: string, end: string) {
-  return Math.round(
-    (new Date(end).getTime() - new Date(start).getTime()) / (24 * 60 * 60 * 1000),
+function formatPeriod(start: string, endExclusive: string) {
+  const end = new Date(endExclusive);
+  end.setDate(end.getDate() - 1);
+  return `${formatIsoDate(start)} - ${formatIsoDate(end.toISOString())}`;
+}
+
+function daysUntil(value: string) {
+  return Math.max(
+    0,
+    Math.ceil((new Date(value).getTime() - Date.now()) / (24 * 60 * 60 * 1000)),
   );
 }
 
-export function HarvestSeasonPanel({
-  data,
-  onReload,
-}: {
-  data: HarvestSeasonsData | null;
-  onReload: () => void;
-}) {
-  const [notice, setNotice] = useState<Notice>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
-  const [showAdd, setShowAdd] = useState(false);
-  const [addName, setAddName] = useState("");
-  const [addMonth, setAddMonth] = useState(1);
-  const [addDay, setAddDay] = useState(1);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editMonth, setEditMonth] = useState(1);
-  const [editDay, setEditDay] = useState(1);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
+function dayOfYear(month: number, day: number) {
+  return Math.floor(
+    (Date.UTC(2025, month - 1, day) - Date.UTC(2025, 0, 1)) /
+      (24 * 60 * 60 * 1000),
+  );
+}
 
-  const seasons = data?.seasons ?? [];
-  const selectedSeason = seasonLabel(data, selectedSeasonId ?? "") ?? null;
+function endMonthFor(seasons: Season[], index: number) {
+  if (seasons.length === 0) return 1;
+  const next = seasons[(index + 1) % seasons.length];
+  return next.startDay === 1
+    ? next.startMonth === 1
+      ? 12
+      : next.startMonth - 1
+    : next.startMonth;
+}
+
+function monthRangeLabel(seasons: Season[], index: number) {
+  return `${MONTH_SHORT[seasons[index].startMonth - 1]} - ${MONTH_SHORT[endMonthFor(seasons, index) - 1]}`;
+}
+
+function buildYearSegments(seasons: Season[]) {
+  if (seasons.length === 0) return [];
+  const sorted = [...seasons].sort(
+    (a, b) => dayOfYear(a.startMonth, a.startDay) - dayOfYear(b.startMonth, b.startDay),
+  );
+  const starts = new Map(sorted.map((season) => [dayOfYear(season.startMonth, season.startDay), season]));
+  const boundaries = [
+    0,
+    ...sorted.map((season) => dayOfYear(season.startMonth, season.startDay)).filter((day) => day > 0),
+    365,
+  ];
+  return boundaries.slice(0, -1).map((start, index) => ({
+    season: starts.get(start) ?? sorted[sorted.length - 1],
+    start,
+    days: boundaries[index + 1] - start,
+  }));
+}
+
+export function HarvestSeasonPanel({ data, onReload }: Props) {
+  const [view, setView] = useState<"schedule" | "usage">("schedule");
+  const [notice, setNotice] = useState<Notice>(null);
+  const [busy, setBusy] = useState<"save" | "delete" | "bootstrap" | null>(null);
+  const [editor, setEditor] = useState<EditorState | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Season | null>(null);
+  const [selectedSeasonId, setSelectedSeasonId] = useState("");
+  const [usageQuery, setUsageQuery] = useState("");
 
   useEffect(() => {
-    if (selectedSeasonId && seasons.some((s) => s.id === selectedSeasonId)) return;
-    const preferred = data?.current?.id ?? seasons[0]?.id ?? null;
-    setSelectedSeasonId(preferred);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, seasons.length]);
+    if (!data?.seasons.length) return;
+    setSelectedSeasonId((current) => {
+      if (current && data.seasons.some((season) => season.id === current)) return current;
+      return data.current?.id ?? data.seasons[0].id;
+    });
+  }, [data]);
 
-  const capacityForSelectedSeason = useMemo(
-    () => (data?.capacity ?? []).filter((c) => c.seasonId === selectedSeasonId),
-    [data, selectedSeasonId],
+  const sortedSeasons = useMemo(
+    () =>
+      [...(data?.seasons ?? [])].sort(
+        (a, b) => dayOfYear(a.startMonth, a.startDay) - dayOfYear(b.startMonth, b.startDay),
+      ),
+    [data?.seasons],
   );
+  const yearSegments = useMemo(() => buildYearSegments(sortedSeasons), [sortedSeasons]);
+  const selectedCapacity = (data?.capacity ?? []).filter(
+    (row) => row.seasonId === selectedSeasonId,
+  );
+  const visibleCapacity = selectedCapacity.filter((row) =>
+    row.name.toLowerCase().includes(usageQuery.trim().toLowerCase()),
+  );
+  const selectedSeason = data?.seasons.find((season) => season.id === selectedSeasonId) ?? null;
 
-  function flash(kind: "success" | "error", text: string) {
-    setNotice({ kind, text });
-  }
-
-  async function run(
-    key: string,
-    fn: () => Promise<Response>,
+  async function request(
+    url: string,
+    init: RequestInit,
+    busyState: NonNullable<typeof busy>,
     successMessage: string,
-  ): Promise<boolean> {
-    setBusy(key);
+  ) {
+    setBusy(busyState);
+    setNotice(null);
     try {
-      const res = await fn();
-      const result = await res.json().catch(() => ({}));
-      if (res.ok) {
-        flash("success", result.message ?? successMessage);
-        if (onReload) onReload();
-        return true;
-      }
-      flash("error", result.error ?? "Something went wrong");
-      return false;
-    } catch {
-      flash("error", "Network error");
+      const response = await fetch(url, init);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "Something went wrong.");
+      setNotice({ type: "success", text: payload.message ?? successMessage });
+      onReload();
+      return true;
+    } catch (error) {
+      setNotice({
+        type: "error",
+        text: error instanceof Error ? error.message : "Something went wrong.",
+      });
       return false;
     } finally {
       setBusy(null);
     }
   }
 
-  async function handleBootstrap() {
-    await run("bootstrap", () => fetch("/api/seasons/bootstrap", { method: "POST" }), "Default seasons created");
+  function openCreate() {
+    const today = new Date();
+    setEditor({
+      mode: "create",
+      name: "",
+      startMonth: today.getMonth() + 1,
+      color: SEASON_COLORS[sortedSeasons.length % SEASON_COLORS.length],
+    });
+    setDeleteTarget(null);
   }
 
-  async function handleAddSeason() {
-    if (!isValidMonthDay(addMonth, addDay)) {
-      flash("error", "Invalid start date");
+  function openEdit(season: Season) {
+    const index = sortedSeasons.findIndex((item) => item.id === season.id);
+    setEditor({
+      mode: "edit",
+      id: season.id,
+      name: season.name,
+      startMonth: season.startMonth,
+      endMonth: endMonthFor(sortedSeasons, index),
+      color: seasonColor(season, index),
+    });
+    setDeleteTarget(null);
+  }
+
+  async function saveSeason() {
+    if (!editor) return;
+    const name = editor.name.trim();
+    if (!name) {
+      setNotice({ type: "error", text: "Enter a season name." });
       return;
     }
-    const ok = await run("add", () =>
-      fetch("/api/seasons", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: addName.trim(), startMonth: addMonth, startDay: addDay }),
-      }),
-      "Season created");
-    if (ok) {
-      setShowAdd(false);
-      setAddName("");
-      setAddMonth(1);
-      setAddDay(1);
-    }
-  }
-
-  async function handleUpdateSeason() {
-    if (!editingId) return;
-    if (!isValidMonthDay(editMonth, editDay)) {
-      flash("error", "Invalid start date");
-      return;
-    }
-    const ok = await run("edit", () =>
-      fetch(`/api/seasons/${editingId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editName.trim(), startMonth: editMonth, startDay: editDay }),
-      }),
-      "Season updated");
-    if (ok) setEditingId(null);
-  }
-
-  async function handleDeleteSeason() {
-    if (!deletingId) return;
-    if (!deleteConfirm) {
-      setDeleteConfirm(true);
-      return;
-    }
-    const ok = await run("delete", () => fetch(`/api/seasons/${deletingId}`, { method: "DELETE" }), "Season removed");
-    if (ok) {
-      setDeletingId(null);
-      setDeleteConfirm(false);
-    }
-  }
-
-  function startEdit(season: HarvestSeasonsData["seasons"][number]) {
-    setEditingId(season.id);
-    setEditName(season.name);
-    setEditMonth(season.startMonth);
-    setEditDay(season.startDay);
-  }
-
-  const displayYear =
-    (data?.next ? new Date(data.next.start).getFullYear() : undefined) ??
-    (data?.current ? new Date(data.current.start).getFullYear() : undefined) ??
-    new Date().getFullYear();
-
-  const renderSeasonCards = () => {
-    if (!data) return null;
-    const cards = [
+    const isEditing = editor.mode === "edit";
+    const saved = await request(
+      isEditing ? `/api/seasons/${editor.id}` : "/api/seasons",
       {
-        key: "current",
-        title: "Current Season",
-        instance: data.current,
-        caption: data.current
-          ? `Running · ${formatShort(data.current.start)} to ${formatShort(new Date(new Date(data.current.end).getTime() - 86400000).toISOString())}`
-          : "No season currently in progress",
-        highlight: data.current ? "border-lime-400" : "",
-        dot: "bg-lime-500",
+        method: isEditing ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          startMonth: editor.startMonth,
+          startDay: 1,
+          color: editor.color,
+          ...(isEditing ? { endMonth: editor.endMonth } : {}),
+        }),
       },
-      {
-        key: "next",
-        title: "Next Season",
-        instance: data.next,
-        caption: data.next
-          ? `Starts in ${daysInPeriod(new Date().toISOString(), data.next.start)} days · ${formatShort(data.next.start)}`
-          : "No upcoming season configured",
-        highlight: data.next ? "border-amber-400" : "",
-        dot: "bg-amber-500",
-      },
-    ];
-    return (
-      <div className="grid gap-3 sm:grid-cols-2">
-        {cards.map((card) => {
-          const inst = card.instance;
-          const days = inst
-            ? daysInPeriod(inst.start, inst.end)
-            : null;
-          return (
-            <div key={card.key} className={`rounded-xl border border-[#e2ebe6] bg-[#fafdf9] p-4 shadow-sm border-l-4 ${card.highlight}`}>
-              <div className="flex items-center gap-2">
-                <span className={`h-2.5 w-2.5 rounded-full ${card.dot}`} />
-                <h4 className="text-xs font-bold uppercase tracking-wider text-[#5a7267]">{card.title}</h4>
-              </div>
-              <p className="mt-1.5 text-lg font-bold text-[#0f2318]">{inst?.name ?? "—"}</p>
-              <p className="mt-1 text-xs text-[#5a7267]">{card.caption}</p>
-              {days !== null && (
-                <p className="mt-1 text-[11px] font-medium text-[#718176]">{days} days in the season</p>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      "save",
+      isEditing ? "Season updated." : "Season added.",
     );
-  };
+    if (saved) setEditor(null);
+  }
 
-  const renderCalendar = () => {
-    if (data && data.seasons.length === 0) return null;
-    return (
-      <div className="space-y-2">
-        <div className="grid grid-cols-12 gap-1">
-          {MONTH_LABELS.map((label, i) => {
-            const active = activeSeasonForMonth(seasons, displayYear, i);
-            const color = active
-              ? SEASON_BAR_COLORS[seasons.findIndex((s) => s.id === active.id) % SEASON_BAR_COLORS.length]
-              : "bg-[#eef3ee]";
-            return (
-              <div key={label} className="flex flex-col items-center">
-                <span className={`mb-1 h-9 w-full rounded-md ${color} opacity-90 transition hover:opacity-100`} title={active?.name ?? "Unassigned"} />
-                <span className="text-[9px] font-semibold text-[#5a7267]">{label}</span>
-              </div>
-            );
-          })}
-        </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
-          {seasons.map((season, i) => {
-            const color = SEASON_DOT_COLORS[i % SEASON_DOT_COLORS.length];
-            const isCurrent = data?.current?.id === season.id;
-            return (
-              <span key={season.id} className="flex items-center gap-1.5 text-[11px] text-[#5a7267]">
-                <span className={`h-2 w-2 rounded-full ${color}`} />
-                {season.name}
-                {isCurrent && <span className="rounded-full bg-lime-100 px-1.5 text-[9px] font-bold text-lime-700">now</span>}
-              </span>
-            );
-          })}
-        </div>
-      </div>
+  async function removeSeason() {
+    if (!deleteTarget) return;
+    const removed = await request(
+      `/api/seasons/${deleteTarget.id}`,
+      { method: "DELETE" },
+      "delete",
+      "Season removed.",
     );
-  };
+    if (removed) setDeleteTarget(null);
+  }
 
-  const renderEmptyState = () => (
-    <div className="rounded-xl border border-dashed border-[#dce5d9] bg-[#fafdf9] p-6 text-center">
-      <div className="mx-auto mb-2 grid h-10 w-10 place-items-center rounded-xl bg-lime-100 text-lime-700">
-        <Wheat size={20} />
-      </div>
-      <h3 className="text-sm font-bold text-[#0f2318]">No harvest seasons configured</h3>
-      <p className="mx-auto mt-1 max-w-md text-xs text-[#5a7267]">
-        Set up the planting and harvest calendar. The default is a Wet Season (May 1) and a Dry
-        Season (Nov 1) that repeat every year — each season runs until the next one begins, so the
-        year is always fully covered. You can add, rename, or remove seasons however you like.
-      </p>
-      <button
-        onClick={handleBootstrap}
-        disabled={busy === "bootstrap"}
-        className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#1b5e3b] px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#144b2e] active:scale-[0.99] disabled:opacity-60"
+  async function createDefaults() {
+    await request(
+      "/api/seasons/bootstrap",
+      { method: "POST" },
+      "bootstrap",
+      "Wet and dry seasons are ready.",
+    );
+  }
+
+  function renderEditor() {
+    if (!editor) return null;
+    return (
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void saveSeason();
+        }}
+        className="mb-4 border border-[#b9c5b9] bg-[#fffefa] p-4"
       >
-        {busy === "bootstrap" ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-        Set up default Wet &amp; Dry seasons
-      </button>
-    </div>
-  );
-
-  const renderSeasonManagement = () => {
-    if (!data || data.seasons.length === 0) return null;
-    return (
-      <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-bold text-[#0f2318]">Season Calendar</h3>
-            <p className="text-[11px] text-[#5a7267]">
-              Repeats yearly · {data.seasons.length} season{data.seasons.length > 1 ? "s" : ""} · {displayYear}
+            <p className="font-['Barlow_Condensed',sans-serif] text-lg font-bold text-[#173b31]">
+              {editor.mode === "create" ? "Add season" : "Edit season"}
+            </p>
+            <p className="text-xs text-[#65736d]">
+              {editor.mode === "edit"
+                ? `The following season will start in ${MONTHS[editor.endMonth! % 12]}.`
+                : "The new season will run until the next season begins."}
             </p>
           </div>
           <button
-            onClick={() => setShowAdd((v) => !v)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[#1b5e3b] bg-[#1b5e3b] px-3 py-1.5 text-xs font-bold text-white transition hover:bg-[#144b2e] active:scale-[0.99]"
+            type="button"
+            onClick={() => setEditor(null)}
+            className="grid h-9 w-9 place-items-center border border-[#c9d0c9] text-[#53615b] transition hover:bg-[#eef1e9] hover:text-[#173b31]"
+            aria-label="Close season editor"
+            title="Close"
           >
-            {showAdd ? <X size={13} /> : <Plus size={13} />}
-            {showAdd ? "Cancel" : "Add season"}
+            <X className="h-4 w-4" />
           </button>
         </div>
-
-        {showAdd && (
-          <div className="mb-4 rounded-lg border border-[#e2ebe6] bg-[#fafdf9] p-3">
-            <div className="flex flex-wrap items-end gap-2">
-              <label className="flex flex-col gap-1 text-[10px] font-semibold text-[#5a7267]">
-                Name
-                <input
-                  value={addName}
-                  onChange={(e) => setAddName(e.target.value)}
-                  placeholder="e.g. Wet Season"
-                  className="w-44 rounded-md border border-[#dce5d9] px-2.5 py-1.5 text-xs text-[#0f2318] outline-none focus:border-[#1b5e3b]"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-[10px] font-semibold text-[#5a7267]">
-                Month
-                <select value={addMonth} onChange={(e) => setAddMonth(Number(e.target.value))} className="rounded-md border border-[#dce5d9] px-2 py-1.5 text-xs text-[#0f2318] outline-none focus:border-[#1b5e3b]">
-                  {MONTH_LABELS.map((label, i) => (
-                    <option key={i + 1} value={i + 1}>{label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-[10px] font-semibold text-[#5a7267]">
-                Day
-                <select value={addDay} onChange={(e) => setAddDay(Number(e.target.value))} className="rounded-md border border-[#dce5d9] px-2 py-1.5 text-xs text-[#0f2318] outline-none focus:border-[#1b5e3b]">
-                  {Array.from({ length: 31 }, (_, i) => (
-                    <option key={i + 1} value={i + 1}>{i + 1}</option>
-                  ))}
-                </select>
-              </label>
-              <button
-                onClick={handleAddSeason}
-                disabled={busy === "add" || addName.trim() === ""}
-                className="rounded-md bg-[#1b5e3b] px-3 py-1.5 text-xs font-bold text-white transition hover:bg-[#144b2e] active:scale-[0.99] disabled:opacity-50"
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(180px,1fr)_150px_150px_86px_auto] lg:items-end">
+          <label className="space-y-1.5">
+            <span className="block text-[11px] font-bold uppercase text-[#65736d]">Season name</span>
+            <input
+              value={editor.name}
+              onChange={(event) =>
+                setEditor((current) => (current ? { ...current, name: event.target.value } : current))
+              }
+              placeholder="e.g. Wet Season"
+              autoFocus
+              className="h-10 w-full border border-[#b9c5b9] bg-white px-3 text-sm text-[#173b31] outline-none transition focus:border-[#356859] focus:ring-2 focus:ring-[#356859]/15"
+            />
+          </label>
+          <label className="space-y-1.5">
+            <span className="block text-[11px] font-bold uppercase text-[#65736d]">
+              {editor.mode === "edit" ? "From month" : "Starts in"}
+            </span>
+            <select
+              value={editor.startMonth}
+              onChange={(event) =>
+                setEditor((current) =>
+                  current
+                    ? { ...current, startMonth: Number(event.target.value) }
+                    : current,
+                )
+              }
+              className="h-10 w-full border border-[#b9c5b9] bg-white px-3 text-sm text-[#173b31] outline-none focus:border-[#356859]"
+            >
+              {MONTHS.map((month, index) => (
+                <option key={month} value={index + 1}>{month}</option>
+              ))}
+            </select>
+          </label>
+          {editor.mode === "edit" ? (
+            <label className="space-y-1.5">
+              <span className="block text-[11px] font-bold uppercase text-[#65736d]">To month</span>
+              <select
+                value={editor.endMonth}
+                onChange={(event) =>
+                  setEditor((current) =>
+                    current
+                      ? { ...current, endMonth: Number(event.target.value) }
+                      : current,
+                  )
+                }
+                className="h-10 w-full border border-[#b9c5b9] bg-white px-3 text-sm text-[#173b31] outline-none focus:border-[#356859]"
               >
-                {busy === "add" ? <Loader2 size={13} className="animate-spin" /> : "Create"}
-              </button>
+                {MONTHS.map((month, index) => (
+                  <option key={month} value={index + 1}>{month}</option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <div className="hidden lg:block" />
+          )}
+          <label className="space-y-1.5">
+            <span className="block text-[11px] font-bold uppercase text-[#65736d]">Map color</span>
+            <div className="flex h-10 items-center gap-2 border border-[#b9c5b9] bg-white px-2">
+              <input
+                type="color"
+                value={editor.color}
+                onChange={(event) =>
+                  setEditor((current) =>
+                    current ? { ...current, color: event.target.value } : current,
+                  )
+                }
+                className="h-7 w-9 cursor-pointer border-0 bg-transparent p-0"
+                aria-label="Season map color"
+                title="Choose map color"
+              />
+              <span className="font-mono text-[10px] uppercase text-[#65736d]">
+                {editor.color}
+              </span>
             </div>
-            <p className="mt-2 text-[10px] text-[#718176]">
-              The new season runs from its start date until the next season begins; the neighboring
-              season&apos;s boundary adjusts automatically.
-            </p>
+          </label>
+          <button
+            type="submit"
+            disabled={busy === "save"}
+            className="inline-flex h-10 items-center justify-center gap-2 bg-[#173b31] px-4 text-sm font-bold text-white transition hover:bg-[#245444] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {busy === "save" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            Save
+          </button>
+        </div>
+      </form>
+    );
+  }
+
+  function renderSchedule() {
+    return (
+      <div>
+        {renderEditor()}
+        <div className="overflow-hidden border border-[#c9d0c9] bg-[#fffefa]">
+          <div className="hidden grid-cols-[minmax(180px,1fr)_180px_88px] border-b border-[#c9d0c9] bg-[#eef1e9] px-4 py-2 text-[10px] font-bold uppercase text-[#65736d] md:grid">
+            <span>Season</span><span>Months</span><span className="text-right">Actions</span>
           </div>
-        )}
-
-        <div className="space-y-2">
-          {data.seasons.map((season, i) => {
-            const isCurrent = data.current?.id === season.id;
-            const isEditing = editingId === season.id;
-            const isDeleting = deletingId === season.id;
+          {sortedSeasons.map((season, index) => {
+            const isCurrent = season.id === data?.current?.id;
             return (
-              <div key={season.id} className={`rounded-lg border ${isCurrent ? "border-lime-300 bg-lime-50/40" : "border-[#e2ebe6] bg-[#fafdf9]"} p-3`}>
-                {isEditing ? (
-                  <div className="flex flex-wrap items-end gap-2">
-                    <label className="flex flex-col gap-1 text-[10px] font-semibold text-[#5a7267]">
-                      Name
-                      <input value={editName} onChange={(e) => setEditName(e.target.value)} className="w-40 rounded-md border border-[#dce5d9] px-2.5 py-1.5 text-xs text-[#0f2318] outline-none focus:border-[#1b5e3b]" />
-                    </label>
-                    <label className="flex flex-col gap-1 text-[10px] font-semibold text-[#5a7267]">
-                      Month
-                      <select value={editMonth} onChange={(e) => setEditMonth(Number(e.target.value))} className="rounded-md border border-[#dce5d9] px-2 py-1.5 text-xs text-[#0f2318] outline-none focus:border-[#1b5e3b]">
-                        {MONTH_LABELS.map((label, m) => (
-                          <option key={m + 1} value={m + 1}>{label}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="flex flex-col gap-1 text-[10px] font-semibold text-[#5a7267]">
-                      Day
-                      <select value={editDay} onChange={(e) => setEditDay(Number(e.target.value))} className="rounded-md border border-[#dce5d9] px-2 py-1.5 text-xs text-[#0f2318] outline-none focus:border-[#1b5e3b]">
-                        {Array.from({ length: 31 }, (_, d) => (
-                          <option key={d + 1} value={d + 1}>{d + 1}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <button onClick={handleUpdateSeason} disabled={busy === "edit"} className="rounded-md bg-[#1b5e3b] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#144b2e] disabled:opacity-50">
-                      {busy === "edit" ? <Loader2 size={13} className="animate-spin" /> : <Check size={14} />}
-                    </button>
-                    <button onClick={() => setEditingId(null)} className="rounded-md border border-[#dce5d9] px-3 py-1.5 text-xs text-[#5a7267] hover:bg-white">
-                      <X size={14} />
-                    </button>
+              <div
+                key={season.id}
+                className="grid gap-3 border-b border-[#dde2dc] px-4 py-3 last:border-b-0 md:grid-cols-[minmax(180px,1fr)_180px_88px] md:items-center"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className="h-3 w-3 shrink-0 border border-black/10"
+                      style={{
+                        backgroundColor:
+                          editor?.mode === "edit" && editor.id === season.id
+                            ? editor.color
+                            : seasonColor(season, index),
+                      }}
+                      aria-hidden="true"
+                    />
+                    <p className="truncate text-sm font-bold text-[#173b31]">{season.name}</p>
+                    {isCurrent ? (
+                      <span className="bg-[#d7e2b0] px-2 py-0.5 text-[10px] font-bold uppercase text-[#173b31]">Current</span>
+                    ) : null}
                   </div>
-                ) : (
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${SEASON_DOT_COLORS[i % SEASON_DOT_COLORS.length]}`} />
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-[#0f2318]">
-                          {season.name}
-                          {isCurrent && <span className="ml-2 rounded-full bg-lime-100 px-1.5 py-0.5 text-[9px] font-bold text-lime-700">in progress</span>}
-                        </p>
-                        <p className="text-[11px] text-[#5a7267]">
-                          Starts {formatShort(new Date(displayYear, season.startMonth - 1, season.startDay).toISOString())}
-                          {isCurrent ? " · expanding/editing shifts boundaries automatically" : " · moving it shifts the neighbor boundaries"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => setSelectedSeasonId(season.id)}
-                        className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition active:scale-[0.98] ${selectedSeasonId === season.id ? "bg-[#1b5e3b] text-white" : "text-[#5a7267] hover:bg-[#eef3ee]"}`}
-                      >
-                        Capacity
-                      </button>
-                      <button onClick={() => startEdit(season)} className="rounded-md p-1.5 text-[#5a7267] transition hover:bg-[#eef3ee] hover:text-[#1b5e3b]" title="Edit season">
-                        <Pencil size={14} />
-                      </button>
-                      <button onClick={() => { setDeletingId(season.id); setDeleteConfirm(false); }} className="rounded-md p-1.5 text-[#5a7267] transition hover:bg-red-50 hover:text-red-600" title="Remove season">
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {isDeleting && (
-                  <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-red-200 bg-red-50 p-2">
-                    {deleteConfirm ? (
-                      <>
-                        <span className="text-[11px] font-semibold text-red-700">
-                          Really remove this season? Its period merges into the previous season.
-                        </span>
-                        <button onClick={handleDeleteSeason} disabled={busy === "delete"} className="rounded-md bg-red-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-red-700 disabled:opacity-50">
-                          {busy === "delete" ? <Loader2 size={12} className="animate-spin" /> : "Yes, remove"}
-                        </button>
-                        <button onClick={() => setDeletingId(null)} className="rounded-md border border-[#dce5d9] bg-white px-2.5 py-1 text-[11px] text-[#5a7267] hover:bg-gray-50">
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <AlertTriangle size={13} className="text-red-600" />
-                        <span className="text-[11px] text-red-700">
-                          {isCurrent
-                            ? "This is the season currently in progress and cannot be removed yet."
-                            : "Remove this season? Its period automatically merges into the previous season."}
-                        </span>
-                        {!isCurrent && (
-                          <button onClick={handleDeleteSeason} className="rounded-md bg-red-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-red-700">
-                            Remove
-                          </button>
-                        )}
-                        <button onClick={() => setDeletingId(null)} className="rounded-md border border-[#dce5d9] bg-white px-2.5 py-1 text-[11px] text-[#5a7267] hover:bg-gray-50">
-                          Cancel
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
+                  <p className="mt-0.5 font-mono text-xs text-[#7a857f] md:hidden">
+                    {monthRangeLabel(sortedSeasons, index)}
+                  </p>
+                </div>
+                <p className="hidden font-mono text-sm font-bold text-[#53615b] md:block">
+                  {monthRangeLabel(sortedSeasons, index)}
+                </p>
+                <div className="flex items-center gap-2 md:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => openEdit(season)}
+                    className="grid h-9 w-9 place-items-center border border-[#c9d0c9] text-[#53615b] transition hover:border-[#356859] hover:bg-[#eef1e9] hover:text-[#173b31]"
+                    aria-label={`Edit ${season.name}`}
+                    title="Edit season"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(season)}
+                    disabled={isCurrent}
+                    className="grid h-9 w-9 place-items-center border border-[#c9d0c9] text-[#7b655f] transition hover:border-[#b44b3e] hover:bg-[#fff1ed] hover:text-[#9d352b] disabled:cursor-not-allowed disabled:opacity-35"
+                    aria-label={`Remove ${season.name}`}
+                    title={isCurrent ? "The current season cannot be removed" : "Remove season"}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             );
           })}
         </div>
       </div>
     );
-  };
+  }
 
-  const selectedIndex = selectedSeason ? seasons.findIndex((s) => s.id === selectedSeason.id) : -1;
-  const selectedBar = selectedIndex >= 0 ? SEASON_BAR_COLORS[selectedIndex % SEASON_BAR_COLORS.length] : "bg-gray-300";
-
-  const renderCapacity = () => {
-    if (!data || !selectedSeason) return null;
-    const rows = capacityForSelectedSeason;
-    const overLimitCount = rows.filter((r) => r.limitHectareDays !== null && r.bookedHectareDays > r.limitHectareDays).length;
+  function renderUsage() {
+    const usedTotal = selectedCapacity.reduce(
+      (sum, row) => sum + row.bookedHectareDays,
+      0,
+    );
+    const limitTotal = selectedCapacity.reduce(
+      (sum, row) => sum + (row.limitHectareDays ?? 0),
+      0,
+    );
+    const missingFarmSize = selectedCapacity.filter(
+      (row) => row.limitHectareDays === null,
+    ).length;
     return (
-      <div className="rounded-xl border border-[#e2ebe6] bg-white p-5 shadow-sm">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h3 className="text-sm font-bold text-[#0f2318]">Machine Capacity — per member</h3>
-            <p className="text-[11px] text-[#5a7267]">
-              Each member&apos;s limit for{" "}
-              <span className="font-semibold text-[#0f2318]">{selectedSeason.name}</span> equals their
-              farm area (1 hectare = 1 machine-day), shared across all machines. Usage resets each
-              season.
-            </p>
-          </div>
-          <label className="flex items-center gap-1.5 text-[11px] font-semibold text-[#5a7267]">
-            <span className={`h-2.5 w-2.5 rounded-full ${selectedBar}`} />
-            Season
+      <div>
+        <div className="mb-4 flex flex-col gap-3 border-b border-[#c9d0c9] pb-4 sm:flex-row sm:items-end sm:justify-between">
+          <label className="space-y-1.5">
+            <span className="block text-[11px] font-bold uppercase text-[#65736d]">Season</span>
             <select
-              value={selectedSeason.id}
-              onChange={(e) => setSelectedSeasonId(e.target.value)}
-              className="rounded-md border border-[#dce5d9] px-2 py-1 text-xs text-[#0f2318] outline-none focus:border-[#1b5e3b]"
+              value={selectedSeasonId}
+              onChange={(event) => setSelectedSeasonId(event.target.value)}
+              className="h-10 min-w-56 border border-[#b9c5b9] bg-white px-3 text-sm font-semibold text-[#173b31] outline-none focus:border-[#356859]"
             >
-              {data.seasons.map((season) => (
-                <option key={season.id} value={season.id}>{season.name}</option>
+              {sortedSeasons.map((season, index) => (
+                <option key={season.id} value={season.id}>{season.name} - {monthRangeLabel(sortedSeasons, index)}</option>
               ))}
             </select>
           </label>
+          <label className="relative block sm:w-64">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a857f]" />
+            <span className="sr-only">Search members</span>
+            <input
+              value={usageQuery}
+              onChange={(event) => setUsageQuery(event.target.value)}
+              placeholder="Search members"
+              className="h-10 w-full border border-[#b9c5b9] bg-white pl-9 pr-3 text-sm text-[#173b31] outline-none focus:border-[#356859]"
+            />
+          </label>
         </div>
-
-        {rows.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-[#dce5d9] bg-[#fafdf9] px-4 py-5 text-center text-xs text-[#5a7267]">
-            No members to track yet.
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <p className="text-sm font-bold text-[#173b31]">{selectedSeason?.name ?? "Season"} usage</p>
+          <p className="font-mono text-xs text-[#65736d]">
+            {selectedCapacity.length} members · {usedTotal.toFixed(1)} of {limitTotal.toFixed(1)} days used
+            {missingFarmSize > 0 ? ` · ${missingFarmSize} need farm size` : ""}
           </p>
+        </div>
+        {visibleCapacity.length === 0 ? (
+          <div className="border border-[#c9d0c9] bg-[#fffefa] px-4 py-8 text-center text-sm text-[#7a857f]">
+            No members found.
+          </div>
         ) : (
-          <>
-            <div className="overflow-hidden rounded-lg border border-[#e2ebe6]">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-[#e2ebe6] bg-[#f4f9f4] text-[10px] uppercase tracking-wider text-[#5a7267]">
-                    <th className="px-3 py-2 font-bold">Member</th>
-                    <th className="px-3 py-2 font-bold">Farm area (ha)</th>
-                    <th className="px-3 py-2 font-bold text-right">Booked</th>
-                    <th className="px-3 py-2 font-bold text-right">Remaining</th>
-                    <th className="px-3 py-2 font-bold w-40">Utilization</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#eef3ee] bg-white">
-                  {rows.map((row) => {
-                    const over = row.limitHectareDays !== null && row.bookedHectareDays > row.limitHectareDays;
-                    return (
-                      <tr key={row.userId} className={over ? "bg-red-50/50" : ""}>
-                        <td className="px-3 py-2 font-semibold text-[#0f2318]">{row.name}</td>
-                        <td className="px-3 py-2 font-mono text-[#5a7267]">
-                          {row.limitHectareDays === null
-                            ? <span className="italic">no farm record</span>
-                            : `${row.limitHectareDays} ha-days`}
-                        </td>
-                        <td className={`px-3 py-2 text-right font-mono font-bold ${over ? "text-red-600" : "text-[#0f2318]"}`}>
-                          {row.bookedHectareDays.toLocaleString("en-US", { maximumFractionDigits: 1 })}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono font-bold text-[#0f2318]">
-                          {row.remaining === null ? "—" : row.remaining.toLocaleString("en-US", { maximumFractionDigits: 1 })}
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#eef3ee]">
-                              <div
-                                className={`h-full rounded-full ${over ? "bg-red-500" : "bg-[#1b5e3b]"}`}
-                                style={{ width: `${row.utilizationPercent === null ? 3 : Math.max(2, Math.min(100, row.utilizationPercent))}%` }}
-                              />
-                            </div>
-                            <span className="w-8 shrink-0 text-right text-[10px] font-bold text-[#5a7267]">
-                              {row.utilizationPercent === null ? "—" : `${row.utilizationPercent}%`}
-                            </span>
+          <div className="overflow-x-auto border border-[#c9d0c9] bg-[#fffefa]">
+            <table className="w-full min-w-[620px] border-collapse text-left">
+            <thead className="bg-[#eef1e9] text-[10px] font-bold uppercase text-[#65736d]">
+              <tr>
+                <th className="px-4 py-2.5">Member</th><th className="px-4 py-2.5 text-right">Allowance</th>
+                <th className="px-4 py-2.5 text-right">Used</th><th className="px-4 py-2.5 text-right">Remaining</th>
+                <th className="w-40 px-4 py-2.5">Utilization</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleCapacity.map((row) => {
+                const overLimit =
+                  row.remaining !== null && row.bookedHectareDays > row.limitHectareDays!;
+                return (
+                  <tr key={row.userId} className="border-t border-[#dde2dc] text-sm">
+                    <td className="px-4 py-3 font-semibold text-[#173b31]">{row.name}</td>
+                    <td className="px-4 py-3 text-right font-mono text-[#53615b]">
+                      {row.limitHectareDays === null ? "Not set" : row.limitHectareDays.toFixed(1)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono text-[#53615b]">{row.bookedHectareDays.toFixed(1)}</td>
+                    <td className={`px-4 py-3 text-right font-mono font-bold ${overLimit ? "text-[#b44b3e]" : "text-[#356859]"}`}>
+                      {row.remaining === null ? "-" : row.remaining.toFixed(1)}
+                    </td>
+                    <td className="px-4 py-3">
+                      {row.utilizationPercent === null ? (
+                        <span className="text-xs text-[#7a857f]">Farm size needed</span>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 flex-1 bg-[#e3e7e0]">
+                            <div
+                              className={`h-full ${overLimit ? "bg-[#b44b3e]" : "bg-[#356859]"}`}
+                              style={{ width: `${row.utilizationPercent}%` }}
+                            />
                           </div>
-                          {over && (
-                            <span className="mt-1 inline-block rounded-full bg-red-50 px-1.5 py-0.5 text-[9px] font-bold text-red-600">
-                              over limit by {Math.round(row.bookedHectareDays - (row.limitHectareDays ?? 0))} ha
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-              <p className="max-w-lg text-[10px] text-[#718176]">
-                Booked = sum of machine-days of active borrow requests (approved, in use, or
-                overdue) whose start falls in this season. A member&apos;s limit comes from their farm
-                area on file — no separate limits are stored.
-              </p>
-              {overLimitCount > 0 && (
-                <span className="rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-bold text-red-600">
-                  {overLimitCount} member{overLimitCount > 1 ? "s" : ""} over their limit
-                </span>
-              )}
-            </div>
-          </>
+                          <span className="w-9 text-right font-mono text-xs text-[#65736d]">
+                            {row.utilizationPercent}%
+                          </span>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            </table>
+          </div>
         )}
       </div>
     );
-  };
+  }
+
+  function renderContent() {
+    if (!data) {
+      return (
+        <div className="grid min-h-64 place-items-center border-y border-[#d6dcd5] text-[#65736d]">
+          <div className="flex items-center gap-2 text-sm font-semibold"><Loader2 className="h-4 w-4 animate-spin" />Loading seasons</div>
+        </div>
+      );
+    }
+    if (data.empty) {
+      return (
+        <div className="grid min-h-72 place-items-center border-y border-[#d6dcd5] bg-[#fffefa] px-6 text-center">
+          <div className="max-w-md">
+            <Wheat className="mx-auto mb-4 h-9 w-9 text-[#c0934d]" />
+            <h3 className="font-['Barlow_Condensed',sans-serif] text-2xl font-bold text-[#173b31]">Set up the harvest calendar</h3>
+            <p className="mt-2 text-sm leading-6 text-[#65736d]">Start with the cooperative&apos;s wet and dry seasons, then adjust their dates as needed.</p>
+            <button
+              type="button"
+              onClick={() => void createDefaults()}
+              disabled={busy === "bootstrap"}
+              className="mt-5 inline-flex h-10 items-center justify-center gap-2 bg-[#173b31] px-5 text-sm font-bold text-white transition hover:bg-[#245444] disabled:opacity-60"
+            >
+              {busy === "bootstrap" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wheat className="h-4 w-4" />}
+              Use wet and dry seasons
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <>
+        <div className="grid border-y border-[#c9d0c9] bg-[#fffefa] md:grid-cols-[1fr_280px]">
+          <div className="border-b border-[#c9d0c9] p-4 md:border-b-0 md:border-r md:p-5">
+            <p className="text-[10px] font-bold uppercase text-[#65736d]">Current season</p>
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <p className="font-['Barlow_Condensed',sans-serif] text-2xl font-bold text-[#173b31]">{data.current?.name ?? "Not available"}</p>
+              {data.current ? <p className="font-mono text-xs text-[#65736d]">{formatPeriod(data.current.start, data.current.end)}</p> : null}
+            </div>
+          </div>
+          <div className="p-4 md:p-5">
+            <p className="text-[10px] font-bold uppercase text-[#65736d]">Next change</p>
+            <div className="mt-1 flex items-baseline justify-between gap-3">
+              <p className="text-sm font-bold text-[#173b31]">{data.next?.name ?? "Not available"}</p>
+              {data.next ? <p className="font-mono text-xs text-[#65736d]">{formatIsoDate(data.next.start)} ({daysUntil(data.next.start)}d)</p> : null}
+            </div>
+          </div>
+        </div>
+        <div className="py-5">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="text-[10px] font-bold uppercase text-[#65736d]">Annual season map</p>
+            <p className="text-[10px] text-[#7a857f]">Jan - Dec</p>
+          </div>
+          <div className="flex h-11 overflow-hidden border border-[#c9d0c9] bg-[#eef1e9]">
+            {yearSegments.map((segment) => {
+              const index = sortedSeasons.findIndex((item) => item.id === segment.season.id);
+              const color =
+                editor?.mode === "edit" && editor.id === segment.season.id
+                  ? editor.color
+                  : seasonColor(segment.season, index);
+              return (
+                <div
+                  key={`${segment.season.id}-${segment.start}`}
+                  className="flex min-w-0 items-center justify-center border-r border-white/35 px-2 text-center text-xs font-bold last:border-r-0"
+                  style={{
+                    width: `${(segment.days / 365) * 100}%`,
+                    backgroundColor: color,
+                    color: colorText(color),
+                  }}
+                  title={`${segment.season.name}: ${segment.days} days in this calendar year`}
+                >
+                {segment.days >= 35 ? (
+                  <span className="min-w-0 truncate">
+                    <span className="hidden sm:inline">{segment.season.name}</span>
+                    <span className="sm:hidden">{segment.season.name.split(" ")[0]}</span>
+                  </span>
+                ) : null}
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-1 grid grid-cols-12">
+            {MONTH_SHORT.map((month) => (
+              <span key={month} className="text-center font-mono text-[9px] text-[#7a857f]">
+                <span className="hidden sm:inline">{month}</span>
+                <span className="sm:hidden">{month.slice(0, 1)}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-[#c9d0c9]">
+          <div className="flex" role="tablist" aria-label="Season management views">
+            <button
+              type="button" role="tab" aria-selected={view === "schedule"} onClick={() => setView("schedule")}
+              className={`border-b-2 px-4 py-3 text-sm font-bold transition ${view === "schedule" ? "border-[#173b31] text-[#173b31]" : "border-transparent text-[#718079] hover:text-[#173b31]"}`}
+            >Schedule</button>
+            <button
+              type="button" role="tab" aria-selected={view === "usage"} onClick={() => setView("usage")}
+              className={`border-b-2 px-4 py-3 text-sm font-bold transition ${view === "usage" ? "border-[#173b31] text-[#173b31]" : "border-transparent text-[#718079] hover:text-[#173b31]"}`}
+            >Member usage</button>
+          </div>
+          {view === "schedule" ? (
+            <button type="button" onClick={openCreate} className="mb-2 mr-1 inline-flex h-9 items-center gap-2 bg-[#173b31] px-3 text-sm font-bold text-white transition hover:bg-[#245444]">
+              <Plus className="h-4 w-4" />Add season
+            </button>
+          ) : null}
+        </div>
+        {view === "schedule" ? renderSchedule() : renderUsage()}
+      </>
+    );
+  }
 
   return (
-    <div className="space-y-4 animate-fadeIn">
-      {notice && (
-        <div className={`rounded-xl border px-4 py-3 text-sm ${notice.kind === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-700"}`}>
-          {notice.text}
-        </div>
-      )}
-
-      <div className="flex items-center gap-3">
-        <div className="grid h-11 w-11 place-items-center rounded-xl bg-lime-100 text-lime-700">
-          <Wheat size={22} />
-        </div>
+    <section className="animate-in fade-in duration-300">
+      <div className="mb-5 flex items-start gap-3">
+        <div className="grid h-10 w-10 shrink-0 place-items-center bg-[#d7e2b0] text-[#173b31]"><CalendarDays className="h-5 w-5" /></div>
         <div>
-          <h3 className="text-base font-bold text-[#0f2318]">Harvest Season Management</h3>
-          <p className="text-xs text-[#5a7267]">Plan the yearly calendar and machine capacity limits (President only)</p>
+          <h2 className="font-['Barlow_Condensed',sans-serif] text-2xl font-bold text-[#173b31]">Harvest seasons</h2>
+          <p className="mt-0.5 text-sm text-[#65736d]">Manage the yearly machine booking calendar.</p>
         </div>
       </div>
-
-      {data === null ? (
-        <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-[#e2ebe6] bg-white">
-          <Loader2 size={18} className="animate-spin text-[#1b5e3b]" />
+      {notice ? (
+        <div className={`mb-4 flex items-start justify-between gap-3 border px-4 py-3 text-sm ${notice.type === "success" ? "border-[#a9bd84] bg-[#eef5db] text-[#29483e]" : "border-[#d9a49c] bg-[#fff1ed] text-[#8f3028]"}`}>
+          <div className="flex items-center gap-2">
+            {notice.type === "success" ? <Check className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
+            <span>{notice.text}</span>
+          </div>
+          <button type="button" onClick={() => setNotice(null)} className="grid h-5 w-5 shrink-0 place-items-center" aria-label="Dismiss message" title="Dismiss"><X className="h-4 w-4" /></button>
         </div>
-      ) : data.empty ? (
-        renderEmptyState()
-      ) : (
-        <>
-          {renderSeasonCards()}
-          {renderCalendar()}
-          {renderSeasonManagement()}
-          {renderCapacity()}
-        </>
-      )}
-    </div>
+      ) : null}
+      {renderContent()}
+      {deleteTarget ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#102a23]/55 p-4" role="presentation">
+          <div className="w-full max-w-sm border border-[#c9d0c9] bg-[#fffefa] p-5 shadow-xl" role="dialog" aria-modal="true" aria-labelledby="remove-season-title">
+            <div className="flex items-start gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center bg-[#f4ddd7] text-[#9d352b]"><Trash2 className="h-5 w-5" /></div>
+              <div>
+                <h3 id="remove-season-title" className="font-['Barlow_Condensed',sans-serif] text-xl font-bold text-[#173b31]">Remove {deleteTarget.name}?</h3>
+                <p className="mt-1 text-sm leading-6 text-[#65736d]">Its dates will become part of the preceding season. Existing booking records are kept.</p>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setDeleteTarget(null)} disabled={busy === "delete"} className="h-10 border border-[#b9c5b9] px-4 text-sm font-bold text-[#53615b] transition hover:bg-[#eef1e9] disabled:opacity-60">Cancel</button>
+              <button type="button" onClick={() => void removeSeason()} disabled={busy === "delete"} className="inline-flex h-10 items-center gap-2 bg-[#a43c32] px-4 text-sm font-bold text-white transition hover:bg-[#8f3028] disabled:opacity-60">
+                {busy === "delete" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </section>
   );
 }

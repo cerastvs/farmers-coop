@@ -8,6 +8,8 @@ import {
   hectareDayContribution,
   instanceForSeason,
   isValidMonthDay,
+  monthFallsWithinRange,
+  nextCalendarMonth,
   nextInstance,
   bookedInInstance,
   computeCapacityUsage,
@@ -38,6 +40,20 @@ test("seasons sort by month then day", () => {
     sorted.map((s) => s.id),
     ["a", "b", "c"],
   );
+});
+
+test("the month after December wraps to January", () => {
+  assert.equal(nextCalendarMonth(10), 11);
+  assert.equal(nextCalendarMonth(12), 1);
+});
+
+test("month ranges include their endpoints and can wrap across New Year", () => {
+  assert.equal(monthFallsWithinRange(5, 5, 10), true);
+  assert.equal(monthFallsWithinRange(10, 5, 10), true);
+  assert.equal(monthFallsWithinRange(11, 5, 10), false);
+  assert.equal(monthFallsWithinRange(12, 11, 3), true);
+  assert.equal(monthFallsWithinRange(2, 11, 3), true);
+  assert.equal(monthFallsWithinRange(6, 11, 3), false);
 });
 
 test("a season runs until the next season starts (same year)", () => {

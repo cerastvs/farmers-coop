@@ -16,8 +16,12 @@ export async function POST() {
 
     const seasons = await prisma.$transaction(async (tx) => {
       const [wet, dry] = await Promise.all([
-        tx.season.create({ data: { name: "Wet Season", startMonth: 5, startDay: 1 } }),
-        tx.season.create({ data: { name: "Dry Season", startMonth: 11, startDay: 1 } }),
+        tx.season.create({
+          data: { name: "Wet Season", startMonth: 5, startDay: 1, color: "#356859" },
+        }),
+        tx.season.create({
+          data: { name: "Dry Season", startMonth: 11, startDay: 1, color: "#c0934d" },
+        }),
       ]);
 
       await writeAudit(tx, {

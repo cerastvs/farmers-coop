@@ -17,6 +17,7 @@ const CreateSeasonSchema = z.object({
   name: z.string().trim().min(1, "Season name is required").max(60),
   startMonth: z.number().int().min(1).max(12),
   startDay: z.number().int().min(1).max(31),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Invalid season color").optional(),
 });
 
 function serializeSeason(overview: Awaited<ReturnType<typeof getSeasonOverview>>) {
@@ -26,6 +27,7 @@ function serializeSeason(overview: Awaited<ReturnType<typeof getSeasonOverview>>
       name: s.name,
       startMonth: s.startMonth,
       startDay: s.startDay,
+      color: s.color,
     })),
     current: overview.current
       ? {
@@ -110,7 +112,7 @@ export async function POST(req: Request) {
     if (!parsed.success) {
       throw new ApiError(400, parsed.error.issues[0].message);
     }
-    const { name, startMonth, startDay } = parsed.data;
+    const { name, startMonth, startDay, color } = parsed.data;
     if (!isValidMonthDay(startMonth, startDay)) {
       throw new ApiError(400, "Invalid season start date");
     }
@@ -128,7 +130,7 @@ export async function POST(req: Request) {
 
     const season = await prisma.$transaction(async (tx) => {
       const created = await tx.season.create({
-        data: { name, startMonth, startDay },
+        data: { name, startMonth, startDay, color },
       });
       await writeAudit(tx, {
         userId: actor.userId,
@@ -136,14 +138,14 @@ export async function POST(req: Request) {
         action: "CREATE",
         entity: "Season",
         entityId: created.id,
-        metadata: { name, startMonth, startDay },
+        metadata: { name, startMonth, startDay, color },
       });
       return created;
     });
 
     return NextResponse.json(
       {
-        season: { id: season.id, name, startMonth, startDay },
+        season: { id: season.id, name, startMonth, startDay, color: season.color },
         message: "Season created. It runs from its start date until the next season begins.",
       },
       { status: 201 },

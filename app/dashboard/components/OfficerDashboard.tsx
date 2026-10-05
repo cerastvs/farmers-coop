@@ -3792,7 +3792,7 @@ export default function OfficerDashboard({
   const dashboardTitle = meta.dashboardTitle;
   const avatarLetter = meta.avatarLetter;
   const visibleSections = SECTIONS.filter(
-    (s) => !meta.hiddenSections.includes(s),
+    (s) => s !== "overdue" && !meta.hiddenSections.includes(s),
   );
   const [data, setData] = useState<SecretaryData | null>(null);
   const [guarantorPending, setGuarantorPending] = useState(0);

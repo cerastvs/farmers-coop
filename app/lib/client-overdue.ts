@@ -24,6 +24,7 @@ import { businessDaysBetween, startOfBusinessDay } from "@/lib/business-time";
  *    MEMBER_RETURNABLE_MACHINE_STATUSES so the copy cannot drift.
  */
 const RETURNABLE_MACHINE_STATUSES = ["IN_USE", "OVERDUE"];
+const PENDING_MACHINE_ACTION_STATUSES = ["QUEUED", "RETURN_PENDING", "OVERDUE"];
 
 export function daysBetween(from: Date, to: Date): number {
   return businessDaysBetween(from, to);
@@ -64,6 +65,28 @@ export function isMachineRequestOverdue(
   now: Date = new Date(),
 ): boolean {
   return machineRequestOverdueDays(status, endDate, returnedAt, now) > 0;
+}
+
+export function hasPendingMachineAction(
+  request: MachineRequestShape,
+  now: Date = new Date(),
+) {
+  return (
+    PENDING_MACHINE_ACTION_STATUSES.includes(request.status) ||
+    isMachineRequestOverdue(
+      request.status,
+      request.endDate,
+      request.returnedAt,
+      now,
+    )
+  );
+}
+
+export function machineHasPendingAction(
+  requests: MachineRequestShape[] | undefined,
+  now: Date = new Date(),
+) {
+  return requests?.some((request) => hasPendingMachineAction(request, now)) ?? false;
 }
 
 export function machineActiveOverdueDays(

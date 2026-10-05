@@ -5,11 +5,13 @@ import "dotenv/config";
 
 import { MachineStatus } from "../app/generated/prisma";
 import {
+  hasPendingMachineAction,
   isMachineRequestOverdue,
   isReturnableMachineStatus,
   loanOverdueDays,
   machineActiveOverdueDays,
   machineRequestOverdueDays,
+  machineHasPendingAction,
   worstOverdueRequest,
 } from "../app/lib/client-overdue";
 import { UNRETURNED_MACHINE_STATUSES } from "../lib/services/overdue";
@@ -100,6 +102,32 @@ test("a machine with nothing genuinely late reports zero", () => {
   assert.equal(machineActiveOverdueDays(requests, now), 0);
   assert.equal(worstOverdueRequest(requests, now), null);
   assert.equal(machineActiveOverdueDays(undefined, now), 0);
+});
+
+test("pending-machine filters include overdue in-use requests", () => {
+  const now = new Date("2026-10-05T03:00:00.000Z");
+  const overdueInUse = {
+    status: MachineStatus.IN_USE,
+    endDate: "2026-09-29T00:00:00.000Z",
+    returnedAt: null,
+  };
+  const futureInUse = {
+    status: MachineStatus.IN_USE,
+    endDate: "2026-10-06T00:00:00.000Z",
+    returnedAt: null,
+  };
+
+  assert.equal(hasPendingMachineAction(overdueInUse, now), true);
+  assert.equal(machineHasPendingAction([overdueInUse], now), true);
+  assert.equal(machineHasPendingAction([futureInUse], now), false);
+  assert.equal(
+    machineHasPendingAction(
+      [{ status: MachineStatus.QUEUED, endDate: null, returnedAt: null }],
+      now,
+    ),
+    true,
+  );
+  assert.equal(machineHasPendingAction(undefined, now), false);
 });
 
 test("a loan due today is not overdue", () => {

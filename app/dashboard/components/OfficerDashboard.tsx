@@ -16,7 +16,7 @@ import type {
   ReportFilters,
 } from "@/components/reports/types";
 import { logout } from "../../login/actions";
-import { machineActiveOverdueDays, isMachineRequestOverdue, worstOverdueRequest, loanOverdueDays, isLoanOverdue, daysBetween } from "../../lib/client-overdue";
+import { machineActiveOverdueDays, machineHasPendingAction, isMachineRequestOverdue, worstOverdueRequest, loanOverdueDays, isLoanOverdue, daysBetween } from "../../lib/client-overdue";
 import { DEFAULT_RETURN_CONDITION_NOTE } from "@/lib/machine-return";
 import AdminActionsPanel, { ProfileModal, type MemberSummary } from "../secretary/AdminActionsPanel";
 import { HarvestSeasonPanel } from "@/app/dashboard/components/HarvestSeasonPanel";
@@ -369,12 +369,8 @@ const SECTION_META: Record<
 
 const VISIBLE_COUNT = 3;
 
-const PENDING_MACHINE_STATUSES = ["QUEUED", "RETURN_PENDING", "OVERDUE"] as const;
-
 function hasPendingMachineAction(m: Machine) {
-  return m.requests.some((r) =>
-    (PENDING_MACHINE_STATUSES as readonly string[]).includes(r.status),
-  );
+  return machineHasPendingAction(m.requests);
 }
 
 function SectionCard({
@@ -4095,12 +4091,7 @@ export default function OfficerDashboard({
         harvest: 0,
       };
     }
-    const machinePending = data.machines.reduce(
-      (acc, m) => acc + m.requests.filter((r) =>
-        (PENDING_MACHINE_STATUSES as readonly string[]).includes(r.status),
-      ).length,
-      0,
-    );
+    const machinePending = data.machines.filter(hasPendingMachineAction).length;
     const supplyPending = data.supplies.reduce(
       (acc, s) => acc + s.transactions.filter((t) => t.status === "PENDING").length,
       0,

@@ -264,12 +264,13 @@ model Application {
   farmOwnership        FarmOwnership @default(FARM_OWNER)
   farmOwnershipDetails String?
 
-  /// A member cannot change their own farm size outright. One hectare is one
-  /// machine-day, so raising it would hand out machine time. The requested
-  /// value is held here and reviewed by an officer; `farmSize` keeps granting
-  /// the old allowance until then.
-  pendingFarmSize     Float?
-  farmSizeStatus      FarmSizeStatus?
+  /// A member cannot change their own farm role or farm size outright because
+  /// both affect machine and supply access. The requested profile is held here
+  /// while the effective fields above keep applying until an officer decides.
+  pendingFarmSize             Float?
+  pendingFarmOwnership        FarmOwnership?
+  pendingFarmOwnershipDetails String?
+  farmSizeStatus              FarmSizeStatus?
   farmSizeReviewedBy  String?
   farmSizeReviewedByUser User?    @relation("FarmSizeReviewer", fields: [farmSizeReviewedBy], references: [id], onDelete: SetNull)
   farmSizeReviewedAt  DateTime?

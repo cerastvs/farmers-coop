@@ -112,3 +112,27 @@ export function needsFarmSizeReview(
   if (currentFarmSize == null) return true;
   return currentFarmSize !== nextFarmSize;
 }
+
+interface FarmProfile {
+  farmSize: number | null | undefined;
+  farmOwnership: FarmOwnership | null | undefined;
+  farmOwnershipDetails: string | null | undefined;
+}
+
+function normalizedOwnershipDetails(profile: FarmProfile): string | null {
+  if (profile.farmOwnership !== FarmOwnership.OTHERS) return null;
+  const details = profile.farmOwnershipDetails?.trim();
+  return details || null;
+}
+
+/** Whether a member's submitted farm details require an officer's approval. */
+export function needsFarmProfileReview(
+  current: FarmProfile,
+  next: FarmProfile,
+): boolean {
+  return (
+    current.farmOwnership !== next.farmOwnership ||
+    normalizedOwnershipDetails(current) !== normalizedOwnershipDetails(next) ||
+    current.farmSize !== next.farmSize
+  );
+}

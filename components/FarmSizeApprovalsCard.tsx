@@ -7,10 +7,12 @@ interface PendingFarmSize {
   applicationId: string;
   member: { id: string; name: string; username: string; role?: string };
   fullName: string;
-  requestedFarmSize: number;
+  requestedFarmSize: number | null;
   currentFarmSize: number | null;
-  farmOwnership: string;
-  farmOwnershipDetails: string | null;
+  currentFarmOwnership: string;
+  currentFarmOwnershipDetails: string | null;
+  requestedFarmOwnership: string;
+  requestedFarmOwnershipDetails: string | null;
   /** How many machine-days this change adds or removes this season. */
   machineDayChange: number | null;
 }
@@ -39,11 +41,23 @@ function ownershipLabel(ownership: string, details: string | null) {
 }
 
 function machineDaySummary(change: number | null) {
-  if (change === null) return "New farm size — machine-day budget starts from zero";
+  if (change === null) return "Machine-day allowance will be recalculated";
   if (change === 0) return "No change in machine-days";
   return change > 0
     ? `Adds ${change} machine-day${change === 1 ? "" : "s"} this season`
     : `Removes ${Math.abs(change)} machine-day${change === -1 ? "" : "s"} this season`;
+}
+
+function farmDetailsSummary(item: PendingFarmSize) {
+  const currentRole = ownershipLabel(
+    item.currentFarmOwnership,
+    item.currentFarmOwnershipDetails,
+  );
+  const requestedRole = ownershipLabel(
+    item.requestedFarmOwnership,
+    item.requestedFarmOwnershipDetails,
+  );
+  return `${currentRole} (${ha(item.currentFarmSize)}) to ${requestedRole} (${ha(item.requestedFarmSize)})`;
 }
 
 export function FarmSizeApprovalsCard({
@@ -119,10 +133,10 @@ export function FarmSizeApprovalsCard({
     return (
       <section className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm">
         <div className="border-b border-[#f0f3ed] px-5 py-4">
-          <h2 className="text-sm font-bold text-[#0f2318]">Farm size reviews</h2>
+          <h2 className="text-sm font-bold text-[#0f2318]">Farm detail reviews</h2>
         </div>
         <p className="px-5 py-8 text-center text-sm text-[#5a7267]">
-          Loading farm size reviews…
+          Loading farm detail reviews…
         </p>
       </section>
     );
@@ -133,7 +147,7 @@ export function FarmSizeApprovalsCard({
       <section className="rounded-xl border border-[#e2ebe6] bg-white shadow-sm">
         <div className="border-b border-[#f0f3ed] px-5 py-4">
           <h2 className="flex items-center gap-2 text-sm font-bold text-[#0f2318]">
-            Farm size reviews
+            Farm detail reviews
             {pending.length > 0 && (
               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
                 {pending.length}
@@ -141,15 +155,15 @@ export function FarmSizeApprovalsCard({
             )}
           </h2>
           <p className="mt-1 text-xs leading-relaxed text-[#5a7267]">
-            One hectare is one machine-day, so approving a farm size hands out
-            machine capacity and can raise a per-hectare supply loan limit. The
-            member keeps their current allowance until you decide.
+            Review changes to farm roles and sizes together. These details
+            control machine access and per-hectare supply limits, so the
+            member&apos;s current access remains active until you decide.
           </p>
         </div>
 
         {pending.length === 0 ? (
           <p className="px-5 py-6 text-center text-sm text-[#5a7267]">
-            No farm size changes are waiting for review.
+            No farm detail changes are waiting for review.
           </p>
         ) : (
           <ul className="divide-y divide-[#f0f3ed]">
@@ -160,19 +174,21 @@ export function FarmSizeApprovalsCard({
                     <p className="text-sm font-bold text-[#0f2318]">
                       {item.fullName || item.member.name}
                     </p>
-                    <p className="text-xs text-[#5a7267]">
-                      {ownershipLabel(item.farmOwnership, item.farmOwnershipDetails)}
-                    </p>
                     <p className="mt-1.5 text-sm">
-                      <span className="text-[#5a7267]">On file: </span>
+                      <span className="text-[#5a7267]">Current role: </span>
                       <span className="font-semibold text-[#0f2318]">
-                        {ha(item.currentFarmSize)}
+                        {ownershipLabel(item.currentFarmOwnership, item.currentFarmOwnershipDetails)}
                       </span>
                       <span className="mx-2 text-[#8fa594]">→</span>
-                      <span className="text-[#5a7267]">Requested: </span>
+                      <span className="text-[#5a7267]">Requested role: </span>
                       <span className="font-bold text-[#1b5e3b]">
-                        {ha(item.requestedFarmSize)}
+                        {ownershipLabel(item.requestedFarmOwnership, item.requestedFarmOwnershipDetails)}
                       </span>
+                    </p>
+                    <p className="mt-1 text-xs text-[#5a7267]">
+                      Farm size: <span className="font-semibold text-[#0f2318]">{ha(item.currentFarmSize)}</span>
+                      <span className="mx-2 text-[#8fa594]">→</span>
+                      <span className="font-semibold text-[#1b5e3b]">{ha(item.requestedFarmSize)}</span>
                     </p>
                     <p className="mt-1 text-xs font-semibold text-amber-700">
                       {machineDaySummary(item.machineDayChange)}
@@ -209,11 +225,11 @@ export function FarmSizeApprovalsCard({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <h3 className="text-base font-bold text-[#0f2318]">
-              Approve this farm size?
+              Approve these farm details?
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-[#5a7267]">
               {confirming.fullName || confirming.member.name} goes from{" "}
-              {ha(confirming.currentFarmSize)} to {ha(confirming.requestedFarmSize)}.
+              {farmDetailsSummary(confirming)}.
               This takes effect immediately:{" "}
               {machineDaySummary(confirming.machineDayChange).toLowerCase()}.
             </p>
@@ -242,12 +258,12 @@ export function FarmSizeApprovalsCard({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <h3 className="text-base font-bold text-[#0f2318]">
-              Reject this farm size?
+              Reject these farm details?
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-[#5a7267]">
-              The request for {ha(rejecting.requestedFarmSize)} is discarded and{" "}
-              {rejecting.fullName || rejecting.member.name} keeps{" "}
-              {ha(rejecting.currentFarmSize)}. They can submit a new request.
+              The request to change from {farmDetailsSummary(rejecting)} will be
+              discarded. {rejecting.fullName || rejecting.member.name} keeps
+              their current farm role and size.
             </p>
             <label className="mt-4 block text-xs font-semibold text-[#0f2318]">
               Reason (optional)

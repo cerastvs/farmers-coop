@@ -3,7 +3,11 @@ import test from "node:test";
 
 import "dotenv/config";
 
-import { needsFarmSizeReview } from "../lib/farm-access-core";
+import { FarmOwnership } from "../app/generated/prisma";
+import {
+  needsFarmProfileReview,
+  needsFarmSizeReview,
+} from "../lib/farm-access-core";
 import { ApplicationSchema } from "../lib/validators/registration";
 
 /**
@@ -111,4 +115,67 @@ test("a farm worker leaving the farm size blank does not ask for review", () => 
   assert.equal(result.success, true);
   if (!result.success) return;
   assert.equal(needsFarmSizeReview(2.5, result.data.farmSize), false);
+});
+
+test("changing farm role asks for review even when farm size is unchanged", () => {
+  assert.equal(
+    needsFarmProfileReview(
+      {
+        farmSize: 2.5,
+        farmOwnership: FarmOwnership.FARM_OWNER,
+        farmOwnershipDetails: null,
+      },
+      {
+        farmSize: 2.5,
+        farmOwnership: FarmOwnership.OTHERS,
+        farmOwnershipDetails: "Caretaker",
+      },
+    ),
+    true,
+  );
+});
+
+test("changing to farm worker asks for review when farm size is cleared", () => {
+  assert.equal(
+    needsFarmProfileReview(
+      {
+        farmSize: 2.5,
+        farmOwnership: FarmOwnership.FARM_OWNER,
+        farmOwnershipDetails: null,
+      },
+      {
+        farmSize: null,
+        farmOwnership: FarmOwnership.FARM_WORKER,
+        farmOwnershipDetails: null,
+      },
+    ),
+    true,
+  );
+});
+
+test("unchanged farm details do not ask for review", () => {
+  const profile = {
+    farmSize: 2.5,
+    farmOwnership: FarmOwnership.FARM_OWNER,
+    farmOwnershipDetails: null,
+  };
+  assert.equal(needsFarmProfileReview(profile, profile), false);
+});
+
+test("clearing an approved farm size asks for review", () => {
+  assert.equal(
+    needsFarmProfileReview(
+      {
+        farmSize: 2.5,
+        farmOwnership: FarmOwnership.FARM_OWNER,
+        farmOwnershipDetails: null,
+      },
+      {
+        farmSize: null,
+        farmOwnership: FarmOwnership.FARM_OWNER,
+        farmOwnershipDetails: null,
+      },
+    ),
+    true,
+  );
 });

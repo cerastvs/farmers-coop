@@ -1,4 +1,9 @@
-import { FarmSizeStatus, NotificationType, Prisma } from "@/app/generated/prisma";
+import {
+  FarmOwnership,
+  FarmSizeStatus,
+  NotificationType,
+  Prisma,
+} from "@/app/generated/prisma";
 import { notifyUser, writeActivityLog, writeAudit } from "@/lib/activity";
 import { apiErrorResponse, ApiError, readJsonBody, requireUser } from "@/lib/api";
 import prisma from "@/lib/client";
@@ -16,7 +21,14 @@ const ReviewSchema = z.object({
     .transform((val) => (val ? val : undefined)),
 }).strict();
 
-const hectares = (value: number | null) => (value == null ? "none" : `${value}`);
+const farmSizeLabel = (value: number | null) =>
+  value == null ? "not set" : `${value} hectares`;
+
+const ownership = (value: FarmOwnership) => {
+  if (value === FarmOwnership.FARM_OWNER) return "farm owner";
+  if (value === FarmOwnership.FARM_WORKER) return "farm worker / tenant";
+  return "other farm role";
+};
 
 export async function PATCH(
   req: NextRequest,
@@ -39,16 +51,25 @@ export async function PATCH(
         });
         if (!app) throw new ApiError(404, "Membership record not found");
         if (app.farmSizeStatus !== FarmSizeStatus.PENDING) {
-          throw new ApiError(409, "There is no farm size change waiting for review");
+          throw new ApiError(409, "There is no farm detail change waiting for review");
         }
-        if (app.pendingFarmSize == null) {
-          throw new ApiError(409, "There is no farm size change waiting for review");
-        }
+        const requestedOwnership =
+          app.pendingFarmOwnership ?? app.farmOwnership;
+        const requestedFarmSize =
+          requestedOwnership === FarmOwnership.FARM_WORKER
+            ? null
+            : app.pendingFarmSize;
+        const requestedOwnershipDetails =
+          requestedOwnership === FarmOwnership.OTHERS
+            ? app.pendingFarmOwnershipDetails
+            : null;
 
         const nextStatus = approved
           ? FarmSizeStatus.APPROVED
           : FarmSizeStatus.REJECTED;
         const previousFarmSize = app.farmSize;
+        const previousOwnership = app.farmOwnership;
+        const previousOwnershipDetails = app.farmOwnershipDetails;
 
         // On approval the requested value becomes the effective one and starts
         // granting machine-days straight away. On rejection it is discarded and
@@ -56,8 +77,14 @@ export async function PATCH(
         const updated = await tx.application.update({
           where: { id: app.id },
           data: {
-            farmSize: approved ? app.pendingFarmSize : previousFarmSize,
+            farmSize: approved ? requestedFarmSize : previousFarmSize,
+            farmOwnership: approved ? requestedOwnership : previousOwnership,
+            farmOwnershipDetails: approved
+              ? requestedOwnershipDetails
+              : previousOwnershipDetails,
             pendingFarmSize: null,
+            pendingFarmOwnership: null,
+            pendingFarmOwnershipDetails: null,
             farmSizeStatus: nextStatus,
             farmSizeReviewedBy: actor.userId,
             farmSizeReviewedAt: new Date(),
@@ -71,12 +98,12 @@ export async function PATCH(
             ? NotificationType.FARM_SIZE_APPROVED
             : NotificationType.FARM_SIZE_REJECTED,
           link: "/registration",
-          title: approved ? "Farm size approved" : "Farm size change rejected",
+          title: approved ? "Farm details approved" : "Farm details change rejected",
           message: approved
-            ? `Your farm size is now ${hectares(app.pendingFarmSize)} hectares. This sets how many machine-days you may book.`
+            ? `Your farm role is now ${ownership(requestedOwnership)} and your farm size is ${farmSizeLabel(requestedFarmSize)}.`
             : result.data.reason
-              ? `Your requested farm size of ${hectares(app.pendingFarmSize)} hectares was not approved. Reason: ${result.data.reason}. Your farm size on file is unchanged.`
-              : `Your requested farm size of ${hectares(app.pendingFarmSize)} hectares was not approved. Your farm size on file is unchanged.`,
+              ? `Your requested farm details were not approved. Reason: ${result.data.reason}. Your farm role and size on file are unchanged.`
+              : "Your requested farm details were not approved. Your farm role and size on file are unchanged.",
         });
 
         await writeAudit(tx, {
@@ -89,7 +116,11 @@ export async function PATCH(
           newStatus: nextStatus,
           metadata: {
             previousFarmSize,
-            requestedFarmSize: app.pendingFarmSize,
+            requestedFarmSize,
+            previousFarmOwnership: previousOwnership,
+            requestedFarmOwnership: requestedOwnership,
+            previousFarmOwnershipDetails: previousOwnershipDetails,
+            requestedFarmOwnershipDetails: requestedOwnershipDetails,
             ...(result.data.reason ? { reason: result.data.reason } : {}),
           },
         });
@@ -103,18 +134,19 @@ export async function PATCH(
       userId: actor.userId,
       action: approved ? "FARM_SIZE_APPROVED" : "FARM_SIZE_REJECTED",
       success: true,
-      info: `Farm size for application ${rawId} ${result.data.action}d`,
+      info: `Farm details for application ${rawId} ${result.data.action}d`,
     });
 
     return NextResponse.json({
       message:
         result.data.action === "approve"
-          ? "Farm size approved"
-          : "Farm size change rejected",
+          ? "Farm details approved"
+          : "Farm details change rejected",
       status: resultRecord.farmSizeStatus,
       farmSize: resultRecord.farmSize,
+      farmOwnership: resultRecord.farmOwnership,
     });
   } catch (error) {
-    return apiErrorResponse(error, "Failed to review farm size change");
+    return apiErrorResponse(error, "Failed to review farm detail change");
   }
 }

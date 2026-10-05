@@ -112,8 +112,8 @@ export async function handleSubmit(
     if (isUpdate) {
       onResult?.({
         kind: "success",
-        message: data.farmSizePending
-          ? "Profile updated! Your requested farm size is now with an officer for review. Your current farm size still applies until then."
+        message: data.farmProfilePending
+          ? "Profile updated! Your requested farm role and farm size are now with an officer for review. Your current farm access still applies until then."
           : "Profile updated!",
       });
     } else {

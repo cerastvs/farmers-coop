@@ -1,16 +1,15 @@
-import { FarmSizeStatus } from "@/app/generated/prisma";
+import { FarmOwnership, FarmSizeStatus } from "@/app/generated/prisma";
 import { apiErrorResponse, requireUser } from "@/lib/api";
 import prisma from "@/lib/client";
 import { MEMBERSHIP_ROLES } from "@/lib/permissions";
 import { NextResponse } from "next/server";
 
 /**
- * The queue of members asking for a different farm size.
+ * The queue of members asking for different farm details.
  *
- * Farm size cannot be changed by the member themselves because one hectare is
- * one machine-day, so approving one of these hands out machine capacity and can
- * raise a supply loan cap. The member's current size keeps applying until an
- * officer decides.
+ * Farm role and size jointly control machine access and per-hectare supply
+ * limits. The member's current farm details keep applying until an officer
+ * decides.
  */
 export async function GET() {
   try {
@@ -19,7 +18,7 @@ export async function GET() {
     const applications = await prisma.application.findMany({
       where: {
         farmSizeStatus: FarmSizeStatus.PENDING,
-        pendingFarmSize: { not: null },
+        pendingFarmOwnership: { not: null },
         user: { role: { in: ["MEMBER", "APPLICANT"] } },
       },
       orderBy: { farmSizeReviewedAt: "asc" },
@@ -42,14 +41,19 @@ export async function GET() {
         // officer needs both: the second is what still grants the allowance.
         requestedFarmSize: a.pendingFarmSize,
         currentFarmSize: a.farmSize,
-        farmOwnership: a.farmOwnership,
-        farmOwnershipDetails: a.farmOwnershipDetails,
-        // One hectare is one machine-day, so the change is a change in how many
-        // machine-days the member may book this season.
+        currentFarmOwnership: a.farmOwnership,
+        currentFarmOwnershipDetails: a.farmOwnershipDetails,
+        requestedFarmOwnership: a.pendingFarmOwnership,
+        requestedFarmOwnershipDetails: a.pendingFarmOwnershipDetails,
+        // Farm workers have no machine-day allowance even when a legacy farm
+        // size remains on their record.
         machineDayChange:
-          a.pendingFarmSize != null && a.farmSize != null
-            ? Math.ceil(a.pendingFarmSize) - Math.ceil(a.farmSize)
-            : null,
+          (a.pendingFarmOwnership === FarmOwnership.FARM_WORKER
+            ? 0
+            : Math.ceil(a.pendingFarmSize ?? 0)) -
+          (a.farmOwnership === FarmOwnership.FARM_WORKER
+            ? 0
+            : Math.ceil(a.farmSize ?? 0)),
       })),
     });
   } catch (error) {

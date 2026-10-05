@@ -16,6 +16,24 @@ type ApplicationWithLists = Application & {
   guarantorStatus?: string | null;
 };
 
+function requestedFarmDetails(application: ApplicationWithLists) {
+  const pending = application.farmSizeStatus === "PENDING";
+  return {
+    farmOwnership:
+      pending && application.pendingFarmOwnership
+        ? application.pendingFarmOwnership
+        : application.farmOwnership,
+    farmSize:
+      pending
+        ? application.pendingFarmSize
+        : application.farmSize,
+    farmOwnershipDetails:
+      pending
+        ? application.pendingFarmOwnershipDetails
+        : application.farmOwnershipDetails,
+  };
+}
+
 function FieldError({ error }: { error?: string }) {
   if (!error) return null;
   return <p className="text-red-500 text-xs mt-1.5">{error}</p>;
@@ -115,14 +133,30 @@ export default function Registration() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isApplicant, setIsApplicant] = useState(false);
   const [farmOwnership, setFarmOwnership] = useState("");
-  // The role the member had when they started editing. A change away from this
-  // is the one that needs confirming, so that re-selecting the same value (or
-  // changing back and forth) does not nag.
+  const [farmSizeDraft, setFarmSizeDraft] = useState("");
+  const [farmOwnershipDetails, setFarmOwnershipDetails] = useState("");
+  const [farmDetailsSaving, setFarmDetailsSaving] = useState(false);
+  const [farmDetailsMessage, setFarmDetailsMessage] = useState<{
+    kind: "success" | "error";
+    text: string;
+  } | null>(null);
+  // The currently approved role. Returning to it cancels a pending request.
   const [savedFarmOwnership, setSavedFarmOwnership] = useState("");
   const [ownershipConfirm, setOwnershipConfirm] = useState<{
     from: string;
     to: string;
   } | null>(null);
+
+  const applyApplication = useCallback((data: ApplicationWithLists) => {
+    const displayed = requestedFarmDetails(data);
+    setApplication(data);
+    setFarmOwnership(displayed.farmOwnership || "");
+    setFarmSizeDraft(
+      displayed.farmSize == null ? "" : String(displayed.farmSize),
+    );
+    setFarmOwnershipDetails(displayed.farmOwnershipDetails || "");
+    setSavedFarmOwnership(data.farmOwnership || "");
+  }, []);
 
   const resubmitGuarantor = async () => {
     setResubmitting(true);
@@ -161,15 +195,13 @@ export default function Registration() {
       }
       if (!res.ok) throw new Error("Profile request failed");
       const data = await res.json();
-      setApplication(data);
-      setFarmOwnership(data.farmOwnership || "");
-      setSavedFarmOwnership(data.farmOwnership || "");
+      applyApplication(data);
     } catch {
       setProfileLoadError(true);
     } finally {
       setProfileLoading(false);
     }
-  }, []);
+  }, [applyApplication]);
 
   useEffect(() => {
     void loadApplication();
@@ -209,13 +241,11 @@ export default function Registration() {
         r.ok ? r.json() : null,
       );
       if (!fresh) return;
-      setApplication(fresh);
-      setFarmOwnership(fresh.farmOwnership || "");
-      setSavedFarmOwnership(fresh.farmOwnership || "");
+      applyApplication(fresh);
     } catch {
       // A failed refetch must not turn a successful save into an error.
     }
-  }, []);
+  }, [applyApplication]);
 
   const onSubmit = async (
     e: React.FormEvent<HTMLFormElement>,
@@ -238,6 +268,7 @@ export default function Registration() {
   const farmSizeStatus = application?.farmSizeStatus ?? null;
   const farmSizePending = farmSizeStatus === "PENDING";
   const farmSizeRejected = farmSizeStatus === "REJECTED";
+  const pendingFarmOwnership = application?.pendingFarmOwnership ?? null;
 
   // A farm size is the basis for machine-days and for per-hectare supply loan
   // caps, so it is only meaningful for a member who farms their own land. It is
@@ -253,12 +284,90 @@ export default function Registration() {
     OTHERS: "Others",
   };
 
+  const saveFarmDetails = useCallback(
+    async ({
+      ownership,
+      size,
+      details,
+    }: {
+      ownership: string;
+      size: string;
+      details: string;
+    }) => {
+      if (!application) return;
+      const trimmedSize = size.trim();
+      const parsedSize = trimmedSize === "" ? null : Number(trimmedSize);
+      if (
+        ownership !== "FARM_WORKER" &&
+        (parsedSize !== null &&
+          (!Number.isFinite(parsedSize) || parsedSize <= 0))
+      ) {
+        setErrors((current) => ({
+          ...current,
+          farmSize: "Farm size must be greater than 0",
+        }));
+        return;
+      }
+
+      setFarmDetailsSaving(true);
+      setFarmDetailsMessage(null);
+      setErrors((current) => {
+        const next = { ...current };
+        delete next.farmSize;
+        return next;
+      });
+      try {
+        const response = await fetch("/api/registration/farm-details", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            farmOwnership: ownership,
+            farmSize: ownership === "FARM_WORKER" ? null : parsedSize,
+            farmOwnershipDetails:
+              ownership === "OTHERS" ? details.trim() || null : null,
+          }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to update farm details");
+        }
+        await refreshApplication();
+        setFarmDetailsMessage({
+          kind: "success",
+          text: data.message || "Farm details updated.",
+        });
+      } catch (error) {
+        setFarmDetailsMessage({
+          kind: "error",
+          text:
+            error instanceof Error
+              ? error.message
+              : "Failed to update farm details",
+        });
+      } finally {
+        setFarmDetailsSaving(false);
+      }
+    },
+    [application, refreshApplication],
+  );
+
   const requestFarmOwnershipChange = (next: string) => {
-    if (next === savedFarmOwnership) {
+    if (next === farmOwnership) return;
+    if (application && next === savedFarmOwnership) {
+      const effectiveSize =
+        application.farmSize == null ? "" : String(application.farmSize);
+      const effectiveDetails = application.farmOwnershipDetails || "";
       setFarmOwnership(next);
+      setFarmSizeDraft(effectiveSize);
+      setFarmOwnershipDetails(effectiveDetails);
+      void saveFarmDetails({
+        ownership: next,
+        size: effectiveSize,
+        details: effectiveDetails,
+      });
       return;
     }
-    setOwnershipConfirm({ from: savedFarmOwnership, to: next });
+    setOwnershipConfirm({ from: farmOwnership, to: next });
   };
 
   return (
@@ -448,6 +557,19 @@ export default function Registration() {
             {/* Farming Details */}
             <SectionHeader label="Farming details" />
 
+            {farmDetailsMessage && (
+              <p
+                className={`mb-4 text-xs font-semibold ${
+                  farmDetailsMessage.kind === "error"
+                    ? "text-red-600"
+                    : "text-[#2f6b3b]"
+                }`}
+                role="status"
+              >
+                {farmDetailsMessage.text}
+              </p>
+            )}
+
             <div className="space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-x-8 md:gap-y-5">
               <div className="grid grid-cols-2 gap-3 md:col-span-2">
                 <div>
@@ -456,21 +578,43 @@ export default function Registration() {
                     {farmSizeNote}
                   </p>
                   <div className="relative">
-                    <TextInput
+                    <input
                       name="farmSize"
                       type="number"
                       step="0.01"
                       placeholder={isFarmWorker ? "Not required" : "2.5"}
-                      defaultValue={application?.farmSize ?? ""}
-                      error={errors.farmSize}
+                      value={farmSizeDraft}
+                      disabled={farmDetailsSaving || isFarmWorker}
+                      onChange={(event) => {
+                        setFarmSizeDraft(event.target.value);
+                        setFarmDetailsMessage(null);
+                      }}
+                      onBlur={() => {
+                        if (!application) return;
+                        void saveFarmDetails({
+                          ownership: farmOwnership,
+                          size: farmSizeDraft,
+                          details: farmOwnershipDetails,
+                        });
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter") return;
+                        event.preventDefault();
+                        event.currentTarget.blur();
+                      }}
+                      className={`w-full rounded-xl border bg-[#fafcf8] px-3 py-2.5 pr-20 text-sm text-[#173a2b] outline-none transition placeholder:text-[#9aa89e] focus:border-[#4f7e38] focus:ring-4 focus:ring-[#b9db9e]/35 disabled:cursor-not-allowed disabled:opacity-60 ${
+                        errors.farmSize ? "border-red-400" : "border-[#dbe5d7]"
+                      }`}
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#9aa89e] pointer-events-none">hectares</span>
                   </div>
                   <FieldError error={errors.farmSize} />
                   {farmSizePending && (
                     <p className="mt-1.5 text-xs font-semibold text-amber-700">
-                      Requested {application?.pendingFarmSize ?? "—"} ha is with an
-                      officer for review. Your current farm size still applies.
+                      Requested {application?.pendingFarmSize != null
+                        ? `${application.pendingFarmSize} ha`
+                        : "no farm size"} is with an officer for review. Your
+                      current farm size still applies.
                     </p>
                   )}
                   {farmSizeRejected && (
@@ -509,6 +653,7 @@ export default function Registration() {
                 <select
                   name="farmOwnership"
                   value={farmOwnership}
+                  disabled={farmDetailsSaving}
                   onChange={(e) => requestFarmOwnershipChange(e.target.value)}
                   className={`w-full rounded-xl border bg-[#fafcf8] px-3 py-2.5 text-sm text-[#173a2b] outline-none transition placeholder:text-[#9aa89e] focus:border-[#4f7e38] focus:ring-4 focus:ring-[#b9db9e]/35 ${
                     errors.farmOwnership ? "border-red-400" : "border-[#dbe5d7]"
@@ -526,12 +671,41 @@ export default function Registration() {
                       type="text"
                       name="farmOwnershipDetails"
                       placeholder="e.g. Farm caretaker"
-                      defaultValue={application?.farmOwnershipDetails || ""}
+                      value={farmOwnershipDetails}
+                      disabled={farmDetailsSaving}
+                      onChange={(event) => {
+                        setFarmOwnershipDetails(event.target.value);
+                        setFarmDetailsMessage(null);
+                      }}
+                      onBlur={() => {
+                        if (!application) return;
+                        void saveFarmDetails({
+                          ownership: farmOwnership,
+                          size: farmSizeDraft,
+                          details: farmOwnershipDetails,
+                        });
+                      }}
                       className="w-full rounded-xl border border-[#dbe5d7] bg-[#fafcf8] px-3 py-2.5 text-sm text-[#173a2b] outline-none transition placeholder:text-[#9aa89e] focus:border-[#4f7e38] focus:ring-4 focus:ring-[#b9db9e]/35"
                     />
                   </div>
                 )}
                 <FieldError error={errors.farmOwnership} />
+                {farmSizePending && pendingFarmOwnership && (
+                  <p className="mt-1.5 text-xs font-semibold text-amber-700">
+                    Requested role: {OWNERSHIP_LABELS[pendingFarmOwnership] ?? pendingFarmOwnership}.
+                    Your current role remains active until an officer approves it.
+                  </p>
+                )}
+                {farmSizeRejected && (
+                  <p className="mt-1.5 text-xs font-semibold text-red-600">
+                    Your last farm role or size change was not approved.
+                  </p>
+                )}
+                {farmDetailsSaving && (
+                  <p className="mt-1.5 text-xs font-semibold text-[#5b6e62]" role="status">
+                    Saving farm details...
+                  </p>
+                )}
               </div>
 
               <DynamicListField
@@ -795,13 +969,13 @@ export default function Registration() {
             <div className="mt-7">
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || farmDetailsSaving}
                 className="w-full bg-[#174b36] py-3.5 font-bold text-white transition hover:bg-[#0e3b2a] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading
                   ? "Processing..."
                   : isUpdate
-                    ? "Save changes"
+                    ? "Save other changes"
                     : "Submit application"}
               </button>
             </div>
@@ -914,6 +1088,8 @@ export default function Registration() {
               <strong>{OWNERSHIP_LABELS[ownershipConfirm.from] ?? "not set"}</strong>{" "}
               to{" "}
               <strong>{OWNERSHIP_LABELS[ownershipConfirm.to] ?? "not set"}</strong>.
+              {" "}This change will be sent to an officer for approval, and your
+              current farm role remains active until then.
               {ownershipConfirm.to === "FARM_WORKER" ? (
                 <>
                   {" "}As a farm worker you do not have a farm of your own, so a farm
@@ -931,6 +1107,7 @@ export default function Registration() {
             <div className="mt-5 flex gap-3">
               <button
                 type="button"
+                disabled={farmDetailsSaving}
                 onClick={() => {
                   setFarmOwnership(ownershipConfirm.from);
                   setOwnershipConfirm(null);
@@ -941,9 +1118,24 @@ export default function Registration() {
               </button>
               <button
                 type="button"
+                disabled={farmDetailsSaving}
                 onClick={() => {
-                  setFarmOwnership(ownershipConfirm.to);
+                  const nextOwnership = ownershipConfirm.to;
+                  const nextSize =
+                    nextOwnership === "FARM_WORKER" ? "" : farmSizeDraft;
+                  const nextDetails =
+                    nextOwnership === "OTHERS" ? farmOwnershipDetails : "";
+                  setFarmOwnership(nextOwnership);
+                  setFarmSizeDraft(nextSize);
+                  setFarmOwnershipDetails(nextDetails);
                   setOwnershipConfirm(null);
+                  if (application) {
+                    void saveFarmDetails({
+                      ownership: nextOwnership,
+                      size: nextSize,
+                      details: nextDetails,
+                    });
+                  }
                 }}
                 className="w-full rounded-xl bg-[#174b36] py-3 font-bold text-white transition hover:bg-[#0e3b2a]"
               >

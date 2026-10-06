@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { DashboardHeader } from "./DashboardHeader";
 import memberStyles from "./member.module.css";
@@ -11,6 +11,7 @@ import { RecentTransactions } from "./RecentTransactions";
 import { Money } from "@/components/Money";
 import { useUser } from "../../hooks/useUser";
 import { unseenAlertIds } from "../hooks/useAlertSeen";
+import { usePolling } from "../hooks/usePolling";
 import type {
   ApplicationFeeStatus,
   DashboardStats,
@@ -53,6 +54,7 @@ export function DashboardClient({
 }) {
   const { setUser } = useUser();
   const [mounted, setMounted] = useState(false);
+  const [liveStats, setLiveStats] = useState<DashboardStats | null>(stats);
 
   useEffect(() => {
     setUser(user);
@@ -62,21 +64,34 @@ export function DashboardClient({
 
   const isApplicant = user.role === "APPLICANT";
 
+  useEffect(() => {
+    setLiveStats(stats);
+  }, [stats]);
+
+  const refreshStats = useCallback(async () => {
+    const response = await fetch("/api/dashboard/stats", { cache: "no-store" });
+    if (response.ok) setLiveStats((await response.json()) as DashboardStats);
+  }, []);
+
+  usePolling(refreshStats, 5_000, {
+    enabled: !isApplicant && Boolean(liveStats),
+  });
+
   if (isApplicant && user.hasApplied) {
     return <ApplicantPendingScreen initialStatus={applicationFeeStatus} />;
   }
 
   const dots =
-    mounted && stats
+    mounted && liveStats
       ? {
           rejectedLoans:
-            unseenAlertIds("rejectedLoans", stats.rejectedLoanIds).length > 0,
+            unseenAlertIds("rejectedLoans", liveStats.rejectedLoanIds).length > 0,
           supplyAlerts:
-            unseenAlertIds("supplyAlerts", stats.supplyRequestIds).length > 0,
+            unseenAlertIds("supplyAlerts", liveStats.supplyRequestIds).length > 0,
           machineAlerts:
-            unseenAlertIds("machineAlerts", stats.machineRequestIds).length > 0,
-          loanDue: stats.loanDueAlerts > 0,
-          guarantorRejected: stats.guarantorStatus === "REJECTED",
+            unseenAlertIds("machineAlerts", liveStats.machineRequestIds).length > 0,
+          loanDue: liveStats.loanDueAlerts > 0,
+          guarantorRejected: liveStats.guarantorStatus === "REJECTED",
         }
       : DEFAULT_DOTS;
 
@@ -87,21 +102,21 @@ export function DashboardClient({
       // read as "not overdue" and double-count loans already flagged as overdue
       // on the same card row.
       label: "Outstanding Loans",
-      value: stats?.activeLoansCount.toString() || "0",
+      value: liveStats?.activeLoansCount.toString() || "0",
       icon: <IconLoan />,
       iconBg: "bg-green-100",
       iconColor: "text-green-600",
     },
     {
       label: "Borrowed Machines",
-      value: stats?.borrowedMachinesCount.toString() || "0",
+      value: liveStats?.borrowedMachinesCount.toString() || "0",
       icon: <IconMachine />,
       iconBg: "bg-blue-100",
       iconColor: "text-blue-600",
     },
     {
       label: "Current Balance",
-      value: <Money value={stats?.totalDebt || 0} />,
+      value: <Money value={liveStats?.totalDebt || 0} />,
       icon: <IconBalance />,
       iconBg: "bg-orange-100",
       iconColor: "text-orange-500",
@@ -112,8 +127,8 @@ export function DashboardClient({
       // payoff date. Calling it "Next Payment Due" implies instalments the
       // system does not compute, so the label states what the date actually is.
       label: "Loan Payoff Due",
-      value: stats?.nextPaymentDue
-        ? new Date(stats.nextPaymentDue)
+      value: liveStats?.nextPaymentDue
+        ? new Date(liveStats.nextPaymentDue)
             .toLocaleDateString("en-US", {
               month: "short",
               day: "2-digit",
@@ -196,15 +211,15 @@ export function DashboardClient({
             Active Loans &amp; Debts
           </h2>
 
-          {stats && stats.overdueLoansCount > 0 && (
+          {liveStats && liveStats.overdueLoansCount > 0 && (
             <div className="mb-3 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
               <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-red-100 text-red-700">
                 <Clock size={14} />
               </span>
               <div>
                 <p className="text-sm font-bold text-red-700">
-                  You have {stats.overdueLoansCount} overdue loan
-                  {stats.overdueLoansCount > 1 ? "s" : ""}
+                  You have {liveStats.overdueLoansCount} overdue loan
+                  {liveStats.overdueLoansCount > 1 ? "s" : ""}
                 </p>
                 <p className="text-xs text-red-600">
                   Please settle outstanding balances as soon as possible to
@@ -215,8 +230,8 @@ export function DashboardClient({
           )}
 
           <div className="space-y-3">
-            {stats?.activeLoans && stats.activeLoans.length > 0 ? (
-              stats.activeLoans.map((loan) => (
+            {liveStats?.activeLoans && liveStats.activeLoans.length > 0 ? (
+              liveStats.activeLoans.map((loan) => (
                 <ActiveLoanCard
                   key={loan.id}
                   name={loan.name}
@@ -237,12 +252,12 @@ export function DashboardClient({
             )}
           </div>
 
-          {stats && stats.totalDebt > 0 && (
+          {liveStats && liveStats.totalDebt > 0 && (
             <div className="mt-3 flex flex-wrap gap-3 text-sm">
               <span className="rounded-xl bg-white border border-[#e2e7dc] px-4 py-2">
                 <span className="text-[#718176]">Cash debt: </span>
                 <span className="font-bold text-[#173a2b]">
-                  <Money value={stats.cashDebt} />
+                  <Money value={liveStats.cashDebt} />
                 </span>
               </span>
               <span className="rounded-xl bg-white border border-[#e2e7dc] px-4 py-2">
@@ -250,7 +265,7 @@ export function DashboardClient({
                   Fertilizer / supply debt:{" "}
                 </span>
                 <span className="font-bold text-[#173a2b]">
-                  <Money value={stats.supplyDebt} />
+                  <Money value={liveStats.supplyDebt} />
                 </span>
               </span>
             </div>
@@ -259,7 +274,7 @@ export function DashboardClient({
 
         <RecentTransactions
           transactions={
-            stats?.recentTransactions.map((t) => ({
+            liveStats?.recentTransactions.map((t) => ({
               ...t,
               amount: <Money value={t.amount} />,
               date: new Date(t.date).toLocaleDateString("en-US", {
@@ -286,18 +301,16 @@ function ApplicantPendingScreen({
     initialStatus,
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/application-fee")
-      .then(async (res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data && !cancelled) setStatus(data as ApplicationFeeStatus);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
+  const refreshStatus = useCallback(async () => {
+    const response = await fetch("/api/application-fee", { cache: "no-store" });
+    if (response.ok) setStatus((await response.json()) as ApplicationFeeStatus);
   }, []);
+
+  usePolling(refreshStatus, 5_000, { runImmediately: true });
+
+  useEffect(() => {
+    setStatus(initialStatus);
+  }, [initialStatus]);
 
   const appStatus = status?.application.status ?? "PENDING_PAYMENT";
   const paymentStatus = status?.payment?.status ?? null;

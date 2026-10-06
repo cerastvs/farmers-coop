@@ -22,6 +22,7 @@ import AdminActionsPanel, { ProfileModal, type MemberSummary } from "../secretar
 import { HarvestSeasonPanel } from "@/app/dashboard/components/HarvestSeasonPanel";
 import officerStyles from "./officer.module.css";
 import type { HarvestSeasonsData } from "@/app/dashboard/components/HarvestSeasonPanel";
+import { usePolling } from "../hooks/usePolling";
 import { Money } from "@/components/Money";
 import {
   FileText,
@@ -3862,8 +3863,6 @@ export default function OfficerDashboard({
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
-
   const fetchSeasons = useCallback(async () => {
     if (role !== "PRESIDENT") return;
     try {
@@ -4023,26 +4022,8 @@ export default function OfficerDashboard({
     }
   }, []);
 
-  useEffect(() => {
-    fetchNotifications();
-    const id = setInterval(fetchNotifications, 30000);
-    const onFocus = () => fetchNotifications();
-    window.addEventListener("focus", onFocus);
-    return () => {
-      clearInterval(id);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [fetchNotifications]);
-
-  useEffect(() => {
-    const id = setInterval(() => { fetchData(); }, 30000);
-    const onFocus = () => { fetchData(); };
-    window.addEventListener("focus", onFocus);
-    return () => {
-      clearInterval(id);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [fetchData]);
+  usePolling(fetchNotifications, 15_000, { runImmediately: true });
+  usePolling(fetchData, 5_000, { runImmediately: true });
 
   const now = useMemo(() => new Date(), []);
 

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logout } from "../../login/actions";
 import { IconMenu } from "@/components/icons";
 import { Bell } from "lucide-react";
 import { useUser } from "../../hooks/useUser";
+import { usePolling } from "../hooks/usePolling";
 
 export function DashboardHeader() {
   const { user } = useUser();
@@ -24,16 +25,16 @@ export function DashboardHeader() {
     { href: "/dashboard/rentMachine", label: "Machinery" },
   ];
 
-  useEffect(() => {
-    fetch("/api/notifications")
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setUnreadCount(data.filter((n: { read: boolean }) => !n.read).length);
-        }
-      })
-      .catch(() => {});
+  const refreshNotifications = useCallback(async () => {
+    const response = await fetch("/api/notifications", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json();
+    if (Array.isArray(data)) {
+      setUnreadCount(data.filter((n: { read: boolean }) => !n.read).length);
+    }
   }, []);
+
+  usePolling(refreshNotifications, 15_000, { runImmediately: true });
 
   useEffect(() => {
     if (userRole === "APPLICANT" || userRole === "MEMBER") {

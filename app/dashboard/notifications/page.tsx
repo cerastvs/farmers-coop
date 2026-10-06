@@ -5,6 +5,7 @@ import { DashboardHeader } from "../components/DashboardHeader";
 import { MemberPageHeader } from "../components/MemberPageHeader";
 import memberStyles from "../components/member.module.css";
 import { fetchWithTimeout } from "../hooks/fetchWithTimeout";
+import { usePolling } from "../hooks/usePolling";
 import { Bell, CheckCheck, Trash2 } from "lucide-react";
 
 interface Notification {
@@ -35,6 +36,8 @@ export default function NotificationsPage() {
       setLoading(false);
     }
   }
+
+  usePolling(fetchNotifications, 15_000);
 
   useEffect(() => {
     void fetchNotifications();

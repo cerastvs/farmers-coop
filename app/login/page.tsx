@@ -2,13 +2,15 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, ArrowUpRight } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Eye, EyeOff } from "lucide-react";
 import { useActionState } from "react";
+import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { ActionState, login } from "./actions";
 import styles from "../auth.module.css";
 
 export default function Login() {
+  const [showPassword, setShowPassword] = useState(false);
   const [state, loginAction] = useActionState<ActionState, FormData>(
     login,
     undefined,
@@ -38,7 +40,18 @@ export default function Login() {
             </div>
             <div className={styles.field}>
               <label htmlFor="login-password" className={styles.label}>Password</label>
-              <input id="login-password" name="password" type="password" autoComplete="current-password" placeholder="Enter your password" className={styles.input} />
+              <div className={styles.passwordField}>
+                <input id="login-password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="Enter your password" className={`${styles.input} ${styles.passwordInput}`} />
+                <button
+                  type="button"
+                  className={styles.passwordToggle}
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  title={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
               {state?.errors?.password?.[0] && <p className={styles.error}>{state.errors.password[0]}</p>}
             </div>
             <Link href="#" className={styles.forgot}>Forgot password?</Link>

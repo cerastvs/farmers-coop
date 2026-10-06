@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { Printer, X } from "lucide-react";
+import { FileText, Printer, Table2, X } from "lucide-react";
 import { Money } from "@/components/Money";
 import { ReportDocument, ReportPrintCopy } from "@/components/reports/ReportDocument";
 
@@ -38,41 +38,39 @@ export function ReportModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#102a23]/65 p-3 backdrop-blur-sm sm:p-5"
       onClick={onClose}
     >
       <div
-        className="relative flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="saved-report-title"
+        className="relative flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-[#d5e1d8] bg-[#fbfdfb] shadow-[0_24px_80px_rgba(16,42,35,0.24)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-3 border-b border-[#eef2e8] bg-[#f7faf5] px-5 py-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-indigo-600">
-              {type} Report
-            </p>
-            <h2 className="text-lg font-bold text-[#173a2b]">{title}</h2>
-            {from || to ? (
-              <p className="mt-0.5 text-xs font-semibold text-indigo-600">
-                {formatDateRange(from ?? null, to ?? null)}
-              </p>
-            ) : null}
-            {createdAt && (
-              <p className="text-xs text-[#718176]">
-                Generated {new Date(createdAt).toLocaleString("en-PH")}
-                {report.generatedByName ? ` by ${report.generatedByName}` : ""}
-              </p>
-            )}
+        <div className="flex items-center justify-between gap-4 border-b border-[#e3ebe3] bg-white px-4 py-3.5 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-700"><FileText size={17} /></div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.1em] text-indigo-700">{type} Report</span>
+                {from || to ? <span className="text-xs font-semibold text-[#496558]">{formatDateRange(from ?? null, to ?? null)}</span> : null}
+              </div>
+              <h2 id="saved-report-title" className="truncate text-lg font-black text-[#173a2b]">{title}</h2>
+              {createdAt && <p className="text-xs text-[#718176]">Generated {new Date(createdAt).toLocaleString("en-PH")}{report.generatedByName ? ` by ${report.generatedByName}` : ""}</p>}
+            </div>
           </div>
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => window.print()}
-              className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-indigo-700"
+              aria-label="Print report"
+              className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-2 text-[11px] font-bold text-white transition hover:bg-indigo-700"
             >
               <Printer size={13} /> Print
             </button>
             <button
               onClick={onClose}
-              className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              className="rounded-lg border border-transparent p-2 text-gray-400 transition hover:border-[#dce5d9] hover:bg-[#f7faf5] hover:text-[#173a2b]"
               aria-label="Close report"
             >
               <X size={18} />
@@ -80,11 +78,11 @@ export function ReportModal({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto bg-[#eef2ec] p-5">
+        <div className="flex-1 overflow-y-auto bg-[#edf3ee] p-3 sm:p-5">
           {!summary ? (
             <p className="text-sm text-[#718176]">No report data.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-lg shadow-sm">
               <ReportDocument
                 type={type}
                 data={summary}
@@ -250,23 +248,30 @@ function DetailModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-[#102a23]/65 p-3 backdrop-blur-sm sm:p-5"
       onClick={onClose}
     >
       <div
-        className="flex w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl max-h-[80vh]"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="detail-modal-title"
+        className="flex max-h-[84vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-[#d5e1d8] bg-[#fbfdfb] shadow-[0_24px_80px_rgba(16,42,35,0.24)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-[#eef2e8] bg-[#f7faf5] px-5 py-3">
-          <h3 className="text-sm font-bold text-[#173a2b]">{detail.title}</h3>
+        <div className="flex items-center justify-between gap-3 border-b border-[#e3ebe3] bg-white px-4 py-3.5 sm:px-5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#eef2ec] text-[#315646]"><Table2 size={15} /></div>
+            <h3 id="detail-modal-title" className="truncate text-sm font-black text-[#173a2b]">{detail.title}</h3>
+          </div>
           <button
             onClick={onClose}
-            className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            aria-label="Close details"
+            className="rounded-lg border border-transparent p-2 text-gray-400 transition hover:border-[#dce5d9] hover:bg-[#f7faf5] hover:text-[#173a2b]"
           >
             <X size={16} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto bg-[#f7faf5] p-3 sm:p-5">
           {detail.rows.length === 0 ? (
             <p className="text-sm text-[#718176]">No records found.</p>
           ) : (

@@ -10,9 +10,11 @@ import { createPortal } from "react-dom";
 import {
   ArrowDown,
   ArrowUp,
+  CheckCircle2,
   CheckSquare,
   ChevronDown,
   ChevronUp,
+  FileText,
   Layers,
   ListFilter,
   Printer,
@@ -265,47 +267,51 @@ export function ReportBuilder({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="flex w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-[#dce5d9] bg-white shadow-2xl max-h-[95vh]">
-        <div className="flex items-center justify-between border-b border-[#eef2e8] bg-[#f7faf5] px-5 py-3">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-indigo-600">
-              Report Builder
-            </p>
-            <h3 className="text-sm font-black text-[#173a2b]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#102a23]/65 p-3 backdrop-blur-sm sm:p-5">
+      <div role="dialog" aria-modal="true" aria-labelledby="report-builder-title" className="flex max-h-[94vh] w-full max-w-[1440px] flex-col overflow-hidden rounded-xl border border-[#d5e1d8] bg-[#fbfdfb] shadow-[0_24px_80px_rgba(16,42,35,0.24)]">
+        <div className="flex items-center justify-between gap-4 border-b border-[#e3ebe3] bg-white px-4 py-3.5 sm:px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-700"><FileText size={17} /></div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-indigo-600">Report Builder</p>
+                <span className="rounded-full bg-[#eef2ec] px-2 py-0.5 text-[10px] font-bold capitalize text-[#496558]">{type}</span>
+              </div>
+            <h3 id="report-builder-title" className="truncate text-sm font-black text-[#173a2b] sm:text-base">
               {generated ? generated.title : "Configure a printable report"}
             </h3>
+            </div>
           </div>
           <button
             disabled={busy === "report"}
             onClick={onClose}
             aria-label="Close"
-            className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            className="rounded-lg border border-transparent p-2 text-gray-400 transition hover:border-[#dce5d9] hover:bg-[#f7faf5] hover:text-[#173a2b]"
           >
             <X size={18} />
           </button>
         </div>
 
         {generated ? (
-          <div className="overflow-y-auto p-5">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs font-bold text-green-700">
-              <span>Report generated successfully.</span>
+          <div className="overflow-y-auto bg-[#eef3ee] p-4 sm:p-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50/90 px-3.5 py-2.5 text-xs font-bold text-emerald-800">
+              <span className="inline-flex items-center gap-2"><CheckCircle2 size={14} /> Report generated successfully.</span>
               <div className="flex gap-2">
                 <button
                   onClick={() => window.print()}
-                  className="flex items-center gap-1.5 rounded-lg border border-green-300 px-2.5 py-1 text-[10px] font-bold text-green-700 hover:bg-green-100"
+                  className="flex items-center gap-1.5 rounded-md border border-emerald-300 bg-white/60 px-2.5 py-1.5 text-[10px] font-bold text-emerald-800 transition hover:bg-emerald-100"
                 >
                   <Printer size={12} /> Print
                 </button>
                 <button
                   onClick={onClose}
-                  className="rounded-lg border border-green-300 px-2.5 py-1 text-[10px] font-bold text-green-700 hover:bg-green-100"
+                  className="rounded-md border border-emerald-300 bg-white/60 px-2.5 py-1.5 text-[10px] font-bold text-emerald-800 transition hover:bg-emerald-100"
                 >
                   Done
                 </button>
               </div>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-lg shadow-sm">
               <ReportDocument
                 type={type}
                 data={generated.data}
@@ -332,7 +338,7 @@ export function ReportBuilder({
         ) : (
           <div className="flex flex-1 flex-col overflow-hidden md:flex-row">
             {/* ---------------- Controls ---------------- */}
-            <div className="flex flex-col gap-3 overflow-y-auto border-b border-[#eef2e8] bg-[#fafdf7] p-4 md:w-[360px] md:border-b-0 md:border-r">
+            <div className="flex flex-col gap-3 overflow-y-auto border-b border-[#e3ebe3] bg-[#f7faf5] p-4 sm:p-5 md:w-[360px] md:border-b-0 md:border-r">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold uppercase tracking-wide text-[#718176]">
                   Report type
@@ -662,10 +668,10 @@ export function ReportBuilder({
             </div>
 
             {/* ---------------- Preview ---------------- */}
-            <div className="flex-1 overflow-y-auto bg-[#eef2ec] p-4">
-              <div className="mb-2 flex items-center justify-between px-1">
+            <div className="flex-1 overflow-y-auto bg-[#edf3ee] p-4 sm:p-5">
+              <div className="mb-3 flex items-center justify-between px-1">
                 <p className="text-[11px] font-bold uppercase tracking-wide text-[#718176]">
-                  Live preview · {type} Report
+                  <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 align-middle" />Live preview · {type} Report
                 </p>
                 {previewError && (
                   <p className="text-[10px] font-bold text-red-500">
@@ -673,7 +679,7 @@ export function ReportBuilder({
                   </p>
                 )}
               </div>
-              <div className="overflow-x-auto rounded-xl">
+              <div className="overflow-x-auto rounded-lg shadow-sm">
                 {live && live.data ? (
                   <ReportDocument
                     type={live.type}
@@ -697,12 +703,13 @@ export function ReportBuilder({
         )}
 
         {!generated && (
-          <div className="border-t border-[#eef2e8] bg-[#f7faf5] px-5 py-3">
+          <div className="border-t border-[#e3ebe3] bg-white px-4 py-3.5 sm:px-5">
             <button
               disabled={busy === "report" || sections.length === 0}
               onClick={generate}
-              className="w-full rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-md bg-indigo-600 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
+              <FileText size={14} />
               {busy === "report" ? "Generating…" : "Generate Report"}
             </button>
           </div>

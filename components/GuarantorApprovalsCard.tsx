@@ -5,6 +5,7 @@ import {
   CheckCircle,
   CheckCircle2,
   Eye,
+  ShieldCheck,
   XCircle,
 } from "lucide-react";
 
@@ -269,29 +270,34 @@ export function GuarantorApprovalsCard({
 
       {viewing && (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-[#102a23]/65 p-3 backdrop-blur-sm sm:p-5"
           onClick={() => setViewing(null)}
         >
           <div
-            className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="guarantor-approval-title"
+            className="w-full max-w-xl rounded-xl border border-[#d5e1d8] bg-[#fbfdfb] p-5 shadow-[0_24px_80px_rgba(16,42,35,0.24)] sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-5 flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#e8f5ec] text-[#1b5e3b]"><ShieldCheck size={18} /></div>
+                <div>
+                <h3 id="guarantor-approval-title" className="text-lg font-black text-[#173a2b]">
                   Pending Guarantor Approval
                 </h3>
-                <p className="mt-0.5 text-sm text-gray-500">
+                <p className="mt-1 text-sm leading-5 text-[#718176]">
                   Submitted by{" "}
                   <span className="font-semibold text-gray-700">
                     {viewing.member.name}
                   </span>{" "}
                   (@{viewing.member.username}) · {formatDateTime(viewing.submittedAt)}
-                </p>
+                </p></div>
               </div>
               <button
                 onClick={() => setViewing(null)}
-                className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                className="rounded-lg border border-transparent p-1.5 text-gray-400 transition hover:border-[#dce5d9] hover:bg-[#f7faf5] hover:text-gray-600"
                 aria-label="Close"
               >
                 <XCircle size={18} />
@@ -299,7 +305,7 @@ export function GuarantorApprovalsCard({
             </div>
 
             <div className="max-h-[55vh] space-y-4 overflow-y-auto pr-1">
-              <div className="space-y-2.5 rounded-2xl border border-[#e2ebe6] bg-[#fafcfb] p-4">
+              <div className="space-y-2.5 rounded-lg border border-[#dfe9e2] bg-white p-4 shadow-sm">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-[#1b5e3b]">
                   Member
                 </p>
@@ -316,7 +322,7 @@ export function GuarantorApprovalsCard({
                 )}
               </div>
 
-              <div className="space-y-2.5 rounded-2xl border border-[#e2ebe6] bg-[#fafcfb] p-4">
+              <div className="space-y-2.5 rounded-lg border border-[#dfe9e2] bg-white p-4 shadow-sm">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-[#1b5e3b]">
                   Guarantor
                 </p>
@@ -336,7 +342,7 @@ export function GuarantorApprovalsCard({
 
               {viewing.farm && (
                 <>
-                  <div className="space-y-2.5 rounded-2xl border border-[#e2ebe6] bg-[#fafcfb] p-4">
+                  <div className="space-y-2.5 rounded-lg border border-[#dfe9e2] bg-white p-4 shadow-sm">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-[#1b5e3b]">
                       Farm Details
                     </p>
@@ -359,14 +365,14 @@ export function GuarantorApprovalsCard({
                     />
                   </div>
 
-                  <div className="space-y-2.5 rounded-2xl border border-[#e2ebe6] bg-[#fafcfb] p-4">
+                  <div className="space-y-2.5 rounded-lg border border-[#dfe9e2] bg-white p-4 shadow-sm">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-[#1b5e3b]">
                       Crops
                     </p>
                     <DetailRow label="Crops" value={<ListValue items={viewing.farm.crops} />} />
                   </div>
 
-                  <div className="space-y-2.5 rounded-2xl border border-[#e2ebe6] bg-[#fafcfb] p-4">
+                  <div className="space-y-2.5 rounded-lg border border-[#dfe9e2] bg-white p-4 shadow-sm">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-[#1b5e3b]">
                       Owned Machines
                     </p>
@@ -408,16 +414,16 @@ export function GuarantorApprovalsCard({
       )}
 
       {confirming && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#102a23]/65 p-3 backdrop-blur-sm sm:p-5">
+          <div role="dialog" aria-modal="true" aria-labelledby="approve-guarantor-title" className="w-full max-w-lg rounded-xl border border-[#d5e1d8] bg-[#fbfdfb] p-5 shadow-[0_24px_80px_rgba(16,42,35,0.24)] sm:p-6">
             <div className="text-center">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#e8f5ec]">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[#e8f5ec]">
                 <CheckCircle size={20} className="text-[#1b5e3b]" />
               </div>
-              <h3 className="mb-1 text-lg font-bold text-gray-900">
+              <h3 id="approve-guarantor-title" className="mb-1 text-lg font-black text-[#173a2b]">
                 Approve this guarantor?
               </h3>
-              <p className="mb-5 text-sm text-gray-500">
+              <p className="mx-auto mb-5 max-w-md text-sm leading-5 text-[#718176]">
                 <span className="font-semibold text-gray-700">
                   {confirming.member.name}
                 </span>{" "}
@@ -427,7 +433,7 @@ export function GuarantorApprovalsCard({
             </div>
 
             <div className="max-h-[55vh] space-y-4 overflow-y-auto pr-1">
-              <div className="space-y-2.5 rounded-2xl border border-[#e2ebe6] bg-[#fafcfb] p-4">
+              <div className="space-y-2.5 rounded-lg border border-[#dfe9e2] bg-white p-4 shadow-sm">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-[#1b5e3b]">
                   Guarantor
                 </p>
@@ -451,7 +457,7 @@ export function GuarantorApprovalsCard({
 
               {confirming.farm && (
                 <>
-                  <div className="space-y-2.5 rounded-2xl border border-[#e2ebe6] bg-[#fafcfb] p-4">
+                  <div className="space-y-2.5 rounded-lg border border-[#dfe9e2] bg-white p-4 shadow-sm">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-[#1b5e3b]">
                       Farm Details
                     </p>
@@ -510,16 +516,16 @@ export function GuarantorApprovalsCard({
       )}
 
       {rejecting && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#102a23]/65 p-3 backdrop-blur-sm sm:p-5">
+          <div role="dialog" aria-modal="true" aria-labelledby="reject-guarantor-title" className="w-full max-w-md rounded-xl border border-[#d5e1d8] bg-[#fbfdfb] p-5 shadow-[0_24px_80px_rgba(16,42,35,0.24)] sm:p-6">
             <div className="text-center">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-red-50">
                 <XCircle size={20} className="text-red-600" />
               </div>
-              <h3 className="mb-1 text-lg font-bold text-gray-900">
+              <h3 id="reject-guarantor-title" className="mb-1 text-lg font-black text-[#173a2b]">
                 Reject this guarantor?
               </h3>
-              <p className="mb-5 text-sm text-gray-500">
+              <p className="mb-5 text-sm leading-5 text-[#718176]">
                 <span className="font-semibold text-gray-700">
                   {rejecting.member.name}
                 </span>{" "}
@@ -528,7 +534,7 @@ export function GuarantorApprovalsCard({
               </p>
             </div>
 
-            <div className="mb-5 space-y-2.5 rounded-2xl border border-[#e2ebe6] bg-[#fafcfb] p-4">
+            <div className="mb-5 space-y-2.5 rounded-lg border border-[#dfe9e2] bg-white p-4 shadow-sm">
               <DetailRow
                 label="Guarantor"
                 value={guarantorFullName(rejecting.guarantor)}
@@ -556,7 +562,7 @@ export function GuarantorApprovalsCard({
               placeholder="State why this guarantor could not be approved (optional)"
               rows={3}
               autoFocus
-              className="mb-5 w-full resize-none rounded-2xl border border-red-200 bg-red-50/30 px-3.5 py-2.5 text-sm text-gray-700 outline-none transition placeholder:text-gray-400 focus:border-red-300 focus:ring-2 focus:ring-red-100"
+              className="mb-5 w-full resize-none rounded-lg border border-red-200 bg-red-50/40 px-3.5 py-3 text-sm text-gray-700 outline-none transition placeholder:text-gray-400 focus:border-red-300 focus:ring-2 focus:ring-red-100"
             />
 
             <div className="flex gap-3">

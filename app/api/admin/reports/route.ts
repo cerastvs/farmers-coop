@@ -802,6 +802,22 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
   const sold = completed.filter(
     (transaction) => transaction.type === SupplyTransactionType.PURCHASE,
   );
+  const purchases = supplies.flatMap((supply) =>
+    supply.transactions
+      .filter(
+        (transaction) =>
+          transaction.status === TransactionStatus.COMPLETED &&
+          transaction.type === SupplyTransactionType.PURCHASE,
+      )
+      .map((transaction) => ({
+        id: transaction.id,
+        supply: supply.productName,
+        member: transaction.user,
+        quantity: transaction.quantity,
+        totalPrice: Number(transaction.totalPrice),
+        completedAt: (transaction.reviewedAt ?? transaction.createdAt).toISOString(),
+      })),
+  );
   const borrowed = completed.filter(
     (transaction) => transaction.type === SupplyTransactionType.LOAN,
   );
@@ -926,6 +942,7 @@ async function generateSuppliesReport(filters: ReportFilters = {}) {
         })),
       };
     }),
+    purchases,
     rejectedPayments: rejectedPayments.map((payment) => ({
       id: payment.id,
       member: payment.user,

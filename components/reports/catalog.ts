@@ -512,6 +512,25 @@ const SUPPLIES: ReportTypeCatalog = {
       },
     },
     {
+      id: "purchasesTable",
+      label: "Successful Supply Purchases",
+      kind: "table",
+      hideWhenEmpty: (d) =>
+        (((d.purchases as unknown[]) ?? []) as Record<string, any>[]).length === 0,
+      table: {
+        rows: (d) => (((d.purchases as unknown[]) ?? []) as Record<string, any>[]),
+        columns: [
+          { id: "member", label: "Member", get: (r) => r.member?.name ?? r.member?.username ?? "", render: (r) => r.member?.name ?? r.member?.username ?? "—" },
+          { id: "supply", label: "Supply", get: (r) => r.supply ?? "", render: (r) => r.supply ?? "—" },
+          { id: "qty", label: "Qty", get: (r) => moneyValue(r.quantity), render: (r) => String(r.quantity ?? 0) },
+          { id: "amount", label: "Amount", get: (r) => moneyValue(r.totalPrice), render: (r) => money(r.totalPrice), money: true },
+          { id: "date", label: "Completed", get: (r) => dateValue(r.completedAt), render: (r) => renderDate(r.completedAt) },
+        ],
+        groupFields: [],
+        totalColumns: ["qty", "amount"],
+      },
+    },
+    {
       id: "rejectedPaymentsTable",
       label: "Rejected Payments",
       kind: "table",
@@ -536,18 +555,18 @@ const SUPPLIES: ReportTypeCatalog = {
       },
     },
   ],
-  defaultSections: ["totals", "units", "byStatus", "suppliesTable", "rejectedPaymentsTable"],
+  defaultSections: ["totals", "units", "byStatus", "suppliesTable", "purchasesTable", "rejectedPaymentsTable"],
   presets: {
     summary: { id: "summary", label: "Summary", sections: ["totals", "units", "byStatus"] },
     detailed: {
       id: "detailed",
       label: "Detailed",
-      sections: ["totals", "units", "byStatus", "suppliesTable", "rejectedPaymentsTable"],
+      sections: ["totals", "units", "byStatus", "suppliesTable", "purchasesTable", "rejectedPaymentsTable"],
     },
     full: {
       id: "full",
       label: "Full Details",
-      sections: ["totals", "units", "byStatus", "suppliesTable", "transactionsTable", "rejectedPaymentsTable"],
+      sections: ["totals", "units", "byStatus", "suppliesTable", "purchasesTable", "transactionsTable", "rejectedPaymentsTable"],
     },
   },
 };

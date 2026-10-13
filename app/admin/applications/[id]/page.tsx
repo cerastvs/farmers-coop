@@ -259,7 +259,7 @@ export default function ApplicationReviewPage() {
             <p className="text-xs font-bold uppercase tracking-[.14em] text-[#cfe6a5]">
               president workspace
             </p>
-            <p className={adminStyles.brand}>FC / FarmCoop</p>
+            <p className={adminStyles.brand}>FC / Calaocan Cooperative AgriHub</p>
           </div>
           <Link
             href="/admin"

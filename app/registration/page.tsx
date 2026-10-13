@@ -386,7 +386,7 @@ export default function Registration() {
             </Link>
             <div className="flex items-center gap-2 md:gap-3">
               <Image src="/logo.webp" alt="" width={36} height={36} className="h-9 w-9 object-contain" />
-              <span className="text-sm font-bold text-[#174b36] tracking-tight md:text-lg">FarmCoop</span>
+              <span className="text-sm font-bold text-[#174b36] tracking-tight md:text-lg">Calaocan Cooperative AgriHub</span>
             </div>
           </div>
         </div>

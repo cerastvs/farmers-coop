@@ -532,7 +532,7 @@ export default function AdminPage() {
         <div className="mx-auto flex min-h-16 max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-[.14em] text-[#cfe6a5]">{user.role.toLowerCase()} workspace</p>
-            <p className={adminStyles.brand}>FC / FarmCoop</p>
+            <p className={adminStyles.brand}>FC / Calaocan Cooperative AgriHub</p>
           </div>
           <nav className="flex items-center gap-2 text-sm font-bold">
             {user.role === "SECRETARY" && <Link href="/dashboard/secretary" className="rounded-lg px-3 py-2 hover:bg-white/10">Applications</Link>}

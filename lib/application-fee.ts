@@ -101,7 +101,7 @@ export function getApplicationFeeQrUrl() {
 export function getApplicationFeeAccountLabel() {
   return (
     process.env.APPLICATION_FEE_ACCOUNT_LABEL?.trim() ||
-    "FarmCoop Cooperative · GCash 0917 123 4567"
+    "Calaocan Cooperative AgriHub · GCash 0917 123 4567"
   );
 }
 

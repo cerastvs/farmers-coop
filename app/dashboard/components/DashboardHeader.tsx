@@ -53,7 +53,7 @@ export function DashboardHeader() {
       <div className="mx-auto flex h-17 max-w-[1180px] items-center justify-between gap-4 px-4">
         <Link href="/dashboard" className="flex shrink-0 items-center gap-2.5">
           <Image src="/logo.webp" alt="" width={36} height={36} className="h-9 w-9 object-contain" />
-          <span className="font-extrabold tracking-tight">FarmCoop</span>
+          <span className="font-extrabold tracking-tight text-sm leading-tight">Calaocan Cooperative AgriHub</span>
         </Link>
         {userRole === "MEMBER" && (
           <nav aria-label="Member navigation" className="hidden items-center gap-1 lg:flex">

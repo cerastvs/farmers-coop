@@ -84,7 +84,7 @@ export default function SignUp() {
       <div className={styles.visual}>
         <Image src="/farm.webp" alt="Rice field on a working farm" fill priority sizes="(max-width: 800px) 100vw, 52vw" className={styles.photo} />
         <div className={styles.visualContent}>
-          <Link href="/home" className={styles.brand}><Image src="/logo.webp" alt="" width={44} height={44} className={styles.brandMark} />FarmCoop</Link>
+          <Link href="/home" className={styles.brand}><Image src="/logo.webp" alt="" width={44} height={44} className={styles.brandMark} />Calaocan Cooperative AgriHub</Link>
           <div className={styles.visualMessage}><span>Farmers&apos; cooperative</span><p>There is room to grow here.</p></div>
         </div>
       </div>
@@ -92,7 +92,7 @@ export default function SignUp() {
         <Link href="/home" className={styles.topLink}><ArrowLeft size={16} /> Back to home</Link>
         <div className={styles.formContent}>
           <p className={styles.eyebrow}>New member</p>
-          <h1 className={styles.title}>Join FarmCoop.</h1>
+          <h1 className={styles.title}>Join Calaocan Cooperative AgriHub.</h1>
           <p className={styles.subtitle}>Create an account to begin your membership application.</p>
           <form className={styles.form} onSubmit={handleSubmit}>
             <div className={styles.field}>

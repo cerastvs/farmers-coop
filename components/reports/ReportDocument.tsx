@@ -16,7 +16,7 @@ import type {
   SortConfig,
 } from "./types";
 
-const COOP_NAME = "Farmers' Cooperative";
+const COOP_NAME = "Calaocan Cooperative AgriHub";
 
 function readConfig(data: ReportData | null): ReportConfig | null {
   if (!data) return null;

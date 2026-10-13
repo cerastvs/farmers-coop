@@ -2,7 +2,7 @@
 
 .workspace { min-height:100vh; background:#f5f4ec; color:#173b31; }
 .topbar { border-bottom:1px solid #12382d; background:#173b31; color:#f5f4ec; }
-.brand { font-family:"Barlow Condensed",Impact,sans-serif; font-size:1.45rem; font-weight:700; line-height:1; text-transform:uppercase; }
+.brand { max-width:18rem; font-family:"Barlow Condensed",Impact,sans-serif; font-size:1.05rem; font-weight:700; line-height:1.05; }
 .intro { margin-bottom:1.5rem; padding:1rem 0 1.5rem; border-bottom:1px solid #cbd3c5; }
 .eyebrow { margin-bottom:.5rem; color:#527156; font-size:.7rem; font-weight:800; letter-spacing:.15em; text-transform:uppercase; }
 .title { color:#173b31; font-family:"Barlow Condensed",Impact,sans-serif; font-size:clamp(3.3rem,6vw,5.5rem); font-weight:700; line-height:.9; text-transform:uppercase; }

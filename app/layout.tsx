@@ -4,7 +4,7 @@ import "./globals.css";
 import { UserProvider } from "./contexts/UserContext";
 
 export const metadata: Metadata = {
-  title: "FarmCoop | Growing stronger together",
+  title: "Calaocan Cooperative AgriHub | Growing stronger together",
   description: "A cooperative platform for farmers to access services, support, and financing.",
 };
 

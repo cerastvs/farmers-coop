@@ -4376,7 +4376,7 @@ export default function OfficerDashboard({
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-2.5">
               <Image src="/logo.webp" alt="" width={34} height={34} className={officerStyles.mark} />
-              <span className={officerStyles.brand}>FarmCoop</span>
+              <span className={officerStyles.brand}>Calaocan Cooperative AgriHub</span>
             </span>
             <div className="hidden h-5 w-px bg-white/20 sm:block" />
             <p className="hidden text-xs font-medium text-white/70 sm:block">{workspaceLabel}</p>

@@ -21,7 +21,7 @@ export default function Login() {
       <div className={styles.visual}>
         <Image src="/farm.webp" alt="Rice field on a working farm" fill priority sizes="(max-width: 800px) 100vw, 52vw" className={styles.photo} />
         <div className={styles.visualContent}>
-          <Link href="/home" className={styles.brand}><Image src="/logo.webp" alt="" width={44} height={44} className={styles.brandMark} />FarmCoop</Link>
+          <Link href="/home" className={styles.brand}><Image src="/logo.webp" alt="" width={44} height={44} className={styles.brandMark} />Calaocan Cooperative AgriHub</Link>
           <div className={styles.visualMessage}><span>Farmers&apos; cooperative</span><p>Good work grows stronger together.</p></div>
         </div>
       </div>
@@ -30,7 +30,7 @@ export default function Login() {
         <div className={styles.formContent}>
           <p className={styles.eyebrow}>Member access</p>
           <h1 className={styles.title}>Welcome back.</h1>
-          <p className={styles.subtitle}>Sign in to your FarmCoop account.</p>
+          <p className={styles.subtitle}>Sign in to your Calaocan Cooperative AgriHub account.</p>
           <form className={styles.form} action={loginAction}>
             {state?.message && <p role="alert" className={styles.formMessage}>{state.message}</p>}
             <div className={styles.field}>

@@ -13,9 +13,9 @@ export default function Home() {
   return (
     <main className={styles.page}>
       <header className={styles.header}>
-        <Link href="/home" className={styles.brand} aria-label="FarmCoop home">
+        <Link href="/home" className={styles.brand} aria-label="Calaocan Cooperative AgriHub home">
           <Image src="/logo.webp" alt="" width={44} height={44} className={styles.brandMark} />
-          <span className={styles.brandName}>FarmCoop<small>Farmers&apos; cooperative</small></span>
+          <span className={styles.brandName}>Calaocan Cooperative AgriHub<small>Farmers&apos; cooperative</small></span>
         </Link>
         <nav className={styles.nav} aria-label="Main navigation">
           <a href="#services">What we offer</a>
@@ -37,7 +37,7 @@ export default function Home() {
         </div>
         <div className={styles.heroImage}>
           <Image src="/farm.webp" alt="Green rice field with trees along its edge" fill priority sizes="(max-width: 800px) 100vw, 53vw" className={styles.photo} />
-          <div className={styles.imageLabel}><strong>FarmCoop</strong><span>Grow with your cooperative</span></div>
+          <div className={styles.imageLabel}><strong>Calaocan Cooperative AgriHub</strong><span>Grow with your cooperative</span></div>
         </div>
       </section>
 
@@ -65,7 +65,7 @@ export default function Home() {
       </section>
 
       <footer className={styles.footer}>
-        <span>FarmCoop</span><span>Farmers&apos; Cooperative Management System</span>
+        <span>Calaocan Cooperative AgriHub</span><span>Farmers&apos; Cooperative Management System</span>
         <Link href="/login">Member sign in <ArrowUpRight size={14} /></Link>
       </footer>
     </main>

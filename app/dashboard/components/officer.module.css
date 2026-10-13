@@ -3,7 +3,7 @@
 .workspace { min-height:100vh; background:#f5f4ec; color:#173b31; }
 .topbar { border-bottom:1px solid #12382d; background:#173b31; color:#f5f4ec; }
 .mark { display:block; height:2.1rem; width:2.1rem; object-fit:contain; }
-.brand { font-family:"Barlow Condensed",Impact,sans-serif; font-size:1.45rem; font-weight:700; letter-spacing:.01em; text-transform:uppercase; }
+.brand { max-width:14rem; font-family:"Barlow Condensed",Impact,sans-serif; font-size:1.05rem; font-weight:700; line-height:1.05; letter-spacing:0; }
 .intro { display:flex; flex-wrap:wrap; align-items:end; justify-content:space-between; gap:1rem; margin-bottom:1.5rem; padding:1rem 0 1.5rem; border-bottom:1px solid #cbd3c5; }
 .eyebrow { margin-bottom:.45rem; color:#527156; font-size:.7rem; font-weight:800; letter-spacing:.15em; text-transform:uppercase; }
 .title { margin:0; color:#173b31; font-family:"Barlow Condensed",Impact,sans-serif; font-size:clamp(3.25rem,6vw,5.75rem); font-weight:700; line-height:.9; text-transform:uppercase; }

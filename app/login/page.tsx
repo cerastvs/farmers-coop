@@ -21,7 +21,7 @@ export default function Login() {
       <div className={styles.visual}>
         <Image src="/farm.webp" alt="Rice field on a working farm" fill priority sizes="(max-width: 800px) 100vw, 52vw" className={styles.photo} />
         <div className={styles.visualContent}>
-          <Link href="/home" className={styles.brand}><span className={styles.brandMark}>FC</span>FarmCoop</Link>
+          <Link href="/home" className={styles.brand}><Image src="/logo.webp" alt="" width={44} height={44} className={styles.brandMark} />FarmCoop</Link>
           <div className={styles.visualMessage}><span>Farmers&apos; cooperative</span><p>Good work grows stronger together.</p></div>
         </div>
       </div>

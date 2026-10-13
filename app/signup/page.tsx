@@ -84,7 +84,7 @@ export default function SignUp() {
       <div className={styles.visual}>
         <Image src="/farm.webp" alt="Rice field on a working farm" fill priority sizes="(max-width: 800px) 100vw, 52vw" className={styles.photo} />
         <div className={styles.visualContent}>
-          <Link href="/home" className={styles.brand}><span className={styles.brandMark}>FC</span>FarmCoop</Link>
+          <Link href="/home" className={styles.brand}><Image src="/logo.webp" alt="" width={44} height={44} className={styles.brandMark} />FarmCoop</Link>
           <div className={styles.visualMessage}><span>Farmers&apos; cooperative</span><p>There is room to grow here.</p></div>
         </div>
       </div>
@@ -118,7 +118,7 @@ export default function SignUp() {
       {showSuccess && (
         <div className={styles.overlay}>
           <div className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="signup-success-title">
-            <span className={styles.dialogMark}>FC</span>
+            <Image src="/logo.webp" alt="" width={48} height={48} className={styles.dialogMark} />
             <h2 id="signup-success-title">Account created.</h2>
             <p>Your account is ready. Continue to your membership application.</p>
             <button onClick={handleContinue} disabled={pending} className={styles.submit}>

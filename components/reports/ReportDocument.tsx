@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useSyncExternalStore, type ReactNode } from "react";
+import Image from "next/image";
 import { createPortal } from "react-dom";
 import { getCatalog } from "./catalog";
 import { formatReportPeriod, humanize } from "./format";
@@ -392,9 +393,7 @@ export function ReportDocument({
     <article className="rpt-doc">
       <header className="rpt-header">
         <div className="rpt-brand">
-          <div className="rpt-brand-mark" aria-hidden="true">
-            FC
-          </div>
+          <Image src="/logo.webp" alt="" width={37} height={37} className="rpt-brand-mark" />
           <div>
             <p className="rpt-coop">{COOP_NAME}</p>
             <p className="rpt-coop-sub">Official Report</p>

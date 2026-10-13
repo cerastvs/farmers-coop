@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import Image from "next/image";
 import { ImageModal } from "@/components/ImageModal";
 import { GuarantorApprovalsCard } from "@/components/GuarantorApprovalsCard";
 import { FarmSizeApprovalsCard } from "@/components/FarmSizeApprovalsCard";
@@ -4361,7 +4362,6 @@ export default function OfficerDashboard({
 
   const nowDate = new Date();
   const formattedDate = nowDate.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-  const formattedTime = nowDate.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" });
 
   const ALL_TABS: { key: Tab; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
     { key: "overview", label: "Overview", icon: BarChart3 },
@@ -4375,16 +4375,13 @@ export default function OfficerDashboard({
         <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-6">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-2.5">
-              <span className={officerStyles.mark}>FC</span>
+              <Image src="/logo.webp" alt="" width={34} height={34} className={officerStyles.mark} />
               <span className={officerStyles.brand}>FarmCoop</span>
             </span>
             <div className="hidden h-5 w-px bg-white/20 sm:block" />
             <p className="hidden text-xs font-medium text-white/70 sm:block">{workspaceLabel}</p>
           </div>
           <div className="flex items-center gap-4">
-            <div className="hidden items-center gap-2 text-xs text-white/60 md:flex">
-              <Calendar size={13} /><span>{formattedDate}</span><span className="text-white/30">·</span><Clock size={13} /><span style={{ fontFamily: "var(--font-mono)" }}>{formattedTime}</span>
-            </div>
             <div className="relative hidden sm:block">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
               <input type="text" placeholder="Search members, loans…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-8 w-48 rounded-lg border border-white/20 bg-white/10 pl-9 pr-3 text-xs text-white placeholder-white/40 outline-none transition-all focus:w-56 focus:border-white/40 focus:bg-white/15" />

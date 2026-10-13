@@ -98,12 +98,7 @@ select {
   justify-content: center;
   width: 2.3rem;
   height: 2.3rem;
-  border-radius: 999px;
-  background: #173a2b;
-  color: #fff;
-  font-weight: 800;
-  font-family: "DM Sans", sans-serif;
-  letter-spacing: 0.05em;
+  object-fit: contain;
 }
 
 .rpt-coop {

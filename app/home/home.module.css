@@ -3,7 +3,7 @@
 .page { --ink:#173b31; --field:#416747; --paper:#f5f4ec; --line:#cbd4c6; color:var(--ink); background:var(--paper); font-family:"DM Sans",Arial,sans-serif; }
 .header { min-height:91px; display:flex; align-items:center; justify-content:space-between; gap:2rem; padding:0 clamp(1.25rem,4vw,4.5rem); border-bottom:1px solid var(--line); }
 .brand { display:inline-flex; align-items:center; gap:.8rem; color:var(--ink); }
-.brandMark { width:44px; height:44px; display:grid; place-items:center; background:var(--ink); color:#f6f4e8; font-family:"Barlow Condensed",Impact,sans-serif; font-size:1.3rem; font-weight:700; }
+.brandMark { width:44px; height:44px; display:block; object-fit:contain; }
 .brandName { display:flex; flex-direction:column; font-size:1.15rem; font-weight:800; line-height:1.1; letter-spacing:-.04em; }
 .brandName small { margin-top:.23rem; font-size:.62rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
 .nav { display:flex; align-items:center; gap:clamp(1rem,2.5vw,2.5rem); font-size:.85rem; font-weight:700; }

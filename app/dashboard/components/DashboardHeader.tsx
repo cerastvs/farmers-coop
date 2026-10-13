@@ -2,6 +2,7 @@
 
 import { useCallback, useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { logout } from "../../login/actions";
 import { IconMenu } from "@/components/icons";
@@ -51,7 +52,7 @@ export function DashboardHeader() {
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[#173b31] text-white">
       <div className="mx-auto flex h-17 max-w-[1180px] items-center justify-between gap-4 px-4">
         <Link href="/dashboard" className="flex shrink-0 items-center gap-2.5">
-          <span className="grid h-9 w-9 place-items-center bg-[#d9e3cb] font-['Barlow_Condensed'] text-lg font-bold text-[#173b31]">FC</span>
+          <Image src="/logo.webp" alt="" width={36} height={36} className="h-9 w-9 object-contain" />
           <span className="font-extrabold tracking-tight">FarmCoop</span>
         </Link>
         {userRole === "MEMBER" && (

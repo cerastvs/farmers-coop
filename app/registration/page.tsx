@@ -2,6 +2,7 @@
 
 import { useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { logout } from "../login/actions";
 import { useEffect, useState } from "react";
 import { Application } from "../generated/prisma/client";
@@ -384,9 +385,7 @@ export default function Registration() {
               Back
             </Link>
             <div className="flex items-center gap-2 md:gap-3">
-              <span className="grid h-9 w-9 place-items-center bg-[#174b36] text-[#d6ed9f] font-black">
-                FC
-              </span>
+              <Image src="/logo.webp" alt="" width={36} height={36} className="h-9 w-9 object-contain" />
               <span className="text-sm font-bold text-[#174b36] tracking-tight md:text-lg">FarmCoop</span>
             </div>
           </div>

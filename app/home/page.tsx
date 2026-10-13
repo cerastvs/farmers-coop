@@ -14,7 +14,7 @@ export default function Home() {
     <main className={styles.page}>
       <header className={styles.header}>
         <Link href="/home" className={styles.brand} aria-label="FarmCoop home">
-          <span className={styles.brandMark}>FC</span>
+          <Image src="/logo.webp" alt="" width={44} height={44} className={styles.brandMark} />
           <span className={styles.brandName}>FarmCoop<small>Farmers&apos; cooperative</small></span>
         </Link>
         <nav className={styles.nav} aria-label="Main navigation">
